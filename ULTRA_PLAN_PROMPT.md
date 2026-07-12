@@ -103,6 +103,20 @@ provenance, scan report badge, version history); **comment** threads; **rate / u
    comment/rate/reuse work end-to-end.*
 6. **Phase F — Governance hardening & docs.** Egress controls, tool allowlists, redaction, rollback drill,
    calibration report (κ), adoption guide. *Verify: rollback tested; κ ≥ 0.6; egress denied by default.*
+7. **Phase G — Seed the catalog with role-based skills (dogfood the pipeline).** Generate one
+   role-enablement skill per (role × level) across the **entire semiconductor org** using the work-list in
+   `specs/ROLE_TAXONOMY.md` — Design & Verification, Physical Design, Analog/RF, CAD/EDA, Silicon
+   Validation, Test, Process/Fab, Packaging, Reliability/Quality, Firmware/SW, Product, Program, Sales,
+   Marketing, Finance, HR, **Payroll**, Ops/Supply-chain, IT/Security, Legal/IP, and Executive — across
+   every seniority level (fresher → junior → intermediate → senior → staff → senior-staff → principal →
+   distinguished → fellow/VIP → architect; lead → manager → senior-manager → director → senior-director →
+   VP → EVP → C-suite). **Fan out one generator subagent per function**, each producing skills for its
+   roles; **every generated skill is submitted through L1 and must pass the full L4/L6 pipeline + human
+   approval before publish — no back-door inserts** (Phase C invariant applies to seed skills too). Tag
+   each with `function` / `role` / `level-tier` / `owner` for L3 faceted search. Generate in waves by
+   function, Design/Verification first. *Verify: 100% of seed skills carry a passing scan_run + approval
+   artifact; a deliberately-broken seed skill is blocked exactly like any other submission; catalog is
+   faceted by function/role/level.*
 
 ### Acceptance evals (write these FIRST, per AIOS software-factory discipline)
 - A **benign** skill: submit → passes all scans → human approves → appears in SharePoint → reusable.
@@ -112,6 +126,9 @@ provenance, scan report badge, version history); **comment** threads; **rate / u
 - **ACL test:** a `need-to-know` skill is invisible to an unauthorized querier.
 - **Rollback test:** an approved skill can be unpublished/quarantined within the defined window.
 - **Drift test:** falling judge-vs-gold-set κ blocks the L5 controller from auto-acting.
+- **Seed-catalog test:** every role in `specs/ROLE_TAXONOMY.md` has a generated skill that reached
+  `published` only via a passing `scan_run` + human `approval` artifact; faceted search returns skills
+  by function/role/level; a deliberately-malicious seed skill is blocked identically to a normal one.
 
 ### Guardrails for you (the orchestrator)
 - Confirm the three open decisions as ADRs before coding them: (a) SharePoint hosting model,

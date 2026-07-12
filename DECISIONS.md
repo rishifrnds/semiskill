@@ -36,6 +36,26 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Consequences: Slightly slower time-to-publish; guaranteed no unverified skill is ever discoverable.
 - Related: ADR-001, ULTRA_PLAN_PROMPT.md §Security Pipeline
 
+## [ADR-003] Seed the catalog with a role-based skill for every semiconductor role × level, via the pipeline
+- Date: 2026-07-13
+- Status: accepted
+- Context: To be useful on day one, the marketplace must not launch empty. The company spans the full
+  semiconductor org — Design & Verification, Physical Design, Analog/RF, CAD/EDA, Silicon Validation,
+  Test, Process/Fab, Packaging, Reliability/Quality, Firmware/SW, Product, Program, Sales, Marketing,
+  Finance, HR, Payroll, Ops, IT/Security, Legal/IP, Executive — across every seniority level (fresher
+  through fellow/VIP/architect and lead through C-suite).
+- Decision: Enumerate all roles×levels in `specs/ROLE_TAXONOMY.md` and generate one role-enablement
+  Agent Skill each. Every seed skill is submitted through L1 and must pass the full L4/L6 verification
+  pipeline + human approval before publish — no back-door catalog inserts. This is Phase G and dogfoods
+  the pipeline. Generate in waves by function, Design/Verification first.
+- Alternatives considered:
+  - Bulk-insert seed skills directly into SharePoint — rejected: violates ADR-002 (gated publish) and
+    would let an unverified generated skill go live.
+  - Launch empty and rely on organic submissions — rejected: no day-one value; slow adoption.
+- Consequences: Large generation workload (fanned out per function in ultra mode), but the catalog
+  launches full, faceted by function/role/level, and every seed skill proves the safety gate works.
+- Related: ADR-001, ADR-002, specs/ROLE_TAXONOMY.md, ULTRA_PLAN_PROMPT.md §Phase G
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

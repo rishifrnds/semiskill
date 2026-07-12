@@ -35,7 +35,11 @@ No archives yet — first phase in progress.
 - [P0-002] 2026-07-13  status: done
   what: Authored ultra-mode build plan prompt mapping SemiSkill onto AIOS 6 layers + security-gated publish pipeline
   artifacts: ULTRA_PLAN_PROMPT.md
-  next: end-of-phase (feed ULTRA_PLAN_PROMPT.md to ultra mode)
+  next: P0-003
+- [P0-003] 2026-07-13  status: done
+  what: Captured full semiconductor role×level taxonomy + per-role skill seed catalog; added Phase G (pipeline-verified seeding) to plan; ADR-003
+  artifacts: specs/ROLE_TAXONOMY.md, ULTRA_PLAN_PROMPT.md (Phase G + seed eval), DECISIONS.md (ADR-003)
+  next: end-of-phase (git commit; feed ULTRA_PLAN_PROMPT.md to ultra mode)
 
 ## In-Flight Step
 _(none — next is to run `git init`, commit the foundation, then feed ULTRA_PLAN_PROMPT.md to ultra mode)_
