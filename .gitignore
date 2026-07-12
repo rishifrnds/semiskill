@@ -1,0 +1,29 @@
+# State system
+.session-lock
+
+# Node / build
+node_modules/
+dist/
+build/
+.next/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Env / secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
