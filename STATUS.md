@@ -4,39 +4,40 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T06:35Z_
+_Last updated: 2026-07-13T06:50Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T06:35Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T06:50Z)
 - Session goal: complete all planned tasks (Phases C–G), surface gaps/issues, no per-phase pause.
 
 ## Right now
-Phase C nearly complete. All 6 stages built + gate + publish + rollback + red-team harness (zero
-escapes across 6 attack classes, corpus unreadable). 139 tests green. Next: C-011b creative red-team
-Workflow fan-out (generate novel attacks, verify via harness), then C-012 Phase C gate.
+PHASE C COMPLETE ✅ — 6-stage verification pipeline + gated publish + rollback + held-out corpus
+boundary + red-team (zero escapes across battery + 7 novel LLM-crafted attacks). 146 tests green.
+Continuing to Phase D (Intelligence Controller, L5): stability gate + model routing + queue ranking.
 
 ## Active step
-- Step ID: C-011 (done) -> C-011b (red-team Workflow fan-out)
-- Sub-state: committing C-011
-- Started: 2026-07-13T06:35Z
+- Step ID: C-012 (done) -> rotate C→D, then Phase D
+- Sub-state: committing C-012, then rotation
+- Started: 2026-07-13T06:50Z
 
 ## Last commit
-- SHA: 5a1984a (C-010 judge)
-- Message: wip: C-010 L6 calibrated LLM-judge
+- SHA: 7f9aa45 (C-011b red-team workflow)
+- Message: wip: C-011b creative red-team Workflow fan-out
 - Time: 2026-07-13
 
-## GAPS surfaced (for the goal)
+## GAPS surfaced (carry forward)
 - Stage 2 (security-audit) + cloudflare skill: need egress sandbox + claude-flow (injected-runner tested only).
-- Stage 5 (LLM judge): needs ANTHROPIC/OPENAI keys for a live ClaudeJudge/OpenAIJudge (FakeJudge tested).
-- pgvector semantic search: deferred (Voyage egress).
-- NUL-byte submissions now sanitized at L1 (was a store-crash DoS).
+- Stage 5 (LLM judge): needs API keys for a live ClaudeJudge/OpenAIJudge (FakeJudge tested).
+- pgvector semantic search deferred (Voyage egress).
 
 ## Next action (one step ahead)
-C-011b: Workflow fan-out — agents craft novel malicious SKILL.md per attack class; run each through
-redteam.run_case; assert zero escapes. Then C-012 Phase C verify gate (full suite + acceptance evals).
+Rotate MEMORY C→D, then Phase D: intelligence/stability.py (six-control gate, port AIOS),
+governance/cost.py (model routing SMALL/LARGE + cost-per-verified-skill), intelligence/controller.py
+(verdict aggregation + review-queue ranking + drift-blocks-auto-act). Mirror aios/intelligence/.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase C Pending (C-011b, C-012). DB: `docker compose up -d db` (127.0.0.1). Tests: `pytest`.
+Read MEMORY.md → Phase C done (archive at rotation). DB: `docker compose up -d db` (127.0.0.1). Tests:
+`pytest` (146). Next: Phase D. AIOS refs: intelligence/stability.py, governance/cost.py, controller.py.

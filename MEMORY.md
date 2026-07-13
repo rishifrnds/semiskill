@@ -97,8 +97,13 @@ Built + green (59 tests):
   artifacts: tests/redteam/fixtures/generated_attacks.json, tests/redteam/test_generated_attacks.py, workflow semiskill-redteam (wf_b0c590d8-cb5)
   next: C-012
 
+- [C-012] 2026-07-13T06:50Z  status: done
+  what: Phase C verify gate PASSED — full suite 146 green. Acceptance evals all covered: benign→scans→review→human-approve→discoverable; malicious→hard-fail→never-discoverable→quarantined-with-trail; publish-path invariant (submitter can't forge approval [0003]; publish w/o human approval rejected [test_publish]; colluding-approver on malicious blocked [red-team]); held-out corpus+gold-set UNREADABLE by pipeline role [0004+red-team]; red-team ZERO escapes across battery + 7 novel LLM-crafted attacks
+  artifacts: 146-test suite green
+  next: end-of-phase → Phase D (Intelligence Controller L5). Rotate at Phase D kickoff.
+
 ## In-Flight Step
-_(none — C-012 next: Phase C verify gate — full suite + acceptance evals, then rotate to Phase D)_
+_(none — Phase C COMPLETE. Continuing to Phase D per session goal.)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
