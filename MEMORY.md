@@ -35,8 +35,13 @@ Built + green (59 tests):
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
+- [C-001] 2026-07-13T05:00Z  status: done
+  what: migration 0003_pipeline.sql — added pipeline artifact types (gate_decision/sensor_reading/gold_set); created semiskill_submitter role (INSERT-only) + BEFORE INSERT trigger restricting it to skill_version/comment/rating/reuse_event, so a submitter structurally cannot forge approval/scan_run/injection_test/review (publish-path invariant foundation). 7 tests green; full suite 66 green (no regression from the new trigger)
+  artifacts: semiskill/artifacts/migrations/0003_pipeline.sql, tests/artifacts/test_migration_0003.py
+  next: C-002
+
 ## In-Flight Step
-_(none — starting Phase C: C-001 pipeline migration + submitter-role enforcement)_
+_(none — C-002 next: scanners/base.py Scanner Protocol + ScanResult + governance/policy.py allowlist)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
