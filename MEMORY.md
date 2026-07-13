@@ -12,51 +12,32 @@ Full rules and entry schemas: see STATE_RULES.md.
 - Session goal: complete all planned tasks (Phases C–G) and surface gaps/issues (no per-phase pause).
 
 ## Carry-forward from archives
-Phases 0/A/B/C/D done → archive/MEMORY-{P0,A,B,C,D}.md. Built + green (171 tests):
-- L2 store (schema/store/migrate + migrations 0001..0007), spine (states/lifecycle).
-- L1 capture (intake/events/cli). L3 context (acl/untrusted/retrieve/provenance + catalog_search/lineage/reuse fns).
-- L4/L6 pipeline: 6 stages (static/security-audit/injection/secret-PII/judge/aggregate) + orchestrator
-  + gated publish + rollback + held-out corpus (semiskill_pipeline can't read it) + red-team (zero escapes).
-- L5: intelligence/{stability(six-control),controller(queue-rank + drift-blocks-auto-act)} + governance/cost.
-- Roles: semiskill_app (read), semiskill_submitter (can't forge verification), semiskill_pipeline (can't read corpus).
-- ADRs 001-007. INFRA: Docker PG16 (127.0.0.1 not localhost, fsync=off); shared-DB TRUNCATE tests;
-  git enforcement in .git/hooks/commit-msg. Catalog is DERIVED from artifacts (active published approval).
-- GAPS: stage-2 security-audit needs egress sandbox+claude-flow (injected-runner tested); stage-5 live judge
-  needs API keys (FakeJudge tested); pgvector semantic search deferred; live SharePoint embedding needs a tenant.
+Phases 0/A/B/C/D/E done → archive/MEMORY-{P0,A,B,C,D,E}.md. Built + green (176 tests):
+- L1 capture, L2 store/spine (migrations 0001..0008), L3 context (ACL retrieve/provenance + read API),
+  L4/L6 pipeline (6 stages + gated publish + rollback + held-out corpus + red-team zero-escape),
+  L5 intelligence (stability/controller/cost). UI: catalog-demo.html Artifact + Next.js scaffold.
+- Roles: semiskill_app / semiskill_submitter / semiskill_pipeline. ADRs 001-007.
+- INFRA: Docker PG16 (127.0.0.1, fsync=off); shared-DB TRUNCATE tests; git enforcement in commit-msg hook.
+- GAPS: stage-2 security-audit + stage-5 live judge + pgvector + SharePoint embedding all need external
+  resources (egress sandbox / API keys / tenant); tested with injected fakes / demonstrated via Artifact.
 
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
-- [E-001] 2026-07-13T07:35Z  status: done
-  what: semiskill/api.py — dependency-free (stdlib http.server) READ API over L3: /health, /catalog (ACL + facets/text), /skill/<id> (detail + verification/scan-report badge), /queue (review queue), /lineage/<id>, /reuse/<id>. Principal via X-Principal-Labels header (default public). migration 0008 skill_scan_report SECURITY DEFINER + retrieve.get_skill_detail. 5 integration tests (ACL-filtered catalog, verification in detail, install command, unpublished→404). Read-only — never writes the catalog
-  artifacts: semiskill/api.py, semiskill/artifacts/migrations/0008_detail.sql, semiskill/context/retrieve.py, tests/api/test_api.py
-  next: E-002
-
-- [E-002] 2026-07-13T07:50Z  status: done
-  what: Demonstrable catalog UI — self-contained, theme-aware (light/dark, token-based) HTML catalog where every skill card LEADS with its verification badge (verdict + safety meter + 6 scan-stage dots); search + function facets + copy-install command; a skill detail with the full 6-stage scan report + provenance flow (submitted→scanned→reviewed→approved·human→published); and a "blocked at the gate" panel showing a red-team submission quarantined. Published as an Artifact
-  artifacts: ui/catalog-demo.html, Artifact https://claude.ai/code/artifact/7ab991fa-9800-4363-b161-85b10c0777d8
-  next: E-003
-
-- [E-003] 2026-07-13T07:55Z  status: done
-  what: Next.js + shadcn production scaffold (ui/) — package.json, lib/api.ts (read-only client for /catalog|/skill|/queue with X-Principal-Labels), components/skill-card.tsx (verification-badge-centric), app/page.tsx (server-component catalog), README (run + SharePoint embed per ADR-004). Phase E gate: 176 tests green
-  artifacts: ui/README.md, ui/package.json, ui/lib/api.ts, ui/components/skill-card.tsx, ui/app/page.tsx
-  known-gap: npm install/build + SharePoint tenant embedding NOT run here (no M365 tenant, ADR-004); UI demonstrated via catalog-demo.html Artifact + the tested read API
-  next: end-of-phase → Phase F (Governance hardening & docs). Rotate at Phase F kickoff.
-
 ## In-Flight Step
-_(none — Phase E COMPLETE. Continuing to Phase F per session goal.)_
+_(none — starting Phase F: F-001 calibration/κ report + governance posture)_
 
 ## Pending Steps
-1. [E-001] semiskill/api.py — stdlib HTTP JSON read API over L3 (health/catalog/skill/queue/lineage/reuse), ACL via principal header + integration tests
-2. [E-002] Demonstrable catalog UI (HTML Artifact) — verification-badge-centric, faceted browse, skill cards + detail, one-click reuse (skills.sh / outskill reference)
-3. [E-003] ui/ Next.js + shadcn production scaffold (ADR-004 SharePoint-embeddable) + Phase E gate
+1. [F-001] semiskill/governance/report.py — calibration_report (κ series/latest/drift vs 0.6) + governance_posture (egress-deny, roles, tool allowlist, cost-per-verified-skill) + tests
+2. [F-002] Docs — top-level README.md + docs/SECURITY.md (invariants/roles/egress/redaction/rollback) + docs/ADOPTION.md (how employees use it)
+3. [F-003] Phase F verify gate (rollback drill re-verified; κ≥0.6 reported; egress deny-by-default documented; full suite green)
 
 ## Current Phase
-Phase E: SharePoint hosting + Catalog UI
+Phase F: Governance hardening & docs
 
 Exit criteria:
-- Read API serves ACL-enforced catalog search (facets/text) + skill detail (README/tools/scan-report/provenance) + review-queue + lineage + reuse
-- A skill appears in the catalog read model ONLY after human approval (already structurally guaranteed; re-verified via API)
-- Verification badge is the centerpiece of every skill card; comment/rate/reuse represented
-- Demonstrable catalog UI (renderable); Next.js production scaffold recorded (full SharePoint embedding deferred, ADR-004)
+- Calibration report computes κ (≥0.6 gate) + drift status from the judge readings
+- Governance posture surfaces egress-deny-by-default, the three restricted roles, the tool allowlist, cost-per-verified-skill
+- Rollback drill re-verified (publish → unpublish/quarantine → not discoverable)
+- Docs: README + SECURITY + ADOPTION present
 - `docker compose up -d db && pytest` all green
