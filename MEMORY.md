@@ -32,8 +32,13 @@ Phases 0/A/B/C/D done → archive/MEMORY-{P0,A,B,C,D}.md. Built + green (171 tes
   artifacts: semiskill/api.py, semiskill/artifacts/migrations/0008_detail.sql, semiskill/context/retrieve.py, tests/api/test_api.py
   next: E-002
 
+- [E-002] 2026-07-13T07:50Z  status: done
+  what: Demonstrable catalog UI — self-contained, theme-aware (light/dark, token-based) HTML catalog where every skill card LEADS with its verification badge (verdict + safety meter + 6 scan-stage dots); search + function facets + copy-install command; a skill detail with the full 6-stage scan report + provenance flow (submitted→scanned→reviewed→approved·human→published); and a "blocked at the gate" panel showing a red-team submission quarantined. Published as an Artifact
+  artifacts: ui/catalog-demo.html, Artifact https://claude.ai/code/artifact/7ab991fa-9800-4363-b161-85b10c0777d8
+  next: E-003
+
 ## In-Flight Step
-_(none — E-002 next: demonstrable verification-badge-centric catalog UI (HTML Artifact))_
+_(none — E-003 next: Next.js + shadcn production scaffold (ADR-004) + Phase E gate)_
 
 ## Pending Steps
 1. [E-001] semiskill/api.py — stdlib HTTP JSON read API over L3 (health/catalog/skill/queue/lineage/reuse), ACL via principal header + integration tests
