@@ -69,8 +69,13 @@ Postgres full-text + graph traversal (hermetic).
   artifacts: semiskill/context/retrieve.py, tests/context/test_retrieve.py
   next: B-007
 
+- [B-007] 2026-07-13T04:45Z  status: done
+  what: context/provenance.py — get_lineage (verification trail via input_refs, ACL-pruned per hop, delimited-untrusted nodes + edges) + get_reuse (reuse graph, gated on skill visibility). Both SET LOCAL ROLE semiskill_app + rollback. 4 integration tests: trail traces approval→review→scan→skill_version, unauthorized node pruned at boundary, reuse graph, reuse fail-closed when skill invisible
+  artifacts: semiskill/context/provenance.py, tests/context/test_provenance.py
+  next: B-008
+
 ## In-Flight Step
-_(none — B-007 next: context/provenance.py — lineage (verification trail) + reuse graph wrappers, SET LOCAL ROLE + fail-closed pruning; integration tests)_
+_(none — B-008 next: Phase B verify gate — full suite green + confirm exit criteria)_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests

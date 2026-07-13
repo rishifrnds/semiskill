@@ -4,34 +4,34 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T04:38Z_
+_Last updated: 2026-07-13T04:45Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T04:38Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T04:45Z)
 
 ## Right now
-Phase B nearly done. L1 (B-001..003) + L3 (B-004 acl/untrusted, B-005 migration, B-006 retrieve).
-ACL acceptance criterion proven (need-to-know invisible to unauthorized). Next: B-007 provenance.py
-(lineage + reuse graph wrappers), then B-008 Phase B verify gate.
+Phase B feature-complete: L1 (intake/events/CLI) + L3 (acl/untrusted, migration 0002, retrieve,
+provenance) all built and tested. Next: B-008 Phase B verify gate — run the full suite, confirm all
+exit criteria, then checkpoint for user review before Phase C.
 
 ## Active step
-- Step ID: B-006 (done) -> B-007 (context/provenance.py)
-- Sub-state: committing B-006
-- Started: 2026-07-13T04:38Z
+- Step ID: B-007 (done) -> B-008 (Phase B verify gate)
+- Sub-state: committing B-007
+- Started: 2026-07-13T04:45Z
 
 ## Last commit
-- SHA: 2bee3df (B-005)
-- Message: wip: B-005 migration 0002 L3 context fns
+- SHA: 5afd649 (B-006)
+- Message: wip: B-006 context/retrieve.py ACL-enforced catalog search
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-B-007: semiskill/context/provenance.py — get_lineage(dsn, start, principal, max_depth) and
-get_reuse(dsn, skill_id, principal) via SET LOCAL ROLE semiskill_app + lineage()/reuse_events_for_skill();
-delimited-untrusted nodes, fail-closed pruning. Integration tests (verification trail + reuse; ACL prune).
+B-008: `docker compose up -d db && pytest` full run (twice, cross-run stable); confirm exit criteria
+(need-to-know invisible, catalog published-only, lineage+reuse ACL-pruned, facet/text search). Then
+PAUSE for user review before Phase C (Security pipeline, L4/L6 — the load-bearing safety core).
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase B Pending (B-007 provenance, B-008 gate). DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest`. Pattern: aios provenance.py (ProvenanceNode + SET LOCAL ROLE + rollback + delimit).
+Read MEMORY.md → B-008 is the Phase B gate. DB: `docker compose up -d db` (127.0.0.1 not localhost).
+Tests: `pytest` (shared-DB TRUNCATE). Next phase: C (6-stage security pipeline + red-team).
