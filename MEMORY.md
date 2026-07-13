@@ -41,8 +41,18 @@ Phases 0/A/B/C done → archive/MEMORY-{P0,A,B,C}.md. Built + green (146 tests):
   artifacts: semiskill/governance/cost.py, semiskill/artifacts/migrations/0007_cost.sql, semiskill/artifacts/schema.py, tests/governance/test_cost.py
   next: D-003
 
+- [D-003] 2026-07-13T07:20Z  status: done
+  what: intelligence/controller.py (SUGGEST-ONLY, human-gated) — review_queue (pending skills ranked risk-first by aggregate safety; decided skills leave the queue) + controller_decision (drifted/uncalibrated judge → route_to_human; six-control stability gate governs otherwise: deadband→skip, any block→route_to_human, allow→act). 6 tests incl. drift-blocks-auto-act. Full suite 171 green
+  artifacts: semiskill/intelligence/controller.py, tests/intelligence/test_controller.py
+  next: D-004
+
+- [D-004] 2026-07-13T07:20Z  status: done
+  what: Phase D verify gate PASSED — 171 green. Exit criteria met: six-control gate no-oscillation on a converging stream; model routing SMALL/LARGE + cost-per-verified-skill; review-queue ranked by risk; DRIFT blocks the L5 controller from auto-acting (route_to_human)
+  artifacts: 171-test suite green
+  next: end-of-phase → Phase E (SharePoint hosting + Catalog UI). Rotate at Phase E kickoff.
+
 ## In-Flight Step
-_(none — D-003 next: intelligence/controller.py — review-queue ranking + drift-blocks-auto-act (suggest-only))_
+_(none — Phase D COMPLETE. Continuing to Phase E per session goal.)_
 
 ## Pending Steps
 1. [D-001] intelligence/stability.py — six-control gate (deadband/cooldown/circuit-breaker/hysteresis/trajectory/cost) ported from AIOS + tests
