@@ -74,8 +74,13 @@ Postgres full-text + graph traversal (hermetic).
   artifacts: semiskill/context/provenance.py, tests/context/test_provenance.py
   next: B-008
 
+- [B-008] 2026-07-13T04:50Z  status: done
+  what: Phase B verify gate PASSED — full suite 59 passed, stable across 2 consecutive runs (~2.3s) vs live Postgres. All exit criteria met: need-to-know invisible to unauthorized (visible with clearance), catalog surfaces only PUBLISHED skills, lineage + reuse graph ACL-pruned fail-closed, facet/text search works
+  artifacts: 59-test suite green (tests/artifacts 16, capture 20, cli 4, context 11, spine 8)
+  next: end-of-phase — awaiting user go-ahead for Phase C (Security-Verification Pipeline, L4/L6). Will rotate MEMORY (Phase B -> C) at Phase C kickoff.
+
 ## In-Flight Step
-_(none — B-008 next: Phase B verify gate — full suite green + confirm exit criteria)_
+_(none — Phase B complete; paused for user review before Phase C per the approved plan)_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests

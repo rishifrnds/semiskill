@@ -4,34 +4,34 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T04:45Z_
+_Last updated: 2026-07-13T04:50Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T04:45Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T04:50Z)
 
 ## Right now
-Phase B feature-complete: L1 (intake/events/CLI) + L3 (acl/untrusted, migration 0002, retrieve,
-provenance) all built and tested. Next: B-008 Phase B verify gate — run the full suite, confirm all
-exit criteria, then checkpoint for user review before Phase C.
+PHASE B COMPLETE ✅ — L1 Capture (intake/events/CLI) + L3 Context (ACL retrieval, catalog search,
+lineage, reuse graph) built and verified. Full suite 59 passed, stable across 2 runs. Paused for user
+review before Phase C (Security-Verification Pipeline, L4/L6 — the load-bearing safety core).
 
 ## Active step
-- Step ID: B-007 (done) -> B-008 (Phase B verify gate)
-- Sub-state: committing B-007
-- Started: 2026-07-13T04:45Z
+- Step ID: B-008 (done) — Phase B gate passed
+- Sub-state: Phase B complete; awaiting go-ahead for Phase C
+- Started: 2026-07-13T04:50Z
 
 ## Last commit
-- SHA: 5afd649 (B-006)
-- Message: wip: B-006 context/retrieve.py ACL-enforced catalog search
+- SHA: 40e3ebc (B-007) — B-008 landing now
+- Message: wip: B-007 context/provenance.py
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-B-008: `docker compose up -d db && pytest` full run (twice, cross-run stable); confirm exit criteria
-(need-to-know invisible, catalog published-only, lineage+reuse ACL-pruned, facet/text search). Then
-PAUSE for user review before Phase C (Security pipeline, L4/L6 — the load-bearing safety core).
+On go-ahead: rotate MEMORY (Phase B -> C), then Phase C — 6-stage pipeline (static/security-audit/
+injection/secret-PII/LLM-judge/L5-verdict), held-out corpus ACL boundary (semiskill_pipeline role +
+probe fn), gated publish actuator, and a red-team Workflow fan-out. Deterministic stages 1/3/4 + gate first.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → B-008 is the Phase B gate. DB: `docker compose up -d db` (127.0.0.1 not localhost).
-Tests: `pytest` (shared-DB TRUNCATE). Next phase: C (6-stage security pipeline + red-team).
+Read MEMORY.md → Phases A+B done (archive/MEMORY-A.md; Phase B in current MEMORY). DB: `docker compose
+up -d db` (127.0.0.1). Tests: `pytest` (59). Next: Phase C. Design detail in the approved plan §Phase C.
