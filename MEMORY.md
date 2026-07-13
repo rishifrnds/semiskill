@@ -45,8 +45,13 @@ Built + green (59 tests):
   artifacts: semiskill/scanners/base.py, semiskill/governance/policy.py, tests/scanners/test_base.py, tests/governance/test_policy.py
   next: C-003
 
+- [C-003] 2026-07-13T05:10Z  status: done
+  what: scanners/static_structure.py (stage 1, deterministic) — flags dangerous/unlisted tools (policy.tool_risk), binary-executable (hard_fail) / binary-blob / shell-script files, dynamic-exec + base64 obfuscation, outbound network refs, oversized. 7 unit tests (benign clean; Bash + .exe hard_fail; eval/base64 → low score)
+  artifacts: semiskill/scanners/static_structure.py, tests/scanners/test_static_structure.py
+  next: C-004
+
 ## In-Flight Step
-_(none — C-003 next: scanners/static_structure.py stage 1)_
+_(none — C-004 next: scanners/secret_pii.py stage 4)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
