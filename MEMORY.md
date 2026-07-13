@@ -70,8 +70,13 @@ Built + green (59 tests):
   artifacts: semiskill/governance/publish.py, semiskill/governance/rollback.py, semiskill/artifacts/migrations/0005_publish.sql, semiskill/spine/lifecycle.py, tests/governance/test_publish.py
   next: C-008
 
+- [C-008] 2026-07-13T05:55Z  status: done
+  what: spine/pipeline.py orchestrator — run_pipeline runs deterministic stages (static/injection/secret-PII) in order, writes scan_run+injection_test per stage (eval_score=safety, hard_fail, findings), hard-fail SHORT-CIRCUITS (no review → unpublishable), else worst-stage safety → suggest-only review verdict (approve≥0.8 / reject<0.5 / request-changes). 5 integration tests: benign→approve→human-publish→discoverable; soft→request-changes; tool-abuse/injection/secret each blocked at their stage, never in catalog, hard-fail trail present. Full suite 110 green. **Core safety property demonstrated end-to-end.**
+  artifacts: semiskill/spine/pipeline.py, tests/spine/test_pipeline.py
+  next: C-009
+
 ## In-Flight Step
-_(none — C-008 next: spine/pipeline.py orchestrator — run stages in order, write scan_run/injection_test, hard-fail short-circuit, aggregate review)_
+_(none — C-009 next: scanners/security_audit.py stage 2 wrapping local security skills, graceful skip if npx absent)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
