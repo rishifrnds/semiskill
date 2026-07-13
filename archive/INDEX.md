@@ -47,6 +47,12 @@ _Last updated: 2026-07-13_
   - Step count: 3 done, 0 abandoned, 0 rolled-back
   - Exit criterion met: `pytest` 176 green — stdlib read API (ACL-filtered catalog + verification badge), demonstrable catalog UI Artifact, Next.js production scaffold
 
+- MEMORY-F.md — Phase F: Governance hardening & docs
+  - Timespan: 2026-07-13T08:05Z → 2026-07-13T08:10Z
+  - STEP-IDs: F-001 → F-003
+  - Step count: 3 done, 0 abandoned, 0 rolled-back
+  - Exit criterion met: `pytest` 180 green — calibration/κ report + governance posture, rollback drill re-verified, README/SECURITY/ADOPTION docs
+
 <!-- Entry format after first rotation:
 
 - MEMORY-P1.md — Phase 1: <phase name>

@@ -12,47 +12,33 @@ Full rules and entry schemas: see STATE_RULES.md.
 - Session goal: complete all planned tasks (Phases C–G) and surface gaps/issues (no per-phase pause).
 
 ## Carry-forward from archives
-Phases 0/A/B/C/D/E done → archive/MEMORY-{P0,A,B,C,D,E}.md. Built + green (176 tests):
-- L1 capture, L2 store/spine (migrations 0001..0008), L3 context (ACL retrieve/provenance + read API),
-  L4/L6 pipeline (6 stages + gated publish + rollback + held-out corpus + red-team zero-escape),
-  L5 intelligence (stability/controller/cost). UI: catalog-demo.html Artifact + Next.js scaffold.
-- Roles: semiskill_app / semiskill_submitter / semiskill_pipeline. ADRs 001-007.
+Phases 0/A/B/C/D/E/F done → archive/MEMORY-{P0,A,B,C,D,E,F}.md. Built + green (180 tests):
+- All 6 AIOS layers implemented + tested; gated publish; held-out corpus; red-team zero-escape;
+  L5 stability/controller/cost; read API + UI (Artifact + Next.js scaffold); calibration report + docs.
+- Roles: semiskill_app / semiskill_submitter / semiskill_pipeline. ADRs 001-007. migrations 0001..0008.
 - INFRA: Docker PG16 (127.0.0.1, fsync=off); shared-DB TRUNCATE tests; git enforcement in commit-msg hook.
-- GAPS: stage-2 security-audit + stage-5 live judge + pgvector + SharePoint embedding all need external
-  resources (egress sandbox / API keys / tenant); tested with injected fakes / demonstrated via Artifact.
+- Pipeline verification helper: redteam/harness.run_case (submit → pipeline → publish attempt).
+- GAPS: stage-2 live security-audit / stage-5 live judge / pgvector / SharePoint embedding need external
+  resources (tested via fakes / demonstrated). specs/ROLE_TAXONOMY.md is the Phase G work-list.
 
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
-- [F-001] 2026-07-13T08:05Z  status: done
-  what: governance/report.py — calibration_report (κ series/latest/calibrated-vs-0.6/drift status) + governance_posture (egress-deny-by-default, 3 restricted roles, tool allowlist/dangerous set, total spend + cost-per-verified-skill). 4 tests (uncalibrated / calibrated-passes-gate / drift-floor / posture)
-  artifacts: semiskill/governance/report.py, tests/governance/test_report.py
-  next: F-002
-
-- [F-002] 2026-07-13T08:10Z  status: done
-  what: Docs — top-level README.md (what/why, architecture table, quick start, gaps), docs/SECURITY.md (5 structural invariants + restricted roles + pipeline + Rule-of-Two + egress/redaction + rollback + calibration), docs/ADOPTION.md (author/approver/everyone workflows)
-  artifacts: README.md, docs/SECURITY.md, docs/ADOPTION.md
-  next: F-003
-
-- [F-003] 2026-07-13T08:10Z  status: done
-  what: Phase F verify gate PASSED — 180 green. Rollback drill re-verified (publish→unpublish→not discoverable); κ≥0.6 calibration report + governance posture (egress-deny / 3 roles / tool allowlist / cost-per-verified-skill); egress deny-by-default documented; README + SECURITY + ADOPTION present
-  artifacts: 180-test suite green
-  next: end-of-phase → Phase G (seed the catalog via the pipeline). Rotate at Phase G kickoff.
-
 ## In-Flight Step
-_(none — Phase F COMPLETE. Continuing to Phase G per session goal.)_
+_(none — starting Phase G: G-001 seed harness)_
 
 ## Pending Steps
-1. [F-001] semiskill/governance/report.py — calibration_report (κ series/latest/drift vs 0.6) + governance_posture (egress-deny, roles, tool allowlist, cost-per-verified-skill) + tests
-2. [F-002] Docs — top-level README.md + docs/SECURITY.md (invariants/roles/egress/redaction/rollback) + docs/ADOPTION.md (how employees use it)
-3. [F-003] Phase F verify gate (rollback drill re-verified; κ≥0.6 reported; egress deny-by-default documented; full suite green)
+1. [G-001] semiskill/seed.py — seed_skill (generated skill → full pipeline → human approve → published; no back-door) + tests (clean publishes, broken blocked)
+2. [G-002] Generate a representative Design/Verification wave (role×level) via a Workflow fan-out
+3. [G-003] Run the wave through seed_skill; verify each published carries a passing scan_run + approval; a deliberately-broken seed blocked identically; catalog faceted by function/role/level
+4. [G-004] Phase G verify gate (+ final project summary)
 
 ## Current Phase
-Phase F: Governance hardening & docs
+Phase G: Seed the catalog with role-based skills (dogfood the pipeline)
 
 Exit criteria:
-- Calibration report computes κ (≥0.6 gate) + drift status from the judge readings
-- Governance posture surfaces egress-deny-by-default, the three restricted roles, the tool allowlist, cost-per-verified-skill
-- Rollback drill re-verified (publish → unpublish/quarantine → not discoverable)
-- Docs: README + SECURITY + ADOPTION present
+- Every published seed skill carries a passing scan_run + approval artifact (reached publish only via the gate — no back-door)
+- A deliberately-broken seed skill is blocked exactly like any other submission
+- Catalog is faceted by function / role / level (search returns generated skills by facet)
+- Representative wave generated + verified (full-org hundreds flagged as scalable-but-not-exhaustively-run)
 - `docker compose up -d db && pytest` all green
