@@ -41,8 +41,14 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   note: Fixed an off-by-one in the state-system git hook — moved message-type enforcement from pre-commit to a new commit-msg hook. A pre-commit hook cannot read a `git commit -m` message, so the old hook read a stale COMMIT_EDITMSG and validated each commit against the PREVIOUS commit's message (a wip: commit was blocked under rotate: rules). Original preserved at .git/hooks/pre-commit.bak. Hooks live in .git/ (untracked) so this is not a committed change. Also gitignored *.egg-info/.
   next: A-002
 
+- [A-002] 2026-07-13T02:48Z  status: done
+  what: Ported the five-class event spine verbatim from AIOS (EventClass CAPTURED..OBSERVED + next_state/is_terminal); 2 tests green
+  artifacts: semiskill/spine/states.py, tests/spine/test_states.py
+  next: A-003
+  note: Reordered remaining Phase A — schema (A-003) before lifecycle (A-004) since lifecycle imports ArtifactType/Artifact.
+
 ## In-Flight Step
-_(none — A-002 next: spine states TDD)_
+_(none — A-003 next: artifact schema TDD)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton
