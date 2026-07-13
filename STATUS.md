@@ -4,34 +4,36 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T04:50Z_
+_Last updated: 2026-07-13T04:55Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T04:50Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T04:55Z)
+- Session goal: complete all planned tasks (Phases C–G), surface gaps/issues, no per-phase pause.
 
 ## Right now
-PHASE B COMPLETE ✅ — L1 Capture (intake/events/CLI) + L3 Context (ACL retrieval, catalog search,
-lineage, reuse graph) built and verified. Full suite 59 passed, stable across 2 runs. Paused for user
-review before Phase C (Security-Verification Pipeline, L4/L6 — the load-bearing safety core).
+Phase B complete (→ archive/MEMORY-B.md). Rotated into Phase C (Security-Verification Pipeline, L4/L6).
+Building the deterministic safety core first: pipeline migration + submitter-role enforcement, scanner
+base, static-structure + secret/PII stages, held-out corpus boundary, gate + gated publish actuator.
 
 ## Active step
-- Step ID: B-008 (done) — Phase B gate passed
-- Sub-state: Phase B complete; awaiting go-ahead for Phase C
-- Started: 2026-07-13T04:50Z
+- Step ID: rotate B→C (done), then C-001 (migration 0003 pipeline + submitter role)
+- Sub-state: rotation committing
+- Started: 2026-07-13T04:55Z
 
 ## Last commit
-- SHA: 40e3ebc (B-007) — B-008 landing now
-- Message: wip: B-007 context/provenance.py
+- SHA: 02726d4 (B-008 Phase B gate)
+- Message: wip: B-008 Phase B verify gate PASSED
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-On go-ahead: rotate MEMORY (Phase B -> C), then Phase C — 6-stage pipeline (static/security-audit/
-injection/secret-PII/LLM-judge/L5-verdict), held-out corpus ACL boundary (semiskill_pipeline role +
-probe fn), gated publish actuator, and a red-team Workflow fan-out. Deterministic stages 1/3/4 + gate first.
+C-001: migration 0003_pipeline.sql — ALTER TYPE add gate_decision/sensor_reading/gold_set; create
+semiskill_submitter role + BEFORE INSERT trigger restricting it to skill_version/comment/rating/
+reuse_event (can't forge approval/scan_run/review). Tests: submitter forge blocked; owner allowed.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phases A+B done (archive/MEMORY-A.md; Phase B in current MEMORY). DB: `docker compose
-up -d db` (127.0.0.1). Tests: `pytest` (59). Next: Phase C. Design detail in the approved plan §Phase C.
+Read MEMORY.md → Phase C Pending (C-001..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests:
+`pytest`. AIOS refs: governance/gate.py (guarded_run), evals/scorer.py (ScoreResult), sensor/reading.py,
+sensor/judge.py, intelligence/executor.py, migrations 0002/0004 (SECURITY DEFINER + restricted role).
