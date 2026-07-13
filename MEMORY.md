@@ -36,8 +36,13 @@ Phases 0/A/B/C done → archive/MEMORY-{P0,A,B,C}.md. Built + green (146 tests):
   artifacts: semiskill/intelligence/stability.py, tests/intelligence/test_stability.py
   next: D-002
 
+- [D-002] 2026-07-13T07:10Z  status: done
+  what: governance/cost.py — model registry (SMALL=claude-haiku-4-5, LARGE=claude-sonnet-5, +opus), route(bounded→SMALL / ambiguous→LARGE), call_cost (Decimal), build_cost_policy (deny disallowed model / over-budget), guard_llm_call (gate on estimate → blocked never runs; ledger actual), total_spend + cost_per_verified_skill. migration 0007 + COST_LEDGER enum. 8 unit tests. Ported from AIOS
+  artifacts: semiskill/governance/cost.py, semiskill/artifacts/migrations/0007_cost.sql, semiskill/artifacts/schema.py, tests/governance/test_cost.py
+  next: D-003
+
 ## In-Flight Step
-_(none — D-002 next: governance/cost.py model routing + cost ledger + cost-per-verified-skill)_
+_(none — D-003 next: intelligence/controller.py — review-queue ranking + drift-blocks-auto-act (suggest-only))_
 
 ## Pending Steps
 1. [D-001] intelligence/stability.py — six-control gate (deadband/cooldown/circuit-breaker/hysteresis/trajectory/cost) ported from AIOS + tests

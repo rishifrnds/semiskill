@@ -19,6 +19,7 @@ class ArtifactType(str, Enum):
     GATE_DECISION = "gate_decision"      # L4 — governance gate audit (migration 0003)
     SENSOR_READING = "sensor_reading"    # L6 — error-signal reading (migration 0003)
     GOLD_SET = "gold_set"                # L6 — held-out judge labels (migration 0003)
+    COST_LEDGER = "cost_ledger"          # L5 — governed model-call cost record (migration 0007)
     PROPOSAL = "proposal"                # L5 — controller proposal (forward-looking)
     EXECUTION = "execution"              # L5 — executed action (forward-looking)
 
