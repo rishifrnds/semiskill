@@ -7,10 +7,15 @@ entry go in the ACTIVE MEMORY.md as a `status: correction` entry.
 -->
 
 # Archive Index
-_Last updated: <YYYY-MM-DD>_
+_Last updated: 2026-07-13_
 
 ## MEMORY archives (phase-based)
-_No phase rotations yet._
+
+- MEMORY-P0.md — Phase 0: Foundation & Plan
+  - Timespan: 2026-07-13 → 2026-07-13
+  - STEP-IDs: P0-001 → P0-003
+  - Step count: 3 done, 0 abandoned, 0 rolled-back
+  - Exit criterion met: ULTRA_PLAN_PROMPT.md reviewed by user and build plan approved (2026-07-13)
 
 <!-- Entry format after first rotation:
 

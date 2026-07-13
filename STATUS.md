@@ -4,32 +4,33 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13_
+_Last updated: 2026-07-13T02:40Z_
 
 ## Session
-- ID: 20260713T000000Z-DESKTOP-000000
+- ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
-- Host: DESKTOP
-- Lock held: no (no .session-lock created yet — project not git-initialized)
+- Host: Rishi_PC
+- Lock held: yes (.session-lock refreshed 2026-07-13T02:40Z)
 
 ## Right now
-Foundation authored: state system + AIOS-aligned CLAUDE.md + ultra-mode build plan prompt are written.
+Phase 0 closed (build plan approved). Rotated into Phase A (Foundation & Schema). Kickoff housekeeping
+done: session lock created, research/ populated, ADR-004/005/006 recorded, MEMORY rotated.
 
 ## Active step
-- Step ID: P0-002 (done)
-- Sub-state: ULTRA_PLAN_PROMPT.md written
-- Started: 2026-07-13
+- Step ID: rotate P0→A (transition checkpoint), then A-001 (project scaffold)
+- Sub-state: kickoff files written, about to commit the rotation
+- Started: 2026-07-13T02:40Z
 
 ## Last commit
-- SHA: (none — repo not initialized locally yet)
-- Message: n/a
-- Time: n/a
+- SHA: 094943e (pre-rotation)
+- Message: feat: add semiconductor role taxonomy + seed catalog (Phase G, ADR-003)
+- Time: 2026-07-13
 
 ## Next action (one step ahead)
-Run `git init` in E:\code\VLSI\semiskill, add remote origin https://github.com/rishifrnds/semiskill,
-install the pre-commit hook, then `git add -A && git commit -m "chore: init project state system"`.
+Commit the Phase 0→A rotation, then execute A-001: scaffold semiskill/ package + pyproject.toml +
+docker-compose.yml + config.py + tests skeleton (TDD from A-002 onward).
 
 ## If I crash right now, resume by:
-Open MEMORY.md → Pending Steps; P0-003 is git init + first commit. The ultra-mode build spec is in
-ULTRA_PLAN_PROMPT.md — that file is the deliverable to feed to ultra mode. Do NOT rewrite the state
-files; they are complete for Phase 0.
+Read MEMORY.md → Current Phase (Phase A) + Pending Steps A-001..A-010. Build plan is at
+C:\Users\rishi\.claude\plans\semiskill-ultra-mode-logical-lagoon.md. Port targets live in E:\code\aios
+(schema.py, store.py, migrate.py, 0001_artifacts.sql, spine/states.py, tests/). Docker + Python present.

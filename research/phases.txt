@@ -1,0 +1,56 @@
+To build a world-class AI-native Operating System (OS) for your company, you need to treat it as a centralized "closed-loop" architecture where every business action becomes a queryable artifact, rather than just a collection of AI chatbots. 
+
+Based on the 90-day founder roadmap and maturity models from the sources, here is your step-by-step guide, including the specific skills you will need and the exact prompts you can feed to your AI assistant to build each layer.
+
+### Phase 1: The Foundation (Month 1)
+**Goal:** Do not try to make the whole company AI-native on day one. Start by defining your data structure and building **one single closed loop** (e.g., support ticket triage or spec-to-PR code generation).
+**Skills Needed:**
+*   **Data Modeling & Schema Design:** To create the "canonical artifact" structure.
+*   **Basic API Integration:** To pull raw data from your tools (Slack, Jira, GitHub).
+*   **Evaluation Design:** To define programmatic success metrics (evals) rather than just "pass/fail" tests.
+
+**Prompt 1: Designing the Closed Loop & Schema**
+> "I am building the foundation of an AI-Native OS. I want to start by automating one specific process: [Insert Process, e.g., Customer Support Triage / Spec-to-PR generation]. 
+> 1. Help me design a strict 'canonical artifact schema' for this process that includes mandatory fields like artifact_id, provenance, timestamp, permissions_label, and linked_outcome.
+> 2. Map out the goal signal, the measured output, and the feedback mechanism to ensure this acts as a 'closed loop' that improves over time. 
+> 3. Define the held-out validation scenarios (evals) we will use to score the agent's output."
+
+### Phase 2: The Unified Context Layer (Month 2)
+**Goal:** Build the "company brain" by creating a queryable organization. You need to connect your disparate tools into a single intelligence layer where permissions and access control are enforced at the query level.
+**Skills Needed:**
+*   **Vector Databases & RAG:** To store and retrieve semantic data (e.g., Pinecone, Milvus).
+*   **Knowledge Graphs:** To map the relationships between nouns (e.g., how a customer relates to a specific bug ticket).
+*   **Agent Orchestration:** Building "orchestrator-worker" patterns where a planner agent dispatches specialized worker agents.
+
+**Prompt 2: Building the Queryable Knowledge Stack**
+> "I need to design the unified context layer for my AI OS so my entire company is 'legible to AI.' 
+> 1. Draft a reference architecture that connects my source systems [List systems, e.g., Slack, GitHub, Linear] into a central storage layer containing an event log, a relational database, and a vector store.
+> 2. Write the code for a retrieval system that strictly enforces permissions and Access Control Lists (ACLs) so the AI cannot leak private data.
+> 3. Design an 'orchestrator-worker' agent pattern to query this data and execute tasks automatically."
+
+### Phase 3: Security, Rollback, and Token Optimization (Month 3)
+**Goal:** Once your loops are running, the biggest risks are prompt injection, run-away API costs, and agents making irreversible errors. You must implement hard security gates and optimize your token usage.
+**Skills Needed:**
+*   **Cybersecurity (NIST AI RMF):** Defending against prompt injection, data exfiltration, and building tool allowlists.
+*   **Cloud Networking:** Configuring Virtual Private Clouds (VPCs) and network egress controls so agents cannot freely access the open internet.
+*   **FinOps / Cost Routing:** Routing simple tasks to cheap models (like Claude Haiku) and complex tasks to premium models (like Claude Opus).
+
+**Prompt 3: Governance & Token Economics**
+> "We are scaling our AI OS. I need to implement strict governance and optimize our token economics.
+> 1. Provide a day-one security checklist that includes network egress controls, prompt injection defenses, and explicit human-in-the-loop approval gates for high-blast-radius actions. 
+> 2. Help me build a model-routing script that dynamically sends bounded, verifiable tasks to cheaper, faster models, and only escalates to premium reasoning models when ambiguity is high. 
+> 3. Design a fast 'rollback path' for when an AI agent makes a mistake in production."
+
+### Phase 4: Sourcing the Modern Stack
+**Goal:** The AI tooling landscape changes rapidly. You should not build everything from scratch if an off-the-shelf component exists for the capture layer.
+**Skills Needed:**
+*   **Build-vs-Buy Analysis:** Knowing when to integrate existing tools (like AI note-takers or CI agents) versus building proprietary evaluation harnesses.
+
+**Prompt 4: Tool Selection**
+> "I am building my AI-native company stack today. Provide me with a recommended starter stack of the best current tools for:
+> 1. Coding agents and agentic IDEs.
+> 2. Agent orchestration frameworks.
+> 3. Observability and evaluation for agent output.
+> Tell me which components I should buy off-the-shelf, and which components (like my custom artifact schema and eval suite) I must build natively to maintain a defensible moat."
+
+**A Final Rule for Building:** Do not fall into the "record everything" trap. Simply dumping transcripts and code into an LLM creates a noisy data swamp, not an OS. **Intelligence comes from selectivity:** only capture decisions and actions that have a *linked, measurable outcome* so the AI actually has an error signal to learn from.

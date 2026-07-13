@@ -16,43 +16,46 @@ never edit past entries. Move Pending -> In-Flight -> Completed as work progress
 - Repo: https://github.com/rishifrnds/semiskill
 - Architecture: AIOS 6-layer (L1 Capture · L2 Spine/Artifacts · L3 Context · L4 Agents/Governance
   · L5 Intelligence · L6 Sensor) — mirrors E:\code\aios
+- Build plan (approved 2026-07-13): C:\Users\rishi\.claude\plans\semiskill-ultra-mode-logical-lagoon.md
 
 ## Carry-forward from archives
-No archives yet — first phase in progress.
+Phase 0 (Foundation & Plan) complete — see archive/MEMORY-P0.md (steps P0-001..P0-003).
+Still in use:
+- State system files (CLAUDE.md, AGENTS.md, STATE_RULES.md, STATUS/DECISIONS/BLOCKERS).
+- ULTRA_PLAN_PROMPT.md (build spec) and specs/ROLE_TAXONOMY.md (Phase G work-list).
+- ADR-001 (AIOS 6-layer backbone), ADR-002 (gated publish actuator), ADR-003 (pipeline-verified seeding).
+- research/ now populated with the 3 AIOS reference docs (system prompt context, phases, L5/L6 doc).
+Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
 
 ## Completed Steps
 <!-- Append-only. Newest at bottom. Format:
-- [P0-001] <ISO-8601 timestamp>  status: done
+- [A-001] <ISO-8601 timestamp>  status: done
   what: <one-line description>
   artifacts: <commit SHA first, then file paths, URLs, ADR-IDs>
   next: <STEP-ID of what follows, or "end-of-phase">
 -->
 
-- [P0-001] 2026-07-13  status: done
-  what: Instantiated state system (CLAUDE.md, AGENTS.md, STATE_RULES.md, MEMORY/STATUS/DECISIONS/BLOCKERS, archive/INDEX) for SemiSkill
-  artifacts: CLAUDE.md, AGENTS.md, STATE_RULES.md, STATUS.md, DECISIONS.md, BLOCKERS.md, archive/INDEX.md
-  next: P0-002
-- [P0-002] 2026-07-13  status: done
-  what: Authored ultra-mode build plan prompt mapping SemiSkill onto AIOS 6 layers + security-gated publish pipeline
-  artifacts: ULTRA_PLAN_PROMPT.md
-  next: P0-003
-- [P0-003] 2026-07-13  status: done
-  what: Captured full semiconductor role×level taxonomy + per-role skill seed catalog; added Phase G (pipeline-verified seeding) to plan; ADR-003
-  artifacts: specs/ROLE_TAXONOMY.md, ULTRA_PLAN_PROMPT.md (Phase G + seed eval), DECISIONS.md (ADR-003)
-  next: end-of-phase (git commit; feed ULTRA_PLAN_PROMPT.md to ultra mode)
-
 ## In-Flight Step
-_(none — next is to run `git init`, commit the foundation, then feed ULTRA_PLAN_PROMPT.md to ultra mode)_
+_(none — starting Phase A: A-001 project scaffold)_
 
 ## Pending Steps
-1. [P0-003] `git init`, install pre-commit hook from the state pack, initial commit, push to origin
-2. [P1-001] Feed ULTRA_PLAN_PROMPT.md to ultra mode; lock canonical artifact schema as ADR-001
-3. [P1-002] Stand up L2 Spine + Artifacts append-only store (schema + migrations)
+1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton
+2. [A-002] Spine states (TDD): tests/spine/test_states.py + semiskill/spine/states.py (verbatim AIOS port)
+3. [A-003] Spine lifecycle (TDD): tests/spine/test_lifecycle.py (incl. no_published_state_without_approval) + semiskill/spine/lifecycle.py
+4. [A-004] Artifact schema (TDD): tests/artifacts/test_schema.py + semiskill/artifacts/schema.py (17-col dataclass + domain enums)
+5. [A-005] Migration + runner + conftest: migrations/0001_artifacts.sql + migrate.py + tests/conftest.py + tests/artifacts/test_migrate.py
+6. [A-006] Store (TDD): tests/artifacts/test_store.py + semiskill/artifacts/store.py (PostgresArtifactStore, INSERT/SELECT only)
+7. [A-007] Append-only test: tests/artifacts/test_append_only.py (UPDATE/DELETE blocked at DB)
+8. [A-008] Corrections test: tests/artifacts/test_corrections.py (correction is a new row via corrects_ref)
+9. [A-009] ACL test: tests/artifacts/test_acl.py (semiskill_app cannot SELECT artifacts; artifact_get filters by label)
+10. [A-010] Phase A verify gate: full pytest (unit + integration) green; confirm ADR-001 schema locked
 
 ## Current Phase
-Phase 0: Foundation & Plan
+Phase A: Foundation & Schema (L2 substrate — append-only artifact store + five-class spine + derived domain lifecycle)
 
 Exit criteria (each a concrete verifiable check):
-- `ls CLAUDE.md AGENTS.md STATE_RULES.md MEMORY.md STATUS.md DECISIONS.md BLOCKERS.md ULTRA_PLAN_PROMPT.md` all present (done)
-- `git log --oneline` shows the "init project state system" commit
-- ULTRA_PLAN_PROMPT.md reviewed by user and ready to feed to ultra mode
+- `docker compose up -d db && pytest` — all unit + integration tests green
+- Schema round-trips (append→get returns equal); corrections append a new row (never UPDATE)
+- Structural gate proven: `derive_state` returns no published/approved state without a positive `approval` artifact
+- `semiskill_app` restricted role cannot SELECT the artifacts table directly; `artifact_get` ACL-filters by label
+- ADR-001 canonical artifact schema confirmed/locked; ADR-004/005/006 recorded
