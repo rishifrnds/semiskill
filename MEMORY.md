@@ -52,8 +52,13 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   artifacts: semiskill/artifacts/schema.py, tests/artifacts/test_schema.py, ADR-001
   next: A-004
 
+- [A-004] 2026-07-13T02:56Z  status: done
+  what: Implemented derived domain lifecycle (SkillState + derive_state + STATE_SPINE_CLASS) — the ADR-002 structural gate. RED→GREEN: 6 tests incl. no_published_state_without_approval (submitter forging verdict/published on non-approval artifacts is floored at REVIEWED), rejected-approval, unrelated-artifact isolation
+  artifacts: semiskill/spine/lifecycle.py, tests/spine/test_lifecycle.py, ADR-002
+  next: A-005
+
 ## In-Flight Step
-_(none — A-004 next: spine lifecycle TDD — derive_state + no_published_state_without_approval)_
+_(none — A-005 next: migration 0001 + migrate runner + conftest pg_dsn + test_migrate)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton
