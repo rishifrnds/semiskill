@@ -75,8 +75,14 @@ Built + green (59 tests):
   artifacts: semiskill/spine/pipeline.py, tests/spine/test_pipeline.py
   next: C-009
 
+- [C-009] 2026-07-13T06:05Z  status: done
+  what: scanners/security_audit.py (stage 2) — INJECTABLE runner (default npx_security_runner shells the local security-scan CLI; ToolUnavailable → a VISIBLE `security-audit-skipped` finding in the trail, advisory not silent-fail-open). Maps report severities → findings (critical/high → hard_fail). Wired OPT-IN into pipeline (_build_scanners adds stage 2 only when a runner is passed; default stays deterministic-only for hermeticity + egress control). 4 unit + 2 pipeline tests green
+  artifacts: semiskill/scanners/security_audit.py, semiskill/spine/pipeline.py, tests/scanners/test_security_audit.py, tests/spine/test_pipeline.py
+  known-gap: live stage-2 execution needs the egress-controlled sandbox + claude-flow installed — NOT exercised here (tested via injected runners only). Same applies to fetching the cloudflare/security-audit-skill.
+  next: C-010
+
 ## In-Flight Step
-_(none — C-009 next: scanners/security_audit.py stage 2 wrapping local security skills, graceful skip if npx absent)_
+_(none — C-010 next: sensor/judge.py (κ calibration + drift + cross-family) + scanners/judge_risk.py stage 5 + aggregate — logic + injected fakes, no live API)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests

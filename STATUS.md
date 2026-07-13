@@ -4,36 +4,40 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T05:45Z_
+_Last updated: 2026-07-13T06:05Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T05:45Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T06:05Z)
 - Session goal: complete all planned tasks (Phases C–G), surface gaps/issues, no per-phase pause.
 
 ## Right now
-Phase C safety core in place: C-001 submitter role, C-002 base, C-003 static, C-004 secret/PII,
-C-005 held-out corpus boundary, C-006 gate, C-007 gated publish actuator + rollback (publish-path
-invariant + unpublish verified). Full suite 105 green. Next: C-008 pipeline orchestrator.
+Phase C: deterministic pipeline complete + verified end-to-end (110+ green). C-009 stage-2
+security-audit (opt-in, injectable runner) done. Next: C-010 LLM-judge (stage 5) + κ calibration +
+drift + cross-family guard + aggregate (logic + injected fakes; no live API keys here), then C-011
+red-team Workflow, C-012 gate.
 
 ## Active step
-- Step ID: C-007 (done) -> C-008 (spine/pipeline.py orchestrator)
-- Sub-state: committing C-007
-- Started: 2026-07-13T05:45Z
+- Step ID: C-009 (done) -> C-010 (sensor/judge + judge_risk stage 5 + aggregate)
+- Sub-state: committing C-009
+- Started: 2026-07-13T06:05Z
 
 ## Last commit
-- SHA: f04df5b (C-006 gate)
-- Message: wip: C-006 governance/gate.py
+- SHA: ee8fea4 (C-008 pipeline)
+- Message: wip: C-008 pipeline orchestrator
 - Time: 2026-07-13
 
+## GAPS surfaced so far (for the goal)
+- Stage 2 (security-audit) + cloudflare skill: need egress sandbox + claude-flow; tested via injected runners only.
+- Stage 5 (LLM judge): needs ANTHROPIC/OPENAI keys for live cross-family judging; will build logic + fakes.
+- pgvector semantic search: deferred (Voyage egress).
+
 ## Next action (one step ahead)
-C-008: semiskill/spine/pipeline.py — run_pipeline(store, dsn, skill_version_id): run stages
-static(1)/injection(3)/secret-PII(4) in order, write a scan_run per stage + one injection_test,
-hard-fail short-circuit (state stays scanned, no review), else aggregate → review verdict. Integration
-tests: benign → reviewed(approve); malicious → blocked at scan, no review/publish.
+C-010: sensor/judge.py (Judge Protocol, calibrate_judge + cohen_kappa, require_calibrated κ≥0.6,
+require_no_drift, cross-family guard) + scanners/judge_risk.py (stage 5, sampled) — mirror aios sensor/judge.py.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase C Pending (C-008..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests:
-`pytest` (105). Scanners: static_structure/injection_probe/secret_pii built; gate+publish+rollback built.
+Read MEMORY.md → Phase C Pending (C-010..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests: `pytest`.
+AIOS ref: aios/sensor/judge.py (calibrate/kappa/drift/cross-family), aios/intelligence/controller.py.

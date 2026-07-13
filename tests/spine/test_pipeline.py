@@ -70,3 +70,20 @@ def test_secret_blocked_at_stage4(store, pg_dsn):
     res = run_pipeline(store=store, dsn=pg_dsn, skill_version_id=sv.artifact_id)
     assert res.blocked_at == ScanStage.SECRET_PII and res.review is None
     assert _in_catalog(pg_dsn) == set()
+
+
+@pytest.mark.integration
+def test_security_audit_stage_included_when_runner_given(store, pg_dsn):
+    sv = _submit(store, slug="dv/audited")
+    res = run_pipeline(store=store, dsn=pg_dsn, skill_version_id=sv.artifact_id,
+                       security_audit_runner=lambda s: {"findings": []})
+    assert len(res.scan_artifacts) == 4 and res.verdict == "approve"   # 4 stages (2 included)
+
+
+@pytest.mark.integration
+def test_security_audit_can_block(store, pg_dsn):
+    sv = _submit(store, slug="dv/cve")
+    res = run_pipeline(store=store, dsn=pg_dsn, skill_version_id=sv.artifact_id,
+                       security_audit_runner=lambda s: {"findings": [{"severity": "critical", "type": "rce"}]})
+    assert res.blocked_at is not None and res.review is None
+    assert _in_catalog(pg_dsn) == set()

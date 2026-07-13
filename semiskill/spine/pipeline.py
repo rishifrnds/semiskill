@@ -17,6 +17,7 @@ from semiskill.scanners.base import ScanStage, ScanResult, SkillSubmission
 from semiskill.scanners.static_structure import StaticStructureScanner
 from semiskill.scanners.injection_probe import InjectionProbeScanner
 from semiskill.scanners.secret_pii import SecretPiiScanner
+from semiskill.scanners.security_audit import SecurityAuditScanner
 
 APPROVE_THRESHOLD = 0.8
 REJECT_THRESHOLD = 0.5
@@ -31,8 +32,14 @@ class PipelineResult:
     blocked_at: ScanStage | None = None
 
 
-def _build_scanners(dsn: str):
-    return [StaticStructureScanner(), InjectionProbeScanner(dsn), SecretPiiScanner()]
+def _build_scanners(dsn: str, security_audit_runner=None):
+    # Stage 2 (security-audit) is opt-in: it needs the egress sandbox + local security CLI, so the
+    # default pipeline is deterministic-only (stages 1/3/4). Pass a runner to enable stage 2 in order.
+    scanners = [StaticStructureScanner()]
+    if security_audit_runner is not None:
+        scanners.append(SecurityAuditScanner(security_audit_runner))
+    scanners += [InjectionProbeScanner(dsn), SecretPiiScanner()]
+    return scanners
 
 
 def _scan_type(stage: ScanStage) -> ArtifactType:
@@ -60,7 +67,8 @@ def _write_review(store: ArtifactStore, sv: Artifact, scans: list[Artifact], ver
     return store.append(art)
 
 
-def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id) -> PipelineResult:
+def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id,
+                 security_audit_runner=None) -> PipelineResult:
     sv = store.get(skill_version_id)
     if sv is None or sv.artifact_type is not ArtifactType.SKILL_VERSION:
         raise ValueError("skill_version not found")
@@ -68,7 +76,7 @@ def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id) -> Pipelin
     submission = SkillSubmission.from_payload(sv.payload)
 
     scans: list[Artifact] = []
-    for scanner in _build_scanners(dsn):
+    for scanner in _build_scanners(dsn, security_audit_runner):
         result = scanner.scan(submission)
         scans.append(_write_scan(store, sv, result, label))
         if result.hard_fail:
