@@ -4,34 +4,34 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T03:45Z_
+_Last updated: 2026-07-13T03:55Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T03:45Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T03:55Z)
 
 ## Right now
-PHASE A COMPLETE ✅ — L2 foundation built and verified. Full suite 21 passed, stable across 3
-consecutive runs (~1s) against live Docker Postgres 16. All exit criteria met. Paused for user review
-before Phase B (Capture + Context, L1/L3) per the approved plan's per-gate checkpoint.
+Phase A complete (archived → archive/MEMORY-A.md). Rotated into Phase B (Capture + Context, L1/L3).
+Building L1 submission intake + L3 ACL-enforced catalog/search/graphs. Mirroring AIOS context/
+(acl.py resolve_allowed_labels, provenance.py SECURITY DEFINER lineage, untrusted.py delimit).
 
 ## Active step
-- Step ID: A-008 (done) — Phase A gate passed
-- Sub-state: Phase A complete; awaiting go-ahead for Phase B
-- Started: 2026-07-13T03:45Z
+- Step ID: rotate A→B (done), then B-001 (L1 capture intake)
+- Sub-state: rotation committing
+- Started: 2026-07-13T03:55Z
 
 ## Last commit
-- SHA: 9dd43ec (A-007) — A-008 landing now
-- Message: wip: A-007 DB-backed L2 verified — 21 tests green + Windows/Docker infra fixes
+- SHA: 02d9d8e (A-008 Phase A gate)
+- Message: wip: A-008 Phase A verify gate PASSED
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-On user go-ahead: rotate MEMORY (Phase A -> B), then Phase B — L1 capture (semiskill/capture/ + cli.py)
-+ L3 context (ACL-enforced catalog read model, search, lineage/reuse graph). Mirror aios context/.
+B-001: semiskill/capture/intake.py — parse SKILL.md frontmatter (slug/name/tags/allowed-tools/
+function/role/level) → a skill_version artifact (untrusted body in payload); unit tests (no DB).
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase A done (A-001..A-008). DB: `docker compose up -d db` (Docker Desktop; container
-127.0.0.1:5432, fsync=off). Tests: `pytest` (21, shared-DB TRUNCATE isolation, use 127.0.0.1 not
-localhost). Next: Phase B. Git hooks fixed this session (message enforcement in .git/hooks/commit-msg).
+Read MEMORY.md → Phase B Pending (B-001..B-008). DB: `docker compose up -d db` (Docker Desktop;
+127.0.0.1:5432; use 127.0.0.1 NOT localhost). Tests: `pytest` (shared-DB TRUNCATE isolation). Port
+AIOS context/ patterns (acl/provenance/untrusted + migrations 0002/0004 SECURITY DEFINER fns).

@@ -17,6 +17,12 @@ _Last updated: 2026-07-13_
   - Step count: 3 done, 0 abandoned, 0 rolled-back
   - Exit criterion met: ULTRA_PLAN_PROMPT.md reviewed by user and build plan approved (2026-07-13)
 
+- MEMORY-A.md — Phase A: Foundation & Schema (L2 substrate)
+  - Timespan: 2026-07-13T02:45Z → 2026-07-13T03:45Z
+  - STEP-IDs: A-001 → A-008
+  - Step count: 8 done, 0 abandoned, 0 rolled-back
+  - Exit criterion met: `pytest` 21 green vs live Postgres (schema round-trips, corrections append-not-update, no-published-without-approval gate, semiskill_app blocked from direct reads)
+
 <!-- Entry format after first rotation:
 
 - MEMORY-P1.md — Phase 1: <phase name>
