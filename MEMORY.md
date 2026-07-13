@@ -50,8 +50,13 @@ Built + green (59 tests):
   artifacts: semiskill/scanners/static_structure.py, tests/scanners/test_static_structure.py
   next: C-004
 
+- [C-004] 2026-07-13T05:15Z  status: done
+  what: scanners/secret_pii.py (stage 4, deterministic) — detects private keys / AWS / GitHub / Slack tokens / credential-assignments (all hard_fail), JWT, internal-URL, private-IP, SSN, credit-card. 7 unit tests (benign clean; live creds hard_fail; internal-url/ssn soft flags)
+  artifacts: semiskill/scanners/secret_pii.py, tests/scanners/test_secret_pii.py
+  next: C-005
+
 ## In-Flight Step
-_(none — C-004 next: scanners/secret_pii.py stage 4)_
+_(none — C-005 next: held-out corpus — migration 0004_corpus.sql + sensor/corpus.py + injection_probe stage 3; corpus UNREADABLE by pipeline role)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests

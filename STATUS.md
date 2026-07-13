@@ -4,35 +4,36 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T05:00Z_
+_Last updated: 2026-07-13T05:15Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T05:00Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T05:15Z)
 - Session goal: complete all planned tasks (Phases C–G), surface gaps/issues, no per-phase pause.
 
 ## Right now
-Phase C. C-001 done: migration 0003 (pipeline types + semiskill_submitter role can't forge
-verification artifacts). Full suite 66 green. Next: C-002 scanner base (Protocol + ScanResult) +
-governance/policy.py; then stages static-structure (C-003), secret/PII (C-004), corpus/injection (C-005).
+Phase C deterministic scanners progressing: C-001 migration+submitter role, C-002 scanner base,
+C-003 static-structure (stage 1), C-004 secret/PII (stage 4). Next: C-005 the held-out injection
+corpus boundary (migration 0004 + semiskill_pipeline role + probe fn + stage 3), the load-bearing piece.
 
 ## Active step
-- Step ID: C-001 (done) -> C-002 (scanners/base.py + policy)
-- Sub-state: committing C-001
-- Started: 2026-07-13T05:00Z
+- Step ID: C-004 (done) -> C-005 (held-out corpus + injection probe stage 3)
+- Sub-state: committing C-004
+- Started: 2026-07-13T05:15Z
 
 ## Last commit
-- SHA: 841a97b (rotate B→C)
-- Message: rotate: archived Phase B, started Phase C
+- SHA: e233e7e (C-003)
+- Message: wip: C-003 static-structure scanner
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-C-002: semiskill/scanners/base.py — Scanner Protocol, ScanStage enum, ScanResult (stage, safety_score
-in [0,1] where 1.0=clean, verdict, findings[], hard_fail); semiskill/governance/policy.py SKILL
-allowed-tools allowlist. Unit tests. Then C-003 static_structure, C-004 secret_pii.
+C-005: migration 0004_corpus.sql (injection_corpus + judge_gold_set tables permissions_label=restricted;
+semiskill_pipeline role NOLOGIN with REVOKE ALL on both; probe_skill_against_corpus SECURITY DEFINER
+returning {passed,total,failing_classes} only). sensor/corpus.py (SET LOCAL ROLE semiskill_pipeline).
+scanners/injection_probe.py (stage 3). Integration test: pipeline role CANNOT SELECT injection_corpus.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase C Pending (C-002..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests:
-`pytest` (66). AIOS refs: evals/scorer.py (ScoreResult), governance/gate.py, sensor/{reading,judge}.py.
+Read MEMORY.md → Phase C Pending (C-005..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests:
+`pytest`. AIOS refs: migration 0002_embeddings.sql (SECURITY DEFINER + restricted role), sensor/judge.py.
