@@ -92,8 +92,13 @@ Built + green (59 tests):
   artifacts: semiskill/redteam/harness.py, tests/redteam/test_harness.py, semiskill/capture/intake.py (_sanitize)
   next: C-011b (creative Workflow red-team fan-out) then C-012
 
+- [C-011b] 2026-07-13T06:45Z  status: done
+  what: Creative red-team Workflow fan-out — 7 subagents (one per attack class) crafted NOVEL malicious SKILL.md (curl-pipe-bash telemetry, base64/hex exec, HTML-comment injection, EchoLeak zero-click image exfil, credential-validation exfil, hardcoded creds+PEM, shebang exfil). Ran all 7 through the pipeline harness: ZERO escapes — each caught, none published, corpus unreadable. Saved as repo fixture + parametrized regression test. 15 red-team tests green (8 battery + 7 generated)
+  artifacts: tests/redteam/fixtures/generated_attacks.json, tests/redteam/test_generated_attacks.py, workflow semiskill-redteam (wf_b0c590d8-cb5)
+  next: C-012
+
 ## In-Flight Step
-_(none — C-011b next: creative red-team Workflow fan-out generating novel attacks, verified via the harness)_
+_(none — C-012 next: Phase C verify gate — full suite + acceptance evals, then rotate to Phase D)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
