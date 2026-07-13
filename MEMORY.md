@@ -35,8 +35,14 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   next: <STEP-ID of what follows, or "end-of-phase">
 -->
 
+- [A-001] 2026-07-13T02:45Z  status: done
+  what: Scaffolded semiskill package (pyproject, docker-compose pg16, .env.example, config.py, package + tests dirs); package installs editable and pytest collects cleanly
+  artifacts: pyproject.toml, docker-compose.yml, .env.example, semiskill/__init__.py, semiskill/config.py, semiskill/{artifacts,spine}/__init__.py, tests/{,artifacts,spine}/__init__.py
+  note: Fixed an off-by-one in the state-system git hook — moved message-type enforcement from pre-commit to a new commit-msg hook. A pre-commit hook cannot read a `git commit -m` message, so the old hook read a stale COMMIT_EDITMSG and validated each commit against the PREVIOUS commit's message (a wip: commit was blocked under rotate: rules). Original preserved at .git/hooks/pre-commit.bak. Hooks live in .git/ (untracked) so this is not a committed change. Also gitignored *.egg-info/.
+  next: A-002
+
 ## In-Flight Step
-_(none — starting Phase A: A-001 project scaffold)_
+_(none — A-002 next: spine states TDD)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton

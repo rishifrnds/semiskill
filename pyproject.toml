@@ -1,0 +1,18 @@
+[project]
+name = "semiskill"
+version = "0.1.0"
+description = "SemiSkill — internal, security-verified Agent-Skill marketplace (AIOS instance)"
+requires-python = ">=3.12"
+dependencies = ["psycopg[binary]>=3.2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+# [project.scripts] deferred to Phase B (semiskill = "semiskill.cli:main")
+
+[tool.setuptools.packages.find]
+include = ["semiskill*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires a live Postgres (DATABASE_URL)"]
