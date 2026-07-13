@@ -60,8 +60,13 @@ Built + green (59 tests):
   artifacts: semiskill/artifacts/migrations/0004_corpus.sql, semiskill/sensor/corpus.py, semiskill/scanners/injection_probe.py, tests/artifacts/test_migration_0004.py, tests/scanners/test_injection_probe.py
   next: C-006
 
+- [C-006] 2026-07-13T05:30Z  status: done
+  what: governance/gate.py — ported guarded_run deny-precedence gate (Decision/Rule/Policy/ActionDescriptor/evaluate; DENY>REQUIRE_SIGNOFF>ALLOW; action runs only in permitted branch; fail-closed GATE_DECISION audit before side effects). Fixed schema.py — added GATE_DECISION to the Python ArtifactType (it was in the DB enum 0003 but missing in Python). 6 gate tests + schema green
+  artifacts: semiskill/governance/gate.py, semiskill/artifacts/schema.py, tests/governance/test_gate.py
+  next: C-007
+
 ## In-Flight Step
-_(none — C-006 next: governance/gate.py port guarded_run deny-precedence + GATE_DECISION audit)_
+_(none — C-007 next: governance/publish.py gated publish actuator + rollback.py + publish-path invariant tests)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests

@@ -15,11 +15,12 @@ class ArtifactType(str, Enum):
     COMMENT = "comment"                  # L1 — marketplace comment thread
     RATING = "rating"                    # L1 — rating / upvote
     REUSE_EVENT = "reuse_event"          # observed telemetry — a `skills add` / copy
-    # --- L5/L6 controller vocabulary (added to the DB enum via later ALTER TYPE migrations) ---
-    PROPOSAL = "proposal"
-    EXECUTION = "execution"
-    SENSOR_READING = "sensor_reading"
-    GOLD_SET = "gold_set"
+    # --- L4/L5/L6 governance + controller vocabulary (added to the DB enum via later migrations) ---
+    GATE_DECISION = "gate_decision"      # L4 — governance gate audit (migration 0003)
+    SENSOR_READING = "sensor_reading"    # L6 — error-signal reading (migration 0003)
+    GOLD_SET = "gold_set"                # L6 — held-out judge labels (migration 0003)
+    PROPOSAL = "proposal"                # L5 — controller proposal (forward-looking)
+    EXECUTION = "execution"              # L5 — executed action (forward-looking)
 
 
 class SourceSystem(str, Enum):
