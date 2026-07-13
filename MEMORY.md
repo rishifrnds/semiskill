@@ -39,8 +39,13 @@ Postgres full-text + graph traversal (hermetic).
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
+- [B-001] 2026-07-13T04:05Z  status: done
+  what: L1 capture intake — parse_skill_md (YAML frontmatter via safe_load + untrusted body), build_skill_version (facets slug/name/version/function/role/level/owner/tags/allowed_tools → skill_version artifact, body/files kept untrusted), load_skill_dir (reads SKILL.md + files, flags binaries). 10 unit tests green. Added pyyaml dep
+  artifacts: semiskill/capture/intake.py, tests/capture/test_intake.py, pyproject.toml, ADR-007
+  next: B-002
+
 ## In-Flight Step
-_(none — starting Phase B: B-001 L1 capture intake)_
+_(none — B-002 next: L1 events — comment/rating/reuse_event builders)_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests

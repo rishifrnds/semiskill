@@ -111,6 +111,20 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   sandbox with a pinned registry (per ADR-005); the LLM-judge cannot move a verdict until κ≥0.6.
 - Related: ADR-001, ADR-002, ADR-005, ULTRA_PLAN_PROMPT.md §Security Pipeline, plan §Phase C
 
+## [ADR-007] Parse SKILL.md frontmatter with PyYAML safe_load
+- Date: 2026-07-13
+- Status: accepted
+- Context: L1 capture must parse the YAML frontmatter of submitted SKILL.md files. Frontmatter can be
+  arbitrary YAML and is UNTRUSTED submitter input.
+- Decision: Add `pyyaml>=6` and parse frontmatter with `yaml.safe_load` (never `yaml.load`, which can
+  construct arbitrary Python objects). The body and files are stored as untrusted content and never
+  executed; Phase C scans them before publish.
+- Alternatives considered:
+  - Hand-rolled minimal frontmatter parser — rejected: fragile on real YAML (nested/quoted/list forms),
+    and a parser bug on untrusted input is itself a risk.
+- Consequences: One small, standard, hermetic dependency (no egress). `safe_load` must be used everywhere.
+- Related: ADR-001, semiskill/capture/intake.py, plan §Phase B
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

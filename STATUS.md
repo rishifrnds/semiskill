@@ -4,34 +4,34 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T03:55Z_
+_Last updated: 2026-07-13T04:05Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T03:55Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T04:05Z)
 
 ## Right now
-Phase A complete (archived → archive/MEMORY-A.md). Rotated into Phase B (Capture + Context, L1/L3).
-Building L1 submission intake + L3 ACL-enforced catalog/search/graphs. Mirroring AIOS context/
-(acl.py resolve_allowed_labels, provenance.py SECURITY DEFINER lineage, untrusted.py delimit).
+Phase B. B-001 L1 capture intake done (10 unit tests). Next: B-002 L1 events (comment/rating/
+reuse_event builders), then B-003 CLI, B-004 acl/untrusted, B-005 migration 0002 context fns,
+B-006 retrieve, B-007 provenance, B-008 gate.
 
 ## Active step
-- Step ID: rotate A→B (done), then B-001 (L1 capture intake)
-- Sub-state: rotation committing
-- Started: 2026-07-13T03:55Z
+- Step ID: B-001 (done) -> B-002 (L1 events builders, TDD)
+- Sub-state: committing B-001
+- Started: 2026-07-13T04:05Z
 
 ## Last commit
-- SHA: 02d9d8e (A-008 Phase A gate)
-- Message: wip: A-008 Phase A verify gate PASSED
+- SHA: a129dd3 (rotate A→B)
+- Message: rotate: archived Phase A, started Phase B
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-B-001: semiskill/capture/intake.py — parse SKILL.md frontmatter (slug/name/tags/allowed-tools/
-function/role/level) → a skill_version artifact (untrusted body in payload); unit tests (no DB).
+B-002: semiskill/capture/events.py — build comment / rating / reuse_event artifacts (each input_refs
+the skill_version); unit tests. Then B-003 CLI (`semiskill submit`/`list`) + pyproject entry point.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase B Pending (B-001..B-008). DB: `docker compose up -d db` (Docker Desktop;
-127.0.0.1:5432; use 127.0.0.1 NOT localhost). Tests: `pytest` (shared-DB TRUNCATE isolation). Port
-AIOS context/ patterns (acl/provenance/untrusted + migrations 0002/0004 SECURITY DEFINER fns).
+Read MEMORY.md → Phase B Pending. DB: `docker compose up -d db` (127.0.0.1, not localhost). Tests:
+`pytest` (shared-DB TRUNCATE isolation). AIOS context patterns: acl.py resolve_allowed_labels,
+provenance.py + migration 0004 SECURITY DEFINER lineage/corrections, untrusted.py delimit.
