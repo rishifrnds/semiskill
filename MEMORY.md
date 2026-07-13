@@ -63,8 +63,14 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   reason: security review flagged insecure-network-exposure (compose) + hardcoded-credentials-fallback (config); mirrored from AIOS but hardened given SemiSkill's security-first mandate
   next: A-006
 
+- [A-006] 2026-07-13T03:10Z  status: done
+  what: L2 DB layer — migration 0001 (append-only trigger, CHECKs, corrects_ref self-FK, artifact_get SECURITY DEFINER + restricted semiskill_app role), migrate.py runner (verbatim AIOS), conftest pg_dsn disposable-DB fixture (skips if no PG), test_migrate (idempotency + real-0001-applies). Suite: 11 passed, 2 integration skipped pending a live Postgres
+  artifacts: semiskill/artifacts/migrations/0001_artifacts.sql, semiskill/artifacts/migrate.py, tests/conftest.py, tests/artifacts/test_migrate.py
+  note: conda Postgres 15 failed to start on Windows (DLL-init 0xC0000142); launched Docker Desktop to run integration tests. pg_dsn skips gracefully when no DB reachable so the unit suite stays green.
+  next: A-007
+
 ## In-Flight Step
-_(none — A-006 next: migration 0001 + migrate runner + conftest pg_dsn + test_migrate)_
+_(none — A-007 next: PostgresArtifactStore + test_store; then A-008 append-only, A-009 corrections, A-010 acl)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton
