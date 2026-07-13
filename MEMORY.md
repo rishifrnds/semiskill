@@ -39,8 +39,12 @@ Phases 0/A/B/C/D/E/F done → archive/MEMORY-{P0,A,B,C,D,E,F}.md. Built + green 
   artifacts: 183-test suite green
   next: PROJECT BUILD COMPLETE (Phases A–G)
 
+- [G-005] 2026-07-13  status: done
+  what: Usability — scripts/demo.py: one-command live demo (TRUNCATE + seed the 8 generated DV skills through the full pipeline + approval, block a malicious sample, print the verified catalog). Verified the read API serves it live (/health, /catalog=8, /skill/<id> with verification report). Answers "how do I see/use it": (1) Artifact URL for visuals, (2) `python scripts/demo.py` + `python -m semiskill.api` for live data
+  artifacts: scripts/demo.py
+
 ## In-Flight Step
-_(none — Phase G COMPLETE. All planned phases A–G done. 183 tests green.)_
+_(none — Phase G COMPLETE. All planned phases A–G done. 183 tests green + runnable demo.)_
 
 ## Pending Steps
 1. [G-001] semiskill/seed.py — seed_skill (generated skill → full pipeline → human approve → published; no back-door) + tests (clean publishes, broken blocked)
