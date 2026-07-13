@@ -87,8 +87,13 @@ Built + green (59 tests):
   known-gap: live judging needs ANTHROPIC/OPENAI keys — a real ClaudeJudge/OpenAIJudge adapter is a follow-up; tested with FakeJudge only
   next: C-011
 
+- [C-011] 2026-07-13T06:35Z  status: done
+  what: Red-team adversarial harness — redteam/harness.py (RedTeamCase battery across tool-abuse/obfuscation/injection/scope-violation/exfiltration/executable; run_case submits → pipeline → attempts publish with a COLLUDING approver → asserts caught + not-in-catalog + corpus-unreadable). 8 tests: full battery ZERO escapes, corpus unreadable every case, benign control not caught. Hardened L1: sanitize NUL bytes (jsonb-safe, was a store-crash DoS). Full suite 139 green
+  artifacts: semiskill/redteam/harness.py, tests/redteam/test_harness.py, semiskill/capture/intake.py (_sanitize)
+  next: C-011b (creative Workflow red-team fan-out) then C-012
+
 ## In-Flight Step
-_(none — C-011 next: red-team adversarial verification — Workflow fan-out crafting malicious skills, asserting each is caught + blocked + corpus stays unreadable)_
+_(none — C-011b next: creative red-team Workflow fan-out generating novel attacks, verified via the harness)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests

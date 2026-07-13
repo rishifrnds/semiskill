@@ -71,6 +71,11 @@ def test_permissions_label_applied():
     assert art.permissions_label == "need-to-know"
 
 
+def test_nul_bytes_sanitized():
+    art = build_skill_version(skill_md="---\nname: N\n---\nbody\x00with\x00nul", actor="a")
+    assert "\x00" not in art.payload["body"]      # jsonb-safe (would otherwise crash the store)
+
+
 def test_load_skill_dir(tmp_path):
     (tmp_path / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
     (tmp_path / "scripts").mkdir()

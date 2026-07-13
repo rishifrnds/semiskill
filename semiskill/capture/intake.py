@@ -25,6 +25,12 @@ def _slugify(name: str) -> str:
     return s or "skill"
 
 
+def _sanitize(s: str) -> str:
+    """Strip NUL bytes from untrusted content. Postgres jsonb rejects \\u0000, so an unsanitized NUL
+    in a body/file would crash the store — sanitize at the L1 boundary (fail-safe, not fail-crash)."""
+    return s.replace("\x00", "�") if "\x00" in s else s
+
+
 def parse_skill_md(text: str) -> ParsedSkill:
     """Split a SKILL.md into YAML frontmatter (a mapping) + the untrusted body."""
     if not text.startswith(_FENCE):
@@ -63,8 +69,8 @@ def build_skill_version(*, skill_md: str, actor: str,
         "owner": fm.get("owner") or actor,
         "tags": [str(t) for t in (fm.get("tags") or [])],
         "allowed_tools": [str(t) for t in (fm.get("allowed-tools") or fm.get("allowed_tools") or [])],
-        "body": parsed.body,                    # UNTRUSTED submitter content
-        "files": dict(files or {}),             # UNTRUSTED submitter content
+        "body": _sanitize(parsed.body),                          # UNTRUSTED submitter content
+        "files": {k: _sanitize(v) for k, v in (files or {}).items()},  # UNTRUSTED submitter content
     }
     art = Artifact.new(artifact_type=ArtifactType.SKILL_VERSION, source_system=source_system,
                        actor=actor, actor_kind=actor_kind, payload=payload)

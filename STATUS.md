@@ -4,40 +4,39 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T06:05Z_
+_Last updated: 2026-07-13T06:35Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T06:05Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T06:35Z)
 - Session goal: complete all planned tasks (Phases C–G), surface gaps/issues, no per-phase pause.
 
 ## Right now
-Phase C: deterministic pipeline complete + verified end-to-end (110+ green). C-009 stage-2
-security-audit (opt-in, injectable runner) done. Next: C-010 LLM-judge (stage 5) + κ calibration +
-drift + cross-family guard + aggregate (logic + injected fakes; no live API keys here), then C-011
-red-team Workflow, C-012 gate.
+Phase C nearly complete. All 6 stages built + gate + publish + rollback + red-team harness (zero
+escapes across 6 attack classes, corpus unreadable). 139 tests green. Next: C-011b creative red-team
+Workflow fan-out (generate novel attacks, verify via harness), then C-012 Phase C gate.
 
 ## Active step
-- Step ID: C-009 (done) -> C-010 (sensor/judge + judge_risk stage 5 + aggregate)
-- Sub-state: committing C-009
-- Started: 2026-07-13T06:05Z
+- Step ID: C-011 (done) -> C-011b (red-team Workflow fan-out)
+- Sub-state: committing C-011
+- Started: 2026-07-13T06:35Z
 
 ## Last commit
-- SHA: ee8fea4 (C-008 pipeline)
-- Message: wip: C-008 pipeline orchestrator
+- SHA: 5a1984a (C-010 judge)
+- Message: wip: C-010 L6 calibrated LLM-judge
 - Time: 2026-07-13
 
-## GAPS surfaced so far (for the goal)
-- Stage 2 (security-audit) + cloudflare skill: need egress sandbox + claude-flow; tested via injected runners only.
-- Stage 5 (LLM judge): needs ANTHROPIC/OPENAI keys for live cross-family judging; will build logic + fakes.
+## GAPS surfaced (for the goal)
+- Stage 2 (security-audit) + cloudflare skill: need egress sandbox + claude-flow (injected-runner tested only).
+- Stage 5 (LLM judge): needs ANTHROPIC/OPENAI keys for a live ClaudeJudge/OpenAIJudge (FakeJudge tested).
 - pgvector semantic search: deferred (Voyage egress).
+- NUL-byte submissions now sanitized at L1 (was a store-crash DoS).
 
 ## Next action (one step ahead)
-C-010: sensor/judge.py (Judge Protocol, calibrate_judge + cohen_kappa, require_calibrated κ≥0.6,
-require_no_drift, cross-family guard) + scanners/judge_risk.py (stage 5, sampled) — mirror aios sensor/judge.py.
+C-011b: Workflow fan-out — agents craft novel malicious SKILL.md per attack class; run each through
+redteam.run_case; assert zero escapes. Then C-012 Phase C verify gate (full suite + acceptance evals).
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase C Pending (C-010..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests: `pytest`.
-AIOS ref: aios/sensor/judge.py (calibrate/kappa/drift/cross-family), aios/intelligence/controller.py.
+Read MEMORY.md → Phase C Pending (C-011b, C-012). DB: `docker compose up -d db` (127.0.0.1). Tests: `pytest`.
