@@ -37,8 +37,14 @@ Phases 0/A/B/C/D done → archive/MEMORY-{P0,A,B,C,D}.md. Built + green (171 tes
   artifacts: ui/catalog-demo.html, Artifact https://claude.ai/code/artifact/7ab991fa-9800-4363-b161-85b10c0777d8
   next: E-003
 
+- [E-003] 2026-07-13T07:55Z  status: done
+  what: Next.js + shadcn production scaffold (ui/) — package.json, lib/api.ts (read-only client for /catalog|/skill|/queue with X-Principal-Labels), components/skill-card.tsx (verification-badge-centric), app/page.tsx (server-component catalog), README (run + SharePoint embed per ADR-004). Phase E gate: 176 tests green
+  artifacts: ui/README.md, ui/package.json, ui/lib/api.ts, ui/components/skill-card.tsx, ui/app/page.tsx
+  known-gap: npm install/build + SharePoint tenant embedding NOT run here (no M365 tenant, ADR-004); UI demonstrated via catalog-demo.html Artifact + the tested read API
+  next: end-of-phase → Phase F (Governance hardening & docs). Rotate at Phase F kickoff.
+
 ## In-Flight Step
-_(none — E-003 next: Next.js + shadcn production scaffold (ADR-004) + Phase E gate)_
+_(none — Phase E COMPLETE. Continuing to Phase F per session goal.)_
 
 ## Pending Steps
 1. [E-001] semiskill/api.py — stdlib HTTP JSON read API over L3 (health/catalog/skill/queue/lineage/reuse), ACL via principal header + integration tests
