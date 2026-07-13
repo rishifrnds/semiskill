@@ -55,8 +55,13 @@ Built + green (59 tests):
   artifacts: semiskill/scanners/secret_pii.py, tests/scanners/test_secret_pii.py
   next: C-005
 
+- [C-005] 2026-07-13T05:25Z  status: done
+  what: Held-out corpus boundary (LOAD-BEARING) — migration 0004_corpus.sql (injection_corpus + judge_gold_set restricted; semiskill_pipeline role REVOKE ALL on both; probe_skill_against_corpus SECURITY DEFINER returns {passed,total,failing_classes} only; 9 seeded signatures: injection/exfiltration/scope-violation/tool-abuse). sensor/corpus.py (seed owner-path + probe pipeline-role-path). scanners/injection_probe.py (stage 3). 5 integration tests: pipeline role CANNOT SELECT corpus/gold-set; probe returns counts not patterns; injection+EchoLeak hard_fail; clean passes. Full suite 94 green
+  artifacts: semiskill/artifacts/migrations/0004_corpus.sql, semiskill/sensor/corpus.py, semiskill/scanners/injection_probe.py, tests/artifacts/test_migration_0004.py, tests/scanners/test_injection_probe.py
+  next: C-006
+
 ## In-Flight Step
-_(none — C-005 next: held-out corpus — migration 0004_corpus.sql + sensor/corpus.py + injection_probe stage 3; corpus UNREADABLE by pipeline role)_
+_(none — C-006 next: governance/gate.py port guarded_run deny-precedence + GATE_DECISION audit)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
