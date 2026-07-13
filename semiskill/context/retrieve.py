@@ -50,3 +50,28 @@ def search_catalog(*, dsn: str, principal: Iterable[str], query: str = "",
         )
         for r in rows
     ]
+
+
+def get_skill_detail(*, dsn: str, skill_version_id, principal: Iterable[str]) -> dict | None:
+    """Detail for a PUBLISHED, visible skill: its card fields + the verification/scan report (the
+    UI badge). Returns None if the skill is not published or not visible to the caller."""
+    principal = list(principal)
+    card = next((c for c in search_catalog(dsn=dsn, principal=principal, limit=1000)
+                 if str(c.artifact_id) == str(skill_version_id)), None)
+    if card is None:
+        return None
+    allowed = list(resolve_allowed_labels(principal))
+    with psycopg.connect(dsn, row_factory=psycopg.rows.dict_row) as conn:
+        conn.execute("SET LOCAL ROLE semiskill_app")
+        row = conn.execute("SELECT * FROM skill_scan_report(%s, %s)",
+                            (skill_version_id, allowed)).fetchone()
+        conn.rollback()
+    return {
+        "artifact_id": str(card.artifact_id), "slug": card.slug, "name": card.name,
+        "description": card.description, "version": card.version, "function": card.function,
+        "role": card.role, "level": card.level, "permissions_label": card.permissions_label,
+        "install": f"skills add {card.slug}",
+        "verification": ({"verdict": row["verdict"],
+                          "aggregate_safety": float(row["aggregate_safety"]) if row["aggregate_safety"] is not None else None,
+                          "stages": row["stages"]} if row else None),
+    }

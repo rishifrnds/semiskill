@@ -27,8 +27,13 @@ Phases 0/A/B/C/D done → archive/MEMORY-{P0,A,B,C,D}.md. Built + green (171 tes
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
+- [E-001] 2026-07-13T07:35Z  status: done
+  what: semiskill/api.py — dependency-free (stdlib http.server) READ API over L3: /health, /catalog (ACL + facets/text), /skill/<id> (detail + verification/scan-report badge), /queue (review queue), /lineage/<id>, /reuse/<id>. Principal via X-Principal-Labels header (default public). migration 0008 skill_scan_report SECURITY DEFINER + retrieve.get_skill_detail. 5 integration tests (ACL-filtered catalog, verification in detail, install command, unpublished→404). Read-only — never writes the catalog
+  artifacts: semiskill/api.py, semiskill/artifacts/migrations/0008_detail.sql, semiskill/context/retrieve.py, tests/api/test_api.py
+  next: E-002
+
 ## In-Flight Step
-_(none — starting Phase E: E-001 read API)_
+_(none — E-002 next: demonstrable verification-badge-centric catalog UI (HTML Artifact))_
 
 ## Pending Steps
 1. [E-001] semiskill/api.py — stdlib HTTP JSON read API over L3 (health/catalog/skill/queue/lineage/reuse), ACL via principal header + integration tests
