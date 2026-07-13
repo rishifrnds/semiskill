@@ -81,8 +81,14 @@ Built + green (59 tests):
   known-gap: live stage-2 execution needs the egress-controlled sandbox + claude-flow installed — NOT exercised here (tested via injected runners only). Same applies to fetching the cloudflare/security-audit-skill.
   next: C-010
 
+- [C-010] 2026-07-13T06:20Z  status: done
+  what: L6 calibrated LLM-judge (stage 5). sensor/reading.py (Setpoint/error_signal/record_sensor_reading, fail-closed on blank ground_truth). sensor/judge.py (Judge Protocol, cohen_kappa, detect_drift floor/drop, record_gold_set, calibrate_judge, require_calibrated κ≥0.6 fail-closed, require_no_drift + drift audit reading, cross-family guard) — ported from AIOS. scanners/judge_risk.py (stage 5, ADVISORY/never-hardfail; uncalibrated/drifted/same-family → VISIBLE skip; low judge score → judge-risk finding). migration 0006 relaxes objective_tag CHECK (free-text like AIOS; permissions_label CHECK kept). Mapped gold-set label restricted→regulated (SemiSkill vocabulary). 14 sensor tests. Full suite 130 green
+  artifacts: semiskill/sensor/reading.py, semiskill/sensor/judge.py, semiskill/scanners/judge_risk.py, semiskill/artifacts/migrations/0006_relax_objective_tag.sql, tests/sensor/test_judge_pure.py, tests/sensor/test_judge_sensor.py
+  known-gap: live judging needs ANTHROPIC/OPENAI keys — a real ClaudeJudge/OpenAIJudge adapter is a follow-up; tested with FakeJudge only
+  next: C-011
+
 ## In-Flight Step
-_(none — C-010 next: sensor/judge.py (κ calibration + drift + cross-family) + scanners/judge_risk.py stage 5 + aggregate — logic + injected fakes, no live API)_
+_(none — C-011 next: red-team adversarial verification — Workflow fan-out crafting malicious skills, asserting each is caught + blocked + corpus stays unreadable)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
