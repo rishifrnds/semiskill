@@ -49,8 +49,13 @@ Postgres full-text + graph traversal (hermetic).
   artifacts: semiskill/capture/events.py, tests/capture/test_events.py
   next: B-003
 
+- [B-003] 2026-07-13T04:15Z  status: done
+  what: CLI — `semiskill submit <dir>` (load_skill_dir → build_skill_version → store.append; prints state=submitted, no publish) and `semiskill list`; injectable store for hermetic tests; [project.scripts] entry point registered and working. 4 tests green
+  artifacts: semiskill/cli.py, tests/cli/test_cli.py, pyproject.toml
+  next: B-004
+
 ## In-Flight Step
-_(none — B-003 next: CLI `semiskill submit`/`list` + pyproject entry point)_
+_(none — B-004 next: L3 acl.py resolve_allowed_labels + untrusted.delimit (verbatim AIOS ports))_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests
