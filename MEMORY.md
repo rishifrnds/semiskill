@@ -59,8 +59,13 @@ Postgres full-text + graph traversal (hermetic).
   artifacts: semiskill/context/acl.py, semiskill/context/untrusted.py, tests/context/test_acl_untrusted.py
   next: B-005
 
+- [B-005] 2026-07-13T04:30Z  status: done
+  what: migration 0002_context.sql — SECURITY DEFINER catalog_search (PUBLISHED-only via a positive published approval, ACL-filtered by permissions_label, function/role/level facets + ILIKE text/tags), lineage (recursive input_refs, ACL-pruned per hop), reuse_events_for_skill (fail-closed visibility gate); all pin search_path and GRANT EXECUTE to semiskill_app only. 3 integration tests green (published-only, ACL filter, facet+text, semiskill_app EXECUTE)
+  artifacts: semiskill/artifacts/migrations/0002_context.sql, tests/artifacts/test_migration_0002.py
+  next: B-006
+
 ## In-Flight Step
-_(none — B-005 next: migration 0002_context.sql — SECURITY DEFINER catalog_search/lineage/reuse_graph, ACL-filtered, EXECUTE-only to semiskill_app)_
+_(none — B-006 next: context/retrieve.py — Python ACL wrapper (resolve_allowed_labels + SET LOCAL ROLE semiskill_app) over catalog_search; catalog detail; integration tests incl. need-to-know invisible)_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests
