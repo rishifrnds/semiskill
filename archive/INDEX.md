@@ -35,6 +35,12 @@ _Last updated: 2026-07-13_
   - Step count: 13 done, 0 abandoned, 0 rolled-back
   - Exit criterion met: `pytest` 146 green — 6-stage pipeline, gated publish, held-out corpus unreadable by pipeline role, red-team zero escapes (battery + 7 novel LLM-crafted attacks)
 
+- MEMORY-D.md — Phase D: Intelligence Controller (L5)
+  - Timespan: 2026-07-13T07:00Z → 2026-07-13T07:20Z
+  - STEP-IDs: D-001 → D-004
+  - Step count: 4 done, 0 abandoned, 0 rolled-back
+  - Exit criterion met: `pytest` 171 green — six-control stability gate (no oscillation), model routing + cost-per-verified-skill, review-queue ranking, drift-blocks-auto-act
+
 <!-- Entry format after first rotation:
 
 - MEMORY-P1.md — Phase 1: <phase name>

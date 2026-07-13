@@ -5,67 +5,42 @@ Full rules and entry schemas: see STATE_RULES.md.
 
 ## Project
 - Name: SemiSkill — Internal Security-Verified Skill Marketplace
-- Goal (one sentence): One internal, SharePoint-hosted place to publish/discover/comment/rate/reuse
-  Agent Skills — every skill passing an automated security pipeline + human approval before publish.
-- Started: 2026-07-13 · CLAUDE.md version: 2026-07-13 · Repo: https://github.com/rishifrnds/semiskill
-- Architecture: AIOS 6-layer — mirrors E:\code\aios
+- Goal: One internal SharePoint-hosted place to publish/discover/comment/rate/reuse Agent Skills —
+  every skill passing an automated security pipeline + human approval before publish.
+- Started: 2026-07-13 · Repo: https://github.com/rishifrnds/semiskill · Architecture: AIOS 6-layer (E:\code\aios)
 - Build plan (approved): C:\Users\rishi\.claude\plans\semiskill-ultra-mode-logical-lagoon.md
 - Session goal: complete all planned tasks (Phases C–G) and surface gaps/issues (no per-phase pause).
 
 ## Carry-forward from archives
-Phases 0/A/B/C done → archive/MEMORY-{P0,A,B,C}.md. Built + green (146 tests):
-- L2: artifacts/{schema,store,migrate}.py + migrations 0001..0006; spine/{states,lifecycle}.py.
-- L1: capture/{intake,events}.py + cli.py. L3: context/{acl,untrusted,retrieve,provenance}.py.
-- L4/L6 pipeline: scanners/{base,static_structure,security_audit,injection_probe,secret_pii,judge_risk}.py;
-  spine/pipeline.py (orchestrator); sensor/{reading,judge,corpus}.py; governance/{gate,policy,publish,rollback}.py;
-  redteam/harness.py. Held-out corpus behind semiskill_pipeline role. Publish is gated (human signoff).
-- Roles: semiskill_app (read via SECURITY DEFINER), semiskill_submitter (can't forge verification artifacts),
-  semiskill_pipeline (can't read corpus/gold-set).
-- Invariants proven: no publish without human approval; submitter can't forge approval; malicious blocked
-  (battery + 7 novel LLM-crafted attacks, zero escapes); corpus unreadable by pipeline role.
-- ADRs 001-007. INFRA: Docker PG16 (127.0.0.1 not localhost; fsync=off); shared-DB TRUNCATE tests;
-  git message enforcement in .git/hooks/commit-msg.
-- GAPS: stage-2 security-audit + cloudflare skill need egress sandbox+claude-flow (injected-runner tested);
-  stage-5 live judge needs API keys (FakeJudge tested); pgvector semantic search deferred (Voyage egress).
+Phases 0/A/B/C/D done → archive/MEMORY-{P0,A,B,C,D}.md. Built + green (171 tests):
+- L2 store (schema/store/migrate + migrations 0001..0007), spine (states/lifecycle).
+- L1 capture (intake/events/cli). L3 context (acl/untrusted/retrieve/provenance + catalog_search/lineage/reuse fns).
+- L4/L6 pipeline: 6 stages (static/security-audit/injection/secret-PII/judge/aggregate) + orchestrator
+  + gated publish + rollback + held-out corpus (semiskill_pipeline can't read it) + red-team (zero escapes).
+- L5: intelligence/{stability(six-control),controller(queue-rank + drift-blocks-auto-act)} + governance/cost.
+- Roles: semiskill_app (read), semiskill_submitter (can't forge verification), semiskill_pipeline (can't read corpus).
+- ADRs 001-007. INFRA: Docker PG16 (127.0.0.1 not localhost, fsync=off); shared-DB TRUNCATE tests;
+  git enforcement in .git/hooks/commit-msg. Catalog is DERIVED from artifacts (active published approval).
+- GAPS: stage-2 security-audit needs egress sandbox+claude-flow (injected-runner tested); stage-5 live judge
+  needs API keys (FakeJudge tested); pgvector semantic search deferred; live SharePoint embedding needs a tenant.
 
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
-- [D-001] 2026-07-13T07:00Z  status: done
-  what: intelligence/stability.py — six-control stability gate (deadband/cooldown/circuit-breaker/hysteresis/trajectory/cost-per-outcome) ported from AIOS, deny-precedence composition, SEMISKILL_STABILITY_* env params. 11 unit tests incl. each control, breaker-reset-by-success, deny-precedence (deadband first), no-oscillation on a converging error stream
-  artifacts: semiskill/intelligence/stability.py, tests/intelligence/test_stability.py
-  next: D-002
-
-- [D-002] 2026-07-13T07:10Z  status: done
-  what: governance/cost.py — model registry (SMALL=claude-haiku-4-5, LARGE=claude-sonnet-5, +opus), route(bounded→SMALL / ambiguous→LARGE), call_cost (Decimal), build_cost_policy (deny disallowed model / over-budget), guard_llm_call (gate on estimate → blocked never runs; ledger actual), total_spend + cost_per_verified_skill. migration 0007 + COST_LEDGER enum. 8 unit tests. Ported from AIOS
-  artifacts: semiskill/governance/cost.py, semiskill/artifacts/migrations/0007_cost.sql, semiskill/artifacts/schema.py, tests/governance/test_cost.py
-  next: D-003
-
-- [D-003] 2026-07-13T07:20Z  status: done
-  what: intelligence/controller.py (SUGGEST-ONLY, human-gated) — review_queue (pending skills ranked risk-first by aggregate safety; decided skills leave the queue) + controller_decision (drifted/uncalibrated judge → route_to_human; six-control stability gate governs otherwise: deadband→skip, any block→route_to_human, allow→act). 6 tests incl. drift-blocks-auto-act. Full suite 171 green
-  artifacts: semiskill/intelligence/controller.py, tests/intelligence/test_controller.py
-  next: D-004
-
-- [D-004] 2026-07-13T07:20Z  status: done
-  what: Phase D verify gate PASSED — 171 green. Exit criteria met: six-control gate no-oscillation on a converging stream; model routing SMALL/LARGE + cost-per-verified-skill; review-queue ranked by risk; DRIFT blocks the L5 controller from auto-acting (route_to_human)
-  artifacts: 171-test suite green
-  next: end-of-phase → Phase E (SharePoint hosting + Catalog UI). Rotate at Phase E kickoff.
-
 ## In-Flight Step
-_(none — Phase D COMPLETE. Continuing to Phase E per session goal.)_
+_(none — starting Phase E: E-001 read API)_
 
 ## Pending Steps
-1. [D-001] intelligence/stability.py — six-control gate (deadband/cooldown/circuit-breaker/hysteresis/trajectory/cost) ported from AIOS + tests
-2. [D-002] governance/cost.py — model routing (SMALL/LARGE) + guard_llm_call + cost ledger + cost-per-verified-skill + tests
-3. [D-003] intelligence/controller.py — verdict aggregation (from pipeline) + review-queue ranking by risk + drift-blocks-auto-act (suggest-only) + tests
-4. [D-004] Phase D verify gate (no oscillation on replayed scan stream; cost-per-verified-skill tracked; drift blocks)
+1. [E-001] semiskill/api.py — stdlib HTTP JSON read API over L3 (health/catalog/skill/queue/lineage/reuse), ACL via principal header + integration tests
+2. [E-002] Demonstrable catalog UI (HTML Artifact) — verification-badge-centric, faceted browse, skill cards + detail, one-click reuse (skills.sh / outskill reference)
+3. [E-003] ui/ Next.js + shadcn production scaffold (ADR-004 SharePoint-embeddable) + Phase E gate
 
 ## Current Phase
-Phase D: Intelligence Controller (L5)
+Phase E: SharePoint hosting + Catalog UI
 
 Exit criteria:
-- Six-control stability gate: no oscillation on a replayed error stream (deadband/cooldown/breaker/hysteresis/trajectory/cost all covered)
-- Model routing SMALL→LARGE on ambiguity; cost-per-verified-skill computable from cost artifacts
-- Review-queue ranking orders pending skills by risk/priority
-- Drift test: a falling judge-vs-gold κ blocks the L5 controller from auto-acting (require_no_drift)
+- Read API serves ACL-enforced catalog search (facets/text) + skill detail (README/tools/scan-report/provenance) + review-queue + lineage + reuse
+- A skill appears in the catalog read model ONLY after human approval (already structurally guaranteed; re-verified via API)
+- Verification badge is the centerpiece of every skill card; comment/rate/reuse represented
+- Demonstrable catalog UI (renderable); Next.js production scaffold recorded (full SharePoint embedding deferred, ADR-004)
 - `docker compose up -d db && pytest` all green
