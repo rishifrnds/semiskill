@@ -64,8 +64,13 @@ Postgres full-text + graph traversal (hermetic).
   artifacts: semiskill/artifacts/migrations/0002_context.sql, tests/artifacts/test_migration_0002.py
   next: B-006
 
+- [B-006] 2026-07-13T04:38Z  status: done
+  what: context/retrieve.py — search_catalog (ACL-enforced: resolve_allowed_labels + SET LOCAL ROLE semiskill_app + catalog_search + conn.rollback(); returns delimited-untrusted SkillCards). 4 integration tests green incl. the acceptance criterion "need-to-know skill invisible to a team-only querier" (visible with clearance), unpublished-not-in-catalog, delimited results, empty-principal fail-closed
+  artifacts: semiskill/context/retrieve.py, tests/context/test_retrieve.py
+  next: B-007
+
 ## In-Flight Step
-_(none — B-006 next: context/retrieve.py — Python ACL wrapper (resolve_allowed_labels + SET LOCAL ROLE semiskill_app) over catalog_search; catalog detail; integration tests incl. need-to-know invisible)_
+_(none — B-007 next: context/provenance.py — lineage (verification trail) + reuse graph wrappers, SET LOCAL ROLE + fail-closed pruning; integration tests)_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests
