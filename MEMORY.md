@@ -24,8 +24,13 @@ Phases 0/A/B/C/D/E done → archive/MEMORY-{P0,A,B,C,D,E}.md. Built + green (176
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
+- [F-001] 2026-07-13T08:05Z  status: done
+  what: governance/report.py — calibration_report (κ series/latest/calibrated-vs-0.6/drift status) + governance_posture (egress-deny-by-default, 3 restricted roles, tool allowlist/dangerous set, total spend + cost-per-verified-skill). 4 tests (uncalibrated / calibrated-passes-gate / drift-floor / posture)
+  artifacts: semiskill/governance/report.py, tests/governance/test_report.py
+  next: F-002
+
 ## In-Flight Step
-_(none — starting Phase F: F-001 calibration/κ report + governance posture)_
+_(none — F-002 next: docs — README + docs/SECURITY.md + docs/ADOPTION.md)_
 
 ## Pending Steps
 1. [F-001] semiskill/governance/report.py — calibration_report (κ series/latest/drift vs 0.6) + governance_posture (egress-deny, roles, tool allowlist, cost-per-verified-skill) + tests
