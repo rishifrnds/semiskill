@@ -69,8 +69,14 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   note: conda Postgres 15 failed to start on Windows (DLL-init 0xC0000142); launched Docker Desktop to run integration tests. pg_dsn skips gracefully when no DB reachable so the unit suite stays green.
   next: A-007
 
+- [A-007] 2026-07-13T03:40Z  status: done
+  what: DB-backed L2 verified end-to-end — PostgresArtifactStore (append/get/by_type, INSERT/SELECT only), append-only trigger blocks UPDATE/DELETE, corrections are new rows via corrects_ref (self-FK enforced), structural ACL (semiskill_app cannot SELECT artifacts; artifact_get SECURITY DEFINER filters by label). Full suite 21 passed in 0.9s against live Postgres 16
+  artifacts: semiskill/artifacts/store.py, tests/artifacts/test_store.py, tests/artifacts/test_append_only.py, tests/artifacts/test_corrections.py, tests/artifacts/test_acl.py
+  note: Two Docker-for-Windows test-infra fixes (durable knowledge): (1) pg_dsn switched from disposable-DB-per-test to a session-scoped shared migrated DB + TRUNCATE-per-test isolation — CREATE/DROP DATABASE takes minutes on the Docker VM filesystem; TRUNCATE bypasses the append-only trigger so tests can reset while app code still cannot mutate. (2) DSN uses 127.0.0.1 not localhost — localhost resolves to IPv6 ::1 which the IPv4-bound container never answers, stalling every connection ~30s (suite went 917s -> 0.9s). Also fsync=off on the throwaway test DB. test_migrate rewritten isolation-independent.
+  next: A-008
+
 ## In-Flight Step
-_(none — A-007 next: PostgresArtifactStore + test_store; then A-008 append-only, A-009 corrections, A-010 acl)_
+_(none — A-008 next: Phase A verify gate — full suite green + confirm exit criteria, then checkpoint for user review before Phase B)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton

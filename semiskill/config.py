@@ -16,7 +16,9 @@ class Config:
             # secret; these credentials grant nothing beyond a throwaway local container.
             database_url=os.environ.get(
                 "DATABASE_URL",
-                "postgresql://semiskill:semiskill@localhost:5432/semiskill",
+                # 127.0.0.1 (not "localhost"): on Windows "localhost" resolves to IPv6 ::1 first,
+                # which the IPv4-bound docker DB never answers, stalling every connection ~30s.
+                "postgresql://semiskill:semiskill@127.0.0.1:5432/semiskill",
             ),
             protected_paths=(
                 "semiskill/spine/",

@@ -9,3 +9,9 @@ services:
       POSTGRES_PASSWORD: semiskill
       POSTGRES_DB: semiskill
     ports: ["127.0.0.1:5432:5432"]
+    # Throwaway local dev/test DB (ADR-005): durability disabled so the disposable-DB-per-test
+    # fixture's CREATE/DROP DATABASE is fast on Docker-for-Windows (fsync to the VM filesystem is
+    # otherwise pathologically slow). Never use these flags for data you care about.
+    command: >
+      postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+      -c checkpoint_timeout=60min -c max_wal_size=2GB
