@@ -40,8 +40,13 @@ Built + green (59 tests):
   artifacts: semiskill/artifacts/migrations/0003_pipeline.sql, tests/artifacts/test_migration_0003.py
   next: C-002
 
+- [C-002] 2026-07-13T05:05Z  status: done
+  what: scanners/base.py — Scanner Protocol, ScanStage(1-6), Finding, SkillSubmission (untrusted body/files/tools + texts()), ScanResult (safety_score [0,1], hard_fail), result_from (fold findings → safety=1-Σseverity clamped, hard_fail if any severity ≥0.9); governance/policy.py tool_risk allowlist (allowed=0, dangerous≥0.95, unknown=0.4). 9 unit tests
+  artifacts: semiskill/scanners/base.py, semiskill/governance/policy.py, tests/scanners/test_base.py, tests/governance/test_policy.py
+  next: C-003
+
 ## In-Flight Step
-_(none — C-002 next: scanners/base.py Scanner Protocol + ScanResult + governance/policy.py allowlist)_
+_(none — C-003 next: scanners/static_structure.py stage 1)_
 
 ## Pending Steps
 1. [C-001] migration 0003_pipeline.sql — add artifact types (gate_decision/sensor_reading/gold_set) + semiskill_submitter role with type-restricted INSERT trigger (can't forge approval/scan_run/review) + tests
