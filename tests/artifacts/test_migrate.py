@@ -16,6 +16,10 @@ def test_apply_is_idempotent(pg_dsn, tmp_path):
     # A brand-new migration file is applied exactly once, and re-running is a no-op. Asserted as a
     # delta so it holds whether or not other migrations are already tracked in the shared DB.
     (tmp_path / "9001_probe.sql").write_text("CREATE TABLE IF NOT EXISTS mig_probe (id int);")
+    # Self-clean so the test is repeatable against the shared (persistent) DB.
+    with psycopg.connect(pg_dsn, autocommit=True) as conn:
+        conn.execute("DROP TABLE IF EXISTS mig_probe")
+        conn.execute("DELETE FROM schema_migrations WHERE filename = '9001_probe.sql'")
     before = _mig_count(pg_dsn)
     applied_first = apply_migrations(pg_dsn, tmp_path)
     applied_second = apply_migrations(pg_dsn, tmp_path)

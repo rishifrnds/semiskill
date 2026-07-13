@@ -75,8 +75,13 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   note: Two Docker-for-Windows test-infra fixes (durable knowledge): (1) pg_dsn switched from disposable-DB-per-test to a session-scoped shared migrated DB + TRUNCATE-per-test isolation — CREATE/DROP DATABASE takes minutes on the Docker VM filesystem; TRUNCATE bypasses the append-only trigger so tests can reset while app code still cannot mutate. (2) DSN uses 127.0.0.1 not localhost — localhost resolves to IPv6 ::1 which the IPv4-bound container never answers, stalling every connection ~30s (suite went 917s -> 0.9s). Also fsync=off on the throwaway test DB. test_migrate rewritten isolation-independent.
   next: A-008
 
+- [A-008] 2026-07-13T03:45Z  status: done
+  what: Phase A verify gate PASSED — full suite 21 passed, stable across 3 consecutive runs against the persistent shared DB (~1s each). Fixed a cross-run flakiness the gate exposed in test_apply_is_idempotent (it left 9001_probe.sql tracked in schema_migrations, so re-runs saw it as already-applied) by self-cleaning probe state at test start. All Phase A exit criteria met
+  artifacts: tests/artifacts/test_migrate.py
+  next: end-of-phase — awaiting user go-ahead for Phase B (Capture + Context, L1/L3). Will rotate MEMORY (Phase A -> B) at Phase B kickoff.
+
 ## In-Flight Step
-_(none — A-008 next: Phase A verify gate — full suite green + confirm exit criteria, then checkpoint for user review before Phase B)_
+_(none — Phase A complete; paused for user review before Phase B per the approved plan)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton
