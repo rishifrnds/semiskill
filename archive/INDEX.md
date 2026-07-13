@@ -29,6 +29,12 @@ _Last updated: 2026-07-13_
   - Step count: 8 done, 0 abandoned, 0 rolled-back
   - Exit criterion met: `pytest` 59 green — need-to-know invisible to unauthorized, catalog published-only, lineage+reuse ACL-pruned, facet/text search
 
+- MEMORY-C.md — Phase C: Security-Verification Pipeline (L4/L6)
+  - Timespan: 2026-07-13T05:00Z → 2026-07-13T06:50Z
+  - STEP-IDs: C-001 → C-012 (incl. C-011b)
+  - Step count: 13 done, 0 abandoned, 0 rolled-back
+  - Exit criterion met: `pytest` 146 green — 6-stage pipeline, gated publish, held-out corpus unreadable by pipeline role, red-team zero escapes (battery + 7 novel LLM-crafted attacks)
+
 <!-- Entry format after first rotation:
 
 - MEMORY-P1.md — Phase 1: <phase name>
