@@ -31,8 +31,13 @@ Phases 0/A/B/C done → archive/MEMORY-{P0,A,B,C}.md. Built + green (146 tests):
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
+- [D-001] 2026-07-13T07:00Z  status: done
+  what: intelligence/stability.py — six-control stability gate (deadband/cooldown/circuit-breaker/hysteresis/trajectory/cost-per-outcome) ported from AIOS, deny-precedence composition, SEMISKILL_STABILITY_* env params. 11 unit tests incl. each control, breaker-reset-by-success, deny-precedence (deadband first), no-oscillation on a converging error stream
+  artifacts: semiskill/intelligence/stability.py, tests/intelligence/test_stability.py
+  next: D-002
+
 ## In-Flight Step
-_(none — starting Phase D: D-001 stability gate)_
+_(none — D-002 next: governance/cost.py model routing + cost ledger + cost-per-verified-skill)_
 
 ## Pending Steps
 1. [D-001] intelligence/stability.py — six-control gate (deadband/cooldown/circuit-breaker/hysteresis/trajectory/cost) ported from AIOS + tests
