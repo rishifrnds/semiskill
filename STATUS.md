@@ -4,35 +4,35 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T04:15Z_
+_Last updated: 2026-07-13T04:20Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T04:15Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T04:20Z)
 
 ## Right now
-Phase B. L1 complete: intake (B-001), events (B-002), CLI (B-003). 24 unit tests green.
-Now moving to L3 Context: B-004 acl+untrusted, B-005 migration 0002 SECURITY DEFINER context fns,
-B-006 ACL-enforced retrieve/catalog, B-007 provenance (lineage + reuse graph), B-008 gate.
+Phase B. L1 done (B-001..003); L3 seams done (B-004 acl+untrusted). 27 unit tests green.
+Next: B-005 migration 0002_context.sql (SECURITY DEFINER catalog_search / lineage / reuse_graph,
+ACL-filtered, EXECUTE-only to semiskill_app), then B-006 retrieve, B-007 provenance, B-008 gate.
 
 ## Active step
-- Step ID: B-003 (done) -> B-004 (L3 acl.py + untrusted.delimit)
-- Sub-state: committing B-003
-- Started: 2026-07-13T04:15Z
+- Step ID: B-004 (done) -> B-005 (migration 0002 context functions)
+- Sub-state: committing B-004
+- Started: 2026-07-13T04:20Z
 
 ## Last commit
-- SHA: a683c2e (B-002)
-- Message: wip: B-002 L1 event builders
+- SHA: 6982e3a (B-003)
+- Message: wip: B-003 CLI (semiskill submit/list)
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-B-004: port aios/context/acl.py (resolve_allowed_labels — dedup/sorted/fail-closed) and
-aios/context/untrusted.py (delimit UNTRUSTED wrapper) into semiskill/context/; unit tests. Then
-B-005 migration 0002_context.sql (SECURITY DEFINER catalog_search / lineage / reuse_graph fns).
+B-005: semiskill/artifacts/migrations/0002_context.sql — catalog_search(query,facets,allowed_labels),
+lineage(start,allowed,max_depth), reuse_graph(skill_id,allowed) as SECURITY DEFINER (search_path pinned),
+ACL-filtered by permissions_label, GRANT EXECUTE to semiskill_app only. Mirror aios 0004_provenance.sql.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase B Pending (B-004..B-008). DB: `docker compose up -d db` (127.0.0.1 not localhost).
-Tests: `pytest` (shared-DB TRUNCATE). AIOS refs: context/acl.py, context/untrusted.py, migration
-0004_provenance.sql (lineage/corrections SECURITY DEFINER pattern), provenance.py (SET LOCAL ROLE).
+Read MEMORY.md → Phase B Pending (B-005..B-008). DB: `docker compose up -d db` (127.0.0.1). Tests:
+`pytest`. Catalog = PUBLISHED skill_versions (positive published `approval`, per Phase A lifecycle.py).
+AIOS ref: migration 0004_provenance.sql (recursive lineage + visibility gate), provenance.py.

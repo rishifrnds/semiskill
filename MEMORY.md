@@ -54,8 +54,13 @@ Postgres full-text + graph traversal (hermetic).
   artifacts: semiskill/cli.py, tests/cli/test_cli.py, pyproject.toml
   next: B-004
 
+- [B-004] 2026-07-13T04:20Z  status: done
+  what: L3 seams — context/acl.py resolve_allowed_labels (dedup/sorted, fail-closed on empty; the single ACL resolver all L3 paths go through) + context/untrusted.delimit (UNTRUSTED-data wrapper). Near-verbatim AIOS ports. 3 unit tests green
+  artifacts: semiskill/context/acl.py, semiskill/context/untrusted.py, tests/context/test_acl_untrusted.py
+  next: B-005
+
 ## In-Flight Step
-_(none — B-004 next: L3 acl.py resolve_allowed_labels + untrusted.delimit (verbatim AIOS ports))_
+_(none — B-005 next: migration 0002_context.sql — SECURITY DEFINER catalog_search/lineage/reuse_graph, ACL-filtered, EXECUTE-only to semiskill_app)_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests
