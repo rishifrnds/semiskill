@@ -23,27 +23,27 @@ STATE_SPINE_CLASS = {
 }
 
 
-def _is_positive_approval(a: Artifact) -> bool:
-    """A publish gate can only be opened by an actual `approval` artifact with an approve verdict.
-    A forged verdict on any OTHER artifact type does not count."""
-    return a.artifact_type is ArtifactType.APPROVAL and a.payload.get("verdict") == "approve"
-
-
 def derive_state(skill_version_id, artifacts: Iterable[Artifact]) -> SkillState:
     """Highest lifecycle state reachable for `skill_version_id` given the artifacts that reference
     it (via input_refs). PURE — never mutates, never stored (the lifecycle is NOT a column).
 
-    ADR-002 gate is structural: APPROVED/PUBLISHED are returnable only when a positive `approval`
-    artifact is present. Since artifacts are append-only and the `approval` type is written only by
-    the (Phase-C) approval actuator, no submitter-controlled path can fabricate a published state.
+    ADR-002 gate is structural: APPROVED/PUBLISHED require a real `approval` artifact, which only the
+    gated actuator can write (a submitter role is trigger-blocked from inserting approvals). The
+    LATEST approval wins, so a later unpublish (a correcting approval with published=false) removes
+    the skill from the catalog. A forged verdict on a non-approval artifact never counts.
     """
     related = [a for a in artifacts if skill_version_id in a.input_refs]
     types = {a.artifact_type for a in related}
-    approvals = [a for a in related if _is_positive_approval(a)]
+    approvals = [a for a in related if a.artifact_type is ArtifactType.APPROVAL]
+    # An approval superseded by a correction (another approval's corrects_ref → it) is inactive;
+    # the active one is the head of the correction chain (deterministic, not timestamp-dependent).
+    superseded = {a.corrects_ref for a in approvals if a.corrects_ref is not None}
+    active = [a for a in approvals if a.artifact_id not in superseded]
+    latest = max(active, key=lambda a: a.timestamp_start, default=None)
 
-    if approvals and any(a.payload.get("published") is True for a in approvals):
-        return SkillState.PUBLISHED
-    if approvals:
+    if latest is not None and latest.payload.get("verdict") == "approve":
+        if latest.payload.get("published") is True:
+            return SkillState.PUBLISHED
         return SkillState.APPROVED
     if ArtifactType.REVIEW in types:
         return SkillState.REVIEWED

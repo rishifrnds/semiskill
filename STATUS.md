@@ -4,36 +4,36 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T05:15Z_
+_Last updated: 2026-07-13T05:45Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T05:15Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T05:45Z)
 - Session goal: complete all planned tasks (Phases C–G), surface gaps/issues, no per-phase pause.
 
 ## Right now
-Phase C deterministic scanners progressing: C-001 migration+submitter role, C-002 scanner base,
-C-003 static-structure (stage 1), C-004 secret/PII (stage 4). Next: C-005 the held-out injection
-corpus boundary (migration 0004 + semiskill_pipeline role + probe fn + stage 3), the load-bearing piece.
+Phase C safety core in place: C-001 submitter role, C-002 base, C-003 static, C-004 secret/PII,
+C-005 held-out corpus boundary, C-006 gate, C-007 gated publish actuator + rollback (publish-path
+invariant + unpublish verified). Full suite 105 green. Next: C-008 pipeline orchestrator.
 
 ## Active step
-- Step ID: C-004 (done) -> C-005 (held-out corpus + injection probe stage 3)
-- Sub-state: committing C-004
-- Started: 2026-07-13T05:15Z
+- Step ID: C-007 (done) -> C-008 (spine/pipeline.py orchestrator)
+- Sub-state: committing C-007
+- Started: 2026-07-13T05:45Z
 
 ## Last commit
-- SHA: e233e7e (C-003)
-- Message: wip: C-003 static-structure scanner
+- SHA: f04df5b (C-006 gate)
+- Message: wip: C-006 governance/gate.py
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-C-005: migration 0004_corpus.sql (injection_corpus + judge_gold_set tables permissions_label=restricted;
-semiskill_pipeline role NOLOGIN with REVOKE ALL on both; probe_skill_against_corpus SECURITY DEFINER
-returning {passed,total,failing_classes} only). sensor/corpus.py (SET LOCAL ROLE semiskill_pipeline).
-scanners/injection_probe.py (stage 3). Integration test: pipeline role CANNOT SELECT injection_corpus.
+C-008: semiskill/spine/pipeline.py — run_pipeline(store, dsn, skill_version_id): run stages
+static(1)/injection(3)/secret-PII(4) in order, write a scan_run per stage + one injection_test,
+hard-fail short-circuit (state stays scanned, no review), else aggregate → review verdict. Integration
+tests: benign → reviewed(approve); malicious → blocked at scan, no review/publish.
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Phase C Pending (C-005..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests:
-`pytest`. AIOS refs: migration 0002_embeddings.sql (SECURITY DEFINER + restricted role), sensor/judge.py.
+Read MEMORY.md → Phase C Pending (C-008..C-012). DB: `docker compose up -d db` (127.0.0.1). Tests:
+`pytest` (105). Scanners: static_structure/injection_probe/secret_pii built; gate+publish+rollback built.
