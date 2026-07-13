@@ -44,8 +44,13 @@ Postgres full-text + graph traversal (hermetic).
   artifacts: semiskill/capture/intake.py, tests/capture/test_intake.py, pyproject.toml, ADR-007
   next: B-002
 
+- [B-002] 2026-07-13T04:10Z  status: done
+  what: L1 event builders — build_comment (threaded via parent_id), build_rating (1-5 validated), build_reuse_event (method); each references the skill_version via input_refs so L3 can build threads/aggregates/reuse graph from the log. 10 unit tests green (20 capture total)
+  artifacts: semiskill/capture/events.py, tests/capture/test_events.py
+  next: B-003
+
 ## In-Flight Step
-_(none — B-002 next: L1 events — comment/rating/reuse_event builders)_
+_(none — B-003 next: CLI `semiskill submit`/`list` + pyproject entry point)_
 
 ## Pending Steps
 1. [B-001] L1 capture intake — parse SKILL.md frontmatter → skill_version artifact (semiskill/capture/intake.py) + unit tests
