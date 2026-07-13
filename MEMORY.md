@@ -29,8 +29,18 @@ Phases 0/A/B/C/D/E/F done → archive/MEMORY-{P0,A,B,C,D,E,F}.md. Built + green 
   artifacts: semiskill/seed.py, tests/seed/test_seed.py
   next: G-002
 
+- [G-002/G-003] 2026-07-13T08:30Z  status: done
+  what: Generated a Design/Verification wave (8 role×level skills: RTL onboarding/microarch, UVM sequences, verification plan, SoC perf model, DFT scan, UPF power intent, formal props) via a Workflow fan-out; ran each through the FULL pipeline + human approval — ALL 8 published, each carrying a passing scan_run + a real published approval (no back-door); a deliberately-broken seed (Bash) blocked at stage 1 identically; catalog faceted by function=design-verification (8/8). Saved as a regression fixture + parametrized test
+  artifacts: tests/seed/fixtures/generated_seeds.json, tests/seed/test_generated_seeds.py, workflow semiskill-seed-dv (wf_1a5deae1-9e1)
+  next: G-004
+
+- [G-004] 2026-07-13T08:30Z  status: done
+  what: Phase G verify gate PASSED — 183 green. Every published seed reached the catalog only via a passing scan_run + approval; a deliberately-broken seed blocked identically; catalog faceted. Representative DV wave verified; full-org hundreds is scalable via more Workflow waves (not exhaustively run here — flagged)
+  artifacts: 183-test suite green
+  next: PROJECT BUILD COMPLETE (Phases A–G)
+
 ## In-Flight Step
-_(none — G-002 next: generate a Design/Verification role×level wave via a Workflow fan-out)_
+_(none — Phase G COMPLETE. All planned phases A–G done. 183 tests green.)_
 
 ## Pending Steps
 1. [G-001] semiskill/seed.py — seed_skill (generated skill → full pipeline → human approve → published; no back-door) + tests (clean publishes, broken blocked)

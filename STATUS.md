@@ -4,36 +4,38 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T08:10Z_
+_Last updated: 2026-07-13T08:30Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T08:10Z)
-- Session goal: complete all planned tasks (Phases C–G), surface gaps/issues, no per-phase pause.
+- Lock held: yes (.session-lock refreshed 2026-07-13T08:30Z)
+- Session goal: complete all planned tasks (Phases C–G), surface gaps/issues — MET.
 
 ## Right now
-PHASE F COMPLETE ✅ — calibration/κ report + governance posture + rollback drill re-verified + docs
-(README/SECURITY/ADOPTION). 180 tests green. Final phase G next: seed the catalog by generating role
-skills and pushing them through the full pipeline + approval (dogfood — no back-door inserts).
+PROJECT BUILD COMPLETE ✅ — all planned phases A–G done. 183 tests green against live Postgres.
+SemiSkill is a working AIOS instance: submit → 6-stage pipeline → human approval → gated publish →
+ACL-enforced catalog. Malicious skills blocked (red-team + 7 novel attacks, zero escapes); a
+Design/Verification seed wave published only via the gate; catalog demonstrable (Artifact).
 
 ## Active step
-- Step ID: F-003 (done) -> rotate F→G, then Phase G
-- Sub-state: committing F-002/F-003, then rotation
-- Started: 2026-07-13T08:10Z
+- Step ID: G-004 (done) — Phase G gate passed; whole build complete
+- Sub-state: committing final state
+- Started: 2026-07-13T08:30Z
 
 ## Last commit
-- SHA: ae666b4 (F-001 report)
-- Message: wip: F-001 governance report
+- SHA: 3e7d4ea (G-001 seed harness)
+- Message: wip: G-001 seed harness
 - Time: 2026-07-13
 
-## Next action (one step ahead)
-Rotate F→G, then Phase G: generate role-enablement skills (Design/Verification first) via a Workflow,
-submit each through L1 → run_pipeline → human approve → published; verify each carries a passing
-scan_run + approval; a deliberately-broken seed is blocked identically. Scale note: generate a
-representative wave, not all hundreds (flag full-org generation as scalable-but-not-exhaustively-run).
+## Known gaps (documented; each needs an external resource)
+- Stage-2 security-audit + cloudflare skill: egress sandbox + claude-flow (injected-runner tested).
+- Stage-5 live judge: ANTHROPIC/OPENAI keys for a real ClaudeJudge/OpenAIJudge (FakeJudge tested).
+- pgvector semantic search: Voyage egress (deferred; Postgres FTS used).
+- SharePoint tenant embedding + Next.js build: M365 tenant + npm (Artifact demo + read API instead).
+- Phase G seeded a representative wave; full-org hundreds scales via more Workflow waves.
 
-## If I crash right now, resume by:
-Read MEMORY.md → Phases A–F done. DB: `docker compose up -d db` (127.0.0.1). Tests: `pytest` (180).
-Phase G: specs/ROLE_TAXONOMY.md is the work-list; redteam/harness.run_case pattern for pipeline verification.
+## If resumed
+Read MEMORY.md (Phases A–G done, archives A–F). DB: `docker compose up -d db` (127.0.0.1). Tests:
+`pytest` (183). Nothing pushed to remote (commit local only, per instructions). Remaining = the gaps above.
