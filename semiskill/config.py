@@ -10,6 +10,10 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         return cls(
+            # DATABASE_URL is the contract. The fallback below is a LOCAL-DEV-ONLY convenience that
+            # points at the loopback docker-compose DB with its non-secret dev credentials
+            # (see .env.example / docker-compose.yml). Any real deployment sets DATABASE_URL from a
+            # secret; these credentials grant nothing beyond a throwaway local container.
             database_url=os.environ.get(
                 "DATABASE_URL",
                 "postgresql://semiskill:semiskill@localhost:5432/semiskill",

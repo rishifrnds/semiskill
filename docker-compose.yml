@@ -1,3 +1,6 @@
+# Local, egress-controlled artifact store (ADR-005). Credentials are LOCAL-DEV-ONLY and match
+# .env.example; a real deployment supplies DATABASE_URL from a secret and never uses these.
+# Port is bound to loopback (127.0.0.1) so the dev DB is not exposed to the local network.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -5,4 +8,4 @@ services:
       POSTGRES_USER: semiskill
       POSTGRES_PASSWORD: semiskill
       POSTGRES_DB: semiskill
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]

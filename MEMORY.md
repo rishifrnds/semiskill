@@ -57,8 +57,14 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   artifacts: semiskill/spine/lifecycle.py, tests/spine/test_lifecycle.py, ADR-002
   next: A-005
 
+- [A-005] 2026-07-13T03:00Z  status: done
+  what: Security hardening from background review — bound the dev Postgres to loopback (127.0.0.1:5432) instead of all interfaces; documented that the config.py DATABASE_URL fallback + compose creds are local-dev-only non-secrets (real deploys set DATABASE_URL from a secret)
+  artifacts: docker-compose.yml, semiskill/config.py, ADR-005
+  reason: security review flagged insecure-network-exposure (compose) + hardcoded-credentials-fallback (config); mirrored from AIOS but hardened given SemiSkill's security-first mandate
+  next: A-006
+
 ## In-Flight Step
-_(none — A-005 next: migration 0001 + migrate runner + conftest pg_dsn + test_migrate)_
+_(none — A-006 next: migration 0001 + migrate runner + conftest pg_dsn + test_migrate)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton
