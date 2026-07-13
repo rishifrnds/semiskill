@@ -29,8 +29,18 @@ Phases 0/A/B/C/D/E done → archive/MEMORY-{P0,A,B,C,D,E}.md. Built + green (176
   artifacts: semiskill/governance/report.py, tests/governance/test_report.py
   next: F-002
 
+- [F-002] 2026-07-13T08:10Z  status: done
+  what: Docs — top-level README.md (what/why, architecture table, quick start, gaps), docs/SECURITY.md (5 structural invariants + restricted roles + pipeline + Rule-of-Two + egress/redaction + rollback + calibration), docs/ADOPTION.md (author/approver/everyone workflows)
+  artifacts: README.md, docs/SECURITY.md, docs/ADOPTION.md
+  next: F-003
+
+- [F-003] 2026-07-13T08:10Z  status: done
+  what: Phase F verify gate PASSED — 180 green. Rollback drill re-verified (publish→unpublish→not discoverable); κ≥0.6 calibration report + governance posture (egress-deny / 3 roles / tool allowlist / cost-per-verified-skill); egress deny-by-default documented; README + SECURITY + ADOPTION present
+  artifacts: 180-test suite green
+  next: end-of-phase → Phase G (seed the catalog via the pipeline). Rotate at Phase G kickoff.
+
 ## In-Flight Step
-_(none — F-002 next: docs — README + docs/SECURITY.md + docs/ADOPTION.md)_
+_(none — Phase F COMPLETE. Continuing to Phase G per session goal.)_
 
 ## Pending Steps
 1. [F-001] semiskill/governance/report.py — calibration_report (κ series/latest/drift vs 0.6) + governance_posture (egress-deny, roles, tool allowlist, cost-per-verified-skill) + tests
