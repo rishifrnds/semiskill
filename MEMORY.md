@@ -24,8 +24,13 @@ Phases 0/A/B/C/D/E/F done → archive/MEMORY-{P0,A,B,C,D,E,F}.md. Built + green 
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
+- [G-001] 2026-07-13T08:20Z  status: done
+  what: semiskill/seed.py — seed_skill (generated skill → build_skill_version → run_pipeline → human-approve-if-clean → published; NO back-door insert) + seed_catalog. 2 tests: clean seed publishes via gate (carries a passing scan_run + a real published approval, faceted by function); broken seed (Bash) blocked identically (never discoverable)
+  artifacts: semiskill/seed.py, tests/seed/test_seed.py
+  next: G-002
+
 ## In-Flight Step
-_(none — starting Phase G: G-001 seed harness)_
+_(none — G-002 next: generate a Design/Verification role×level wave via a Workflow fan-out)_
 
 ## Pending Steps
 1. [G-001] semiskill/seed.py — seed_skill (generated skill → full pipeline → human approve → published; no back-door) + tests (clean publishes, broken blocked)
