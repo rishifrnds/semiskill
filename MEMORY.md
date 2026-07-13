@@ -47,8 +47,13 @@ Open threads: Phases B–G unbuilt; the approved plan is the roadmap.
   next: A-003
   note: Reordered remaining Phase A — schema (A-003) before lifecycle (A-004) since lifecycle imports ArtifactType/Artifact.
 
+- [A-003] 2026-07-13T02:52Z  status: done
+  what: Ported 17-column frozen Artifact + Artifact.new + with_eval_score from AIOS with SemiSkill domain enums (8 lifecycle ArtifactTypes + 4 L5/L6; source_system/actor_kind; permissions/objective vocabularies); 3 tests green incl. enum-vocabulary lock
+  artifacts: semiskill/artifacts/schema.py, tests/artifacts/test_schema.py, ADR-001
+  next: A-004
+
 ## In-Flight Step
-_(none — A-003 next: artifact schema TDD)_
+_(none — A-004 next: spine lifecycle TDD — derive_state + no_published_state_without_approval)_
 
 ## Pending Steps
 1. [A-001] Scaffold Python package (semiskill/) + pyproject.toml + docker-compose.yml + config.py + tests skeleton

@@ -4,34 +4,34 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-07-13T02:48Z_
+_Last updated: 2026-07-13T02:52Z_
 
 ## Session
 - ID: 20260713T024006Z-Rishi_PC-2a55fa
 - Started: 2026-07-13
 - Host: Rishi_PC
-- Lock held: yes (.session-lock refreshed 2026-07-13T02:48Z)
+- Lock held: yes (.session-lock refreshed 2026-07-13T02:52Z)
 
 ## Right now
-Phase A. A-001 scaffold + A-002 spine states done (2 tests green). Next: A-003 artifact schema (TDD),
-reordered before lifecycle since lifecycle imports ArtifactType/Artifact.
+Phase A. Done: A-001 scaffold, A-002 spine states, A-003 artifact schema (8 tests green total).
+Next: A-004 spine lifecycle (derive_state) — includes the structural gate test
+no_published_state_without_approval (ADR-002).
 
 ## Active step
-- Step ID: A-002 (done) -> A-003 (artifact schema, TDD)
-- Sub-state: committing A-002
-- Started: 2026-07-13T02:48Z
+- Step ID: A-003 (done) -> A-004 (spine lifecycle, TDD)
+- Sub-state: committing A-003
+- Started: 2026-07-13T02:52Z
 
 ## Last commit
-- SHA: b589f99 (A-001)
-- Message: wip: A-001 scaffold semiskill package
+- SHA: c5839ab (A-002)
+- Message: wip: A-002 port five-class event spine
 - Time: 2026-07-13
 
 ## Next action (one step ahead)
-A-003: write tests/artifacts/test_schema.py (RED), then semiskill/artifacts/schema.py — 17-col frozen
-Artifact + Artifact.new + with_eval_score (port of aios schema.py) with SemiSkill enum values
-(skill_version/scan_run/injection_test/review/approval/comment/rating/reuse_event + proposal/execution/
-sensor_reading/gold_set; source_system github|sharepoint|cli|web; actor_kind human|service-account|agent).
+A-004: write tests/spine/test_lifecycle.py (RED) — derive_state progression + the structural gate
+(no APPROVED/PUBLISHED without a positive approval artifact) + scanned-requires-both — then implement
+semiskill/spine/lifecycle.py (SkillState + derive_state + STATE_SPINE_CLASS).
 
 ## If I crash right now, resume by:
-Read MEMORY.md → Pending (A-003 schema, A-004 lifecycle, A-005 migration+conftest, A-006 store,
-A-007 append-only, A-008 corrections, A-009 acl, A-010 gate). Port from E:\code\aios. Docker + Python present.
+Read MEMORY.md → Pending (A-004 lifecycle, A-005 migration+conftest, A-006 store, A-007 append-only,
+A-008 corrections, A-009 acl, A-010 gate). Port from E:\code\aios. Docker + Python present.
