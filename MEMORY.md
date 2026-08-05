@@ -50,6 +50,15 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 ## Completed Steps
 <!-- Append-only. Newest at bottom. -->
 
+- [H-001] 2026-08-05T03:26Z  status: done
+  what: ADR-008 — one SKILL.md that is simultaneously Agent-Skills-spec valid, Cursor-loadable and
+  SemiSkill-ingestible: six standard frontmatter keys, kebab `name` == folder name (replaces the
+  slash slug), taxonomy under `metadata:` with semiskill- prefixes, intake resolves
+  metadata[semiskill-k] -> metadata[k] -> top-level k, `allowed-tools` parsed str-or-list, delivered
+  bytes == verified bytes (packaging places, never rewrites)
+  artifacts: DECISIONS.md ADR-008
+  next: H-002
+
 ## In-Flight Step
 _(none)_
 

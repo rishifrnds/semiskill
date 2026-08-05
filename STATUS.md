@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T03:19Z_
+_Last updated: 2026-08-05T03:26Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-000 (done) — lock taken over, dashboard committed, Phase G archived
-- Sub-state: Phase H started; next H-001 (ADR-008)
+- Step ID: H-001 (done) — ADR-008 written
+- Sub-state: next H-002 (intake allowed-tools str-or-list)
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 3a07124
-- Message: wip: G-006 dashboard command centre
+- SHA: 812e381
+- Message: rotate: archived Phase G, started Phase H
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)

@@ -125,6 +125,45 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Consequences: One small, standard, hermetic dependency (no egress). `safe_load` must be used everywhere.
 - Related: ADR-001, semiskill/capture/intake.py, plan §Phase B
 
+## [ADR-008] SKILL.md conforms to the Agent Skills open standard; SemiSkill taxonomy moves under `metadata:`
+- Date: 2026-08-05
+- Status: accepted
+- Context: SemiSkill reads flat frontmatter keys (`slug, function, role, level, owner, tags, version`)
+  that are rejected by the Agent Skills open standard and by Anthropic's skill validator, both of which
+  permit only `{name, description, license, compatibility, metadata, allowed-tools}`. Independently, the
+  runtime the pilot team actually uses — Cursor 2.4+, which gained native Agent Skills support on
+  2026-01-22 — requires `name` to be kebab-case and to equal the skill's parent directory name, and
+  discovers skills purely by file placement (there is no install command). Our eight published seeds
+  carry `name: RTL Onboarding for Freshers` and `slug: dv/rtl-onboarding-fresher`, so **no currently
+  published SemiSkill skill can be loaded by Cursor**. Separately, the standard defines `allowed-tools`
+  as a space-separated string, which `intake.py` iterates character-by-character, yielding ~10 unlisted
+  "tools" and a stage-1 safety score of 0.000 — any spec-compliant submission scores zero today.
+- Decision: One SKILL.md that is simultaneously spec-valid, Cursor-loadable and SemiSkill-ingestible.
+  Frontmatter is restricted to the six standard keys; `name` is the kebab identifier and the directory
+  name (replacing the slash-bearing `slug`); SemiSkill taxonomy moves under `metadata:` with
+  `semiskill-`-prefixed keys. `intake.py` resolves each field `metadata["semiskill-<k>"]` →
+  `metadata["<k>"]` → top-level `"<k>"` (backward compatible with the existing seeds), sources
+  `payload["name"]` from `semiskill-title` so the catalog card stays readable with no schema migration,
+  and parses `allowed-tools` from either a YAML list or a whitespace/comma-separated string. **The
+  delivered bytes are the verified bytes**: packaging performs placement only, never rewriting.
+- Alternatives considered:
+  - Keep the flat keys and give up the standard's tooling — rejected: it gives up **Cursor**, the actual
+    delivery target, not merely a packaging script, and forks us permanently from a standard that
+    Cursor, Claude Code, Codex and VS Code have all adopted.
+  - Emit two variants from one source (verified form + delivered form) — rejected: the file that passes
+    the gate would not be the file the engineer runs, so the verification badge, the scan report and the
+    rollback path would all describe bytes nobody executes. A transformer bug becomes a silent security
+    regression that no test can close without reimplementing the pipeline, and a personalized fork could
+    not be resubmitted through the gate without a lossy reverse transform.
+- Consequences: The slash-slug convention retires; the eight published seeds are non-conformant and are
+  **superseded, never deleted** (ADR-003) by the Phase H wave. The `intake.py` changes are additive and
+  backward compatible — `tests/capture/test_intake.py` and `tests/seed/test_generated_seeds.py` must pass
+  unmodified as the regression gate. Facet values become an enumerated, lint-validated vocabulary, because
+  a typo under `metadata` is as silently unreachable as a top-level one. `allowed-tools` remains a
+  governance declaration that stage 1 scores, even though Cursor does not enforce it at runtime — so the
+  verification badge means "this text passed our scans on this date", never a runtime guarantee.
+- Related: ADR-002, ADR-003, ADR-007; semiskill/capture/intake.py; cursor.com/docs/skills; agentskills.io
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>
