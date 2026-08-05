@@ -68,6 +68,16 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: semiskill/capture/intake.py, tests/capture/test_intake.py, 195 tests green vs live PG
   next: H-004
 
+- [H-004] 2026-08-05T03:52Z  status: done
+  what: semiskill/authoring/lint_body.py — stdlib-only positional body linter (21 rules): stage-1 and
+  stage-4 mirrors of the real scanner regexes with line/col/excerpt/fix, independently-authored
+  ADVISORY phrasing rules for stage 3 (corpus deliberately NOT mirrored — this file ships to
+  engineers inside the pack), plus L060 untrusted-delimiter escape, L062 credential-named slot,
+  L034 oversize, L065 thin body. 26 tests incl. a near-miss negative per rule and an AST check that
+  the module imports nothing outside the stdlib
+  artifacts: semiskill/authoring/lint_body.py, tests/authoring/test_lint_body.py
+  next: H-005
+
 ## In-Flight Step
 _(none)_
 

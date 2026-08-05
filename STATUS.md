@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T03:40Z_
+_Last updated: 2026-08-05T03:52Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-002/H-003 (done) — intake implements ADR-008
-- Sub-state: next H-004 (stdlib-only body linter)
+- Step ID: H-004 (done) — stdlib-only body linter, 21 rules
+- Sub-state: next H-005 (facet vocabulary)
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 2ccffbd
-- Message: wip: H-001 ADR-008
+- SHA: 8e05990
+- Message: wip: H-002/H-003 intake implements ADR-008
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
