@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T07:32Z_
+_Last updated: 2026-08-05T07:52Z_
 
 ## Phase
 Phase I: 84 skills (>=5 per role across 16 roles), every one through
@@ -29,13 +29,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: I-001 (done) — 84-cell registry; scoreboard live (6/83, 0/16 roles at target)
+- Step ID: I-004 (done) — multi-page site; infrastructure for Phase I complete
 - Sub-state: Phase I underway; top-up cell design running. Content still not set-ready (below).
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: cb6b011
-- Message: wip: I-002/I-003 markdown + scoreboard
+- SHA: e946ed6
+- Message: wip: I-001 registry + drift detection
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
@@ -65,4 +65,4 @@ tenant. Plus: no auth, nothing deployed, no CI, no backups.
 
 ## If resumed
 Read MEMORY.md (Phase H) and the approved plan above. DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest` (363, Docker PG running). Nothing pushed to remote.
+Tests: `pytest` (393, Docker PG running). Nothing pushed to remote.

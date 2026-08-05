@@ -214,6 +214,24 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: specs/skill_registry.json, semiskill/authoring/scoreboard.py, tests (13)
   next: I-004 site, then wave 0 retrofit
 
+- [I-004] 2026-08-05T07:52Z  status: done
+  what: semiskill/authoring/site.py + `semiskill site` — the browsable catalog in the skills.sh
+  shape: ranked index with client-side search, a real page per skill (breadcrumbs, install block with
+  a copy-the-prompt button, the body rendered through the restricted renderer, a metadata panel
+  carrying version/owner/blanks/size and the REAL per-stage scan badges where skills.sh puts installs
+  and stars, plus more-in-role), per-role pages, the role x level matrix with linked cells, and an
+  install guide. One stylesheet, relative links throughout, no CDN and no fetch, so the folder
+  survives being zipped, emailed or downloaded from SharePoint. 15 tests including: an unpublished
+  skill never reaches the site, every internal link resolves, no page reaches the network, no page
+  carries a fabricated metric (regex-checked — `ui/catalog-demo.html` shipped "1.3k installs / star
+  4.8"), and a hostile body stays inert on its own page
+  three test-fixture bugs worth remembering: a bare "." matched the metric regex in "1. Download";
+  a hostile body containing a URL never publishes (0.3 network-call) so it cannot be used to test the
+  page; and `<script>` inside the JSON block is inert — only `</script` can terminate it
+  artifacts: semiskill/authoring/site.py, semiskill/cli.py, tests/authoring/test_site.py,
+  dist/site (14 pages) — 393 tests green
+  next: wave 0 retrofit (the matrix currently shows 2 roles x 3 levels — the facet collapse, visible)
+
 ## In-Flight Step
 _(none)_
 

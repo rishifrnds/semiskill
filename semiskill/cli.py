@@ -178,6 +178,26 @@ def cmd_scoreboard(args, store, out) -> int:
     return 0 if sb.ok else 1
 
 
+def cmd_site(args, store, out) -> int:
+    """Generate the browsable multi-page site from the published catalog."""
+    from datetime import datetime, timezone
+    from semiskill.artifacts.store import PostgresArtifactStore
+    from semiskill.authoring.site import build_site
+
+    dsn = args.dsn or Config.from_env().database_url
+    store = store or PostgresArtifactStore(dsn)
+    res = build_site(store=store, out_dir=args.out,
+                     generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    if not res.entries:
+        print("nothing is published yet — run `semiskill wave` first", file=out)
+        return 1
+    print(f"{len(res.entries)} skill(s) -> {len(res.pages)} pages in {res.root}", file=out)
+    print(f"  open {res.root / 'index.html'}", file=out)
+    print("  SharePoint: upload catalog.md (it renders in the browser); the .html tree is "
+          "download-and-open.", file=out)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="semiskill", description="SemiSkill CLI (L1 capture)")
     sub = p.add_subparsers(dest="command", required=True)
@@ -242,6 +262,11 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--json", action="store_true")
     sc.add_argument("--markdown", action="store_true")
     sc.set_defaults(func=cmd_scoreboard, needs_store=False)
+
+    st = sub.add_parser("site", help="generate the browsable multi-page catalog site")
+    st.add_argument("--dsn", default=None)
+    st.add_argument("--out", default="dist/site")
+    st.set_defaults(func=cmd_site, needs_store=False)
     return p
 
 
