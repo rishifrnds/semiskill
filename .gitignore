@@ -1,6 +1,10 @@
 # State system
 .session-lock
 
+# Command centre runtime (local queue + command output, not project state)
+dashboard/inbox*.jsonl
+dashboard/runs/
+
 # Node / build
 node_modules/
 dist/

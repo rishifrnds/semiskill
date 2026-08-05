@@ -43,8 +43,17 @@ Phases 0/A/B/C/D/E/F done → archive/MEMORY-{P0,A,B,C,D,E,F}.md. Built + green 
   what: Usability — scripts/demo.py: one-command live demo (TRUNCATE + seed the 8 generated DV skills through the full pipeline + approval, block a malicious sample, print the verified catalog). Verified the read API serves it live (/health, /catalog=8, /skill/<id> with verification report). Answers "how do I see/use it": (1) Artifact URL for visuals, (2) `python scripts/demo.py` + `python -m semiskill.api` for live data
   artifacts: scripts/demo.py
 
+- [G-006] 2026-08-05T03:19Z  status: done
+  what: dashboard/ command centre — stdlib server (live git/LOC/test-collection/Docker/Postgres/read-API
+  signals + whitelisted local runs + an action queue written to inbox.jsonl) and a shadcn/tweakcn dark
+  single-page UI over it (overview/architecture/pipeline/features/quality/security/catalog/launch/growth/
+  analytics/queue; SVG layer + pipeline + lifecycle diagrams, role×level matrix, Chart.js charts).
+  Verified end-to-end in Chrome: every view renders and a button click queues a task to inbox.jsonl
+  artifacts: dashboard/server.py, dashboard/index.html, dashboard/model.json, dashboard/README.md, .gitignore
+  next: H-001 (Phase H)
+
 ## In-Flight Step
-_(none — Phase G COMPLETE. All planned phases A–G done. 183 tests green + runnable demo.)_
+_(none — Phase G COMPLETE. All planned phases A–G done. 183 tests green + runnable demo + dashboard.)_
 
 ## Pending Steps
 1. [G-001] semiskill/seed.py — seed_skill (generated skill → full pipeline → human approve → published; no back-door) + tests (clean publishes, broken blocked)

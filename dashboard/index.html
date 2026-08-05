@@ -1,0 +1,1201 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SemiSkill — Command Centre</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+<style>
+/* ── shadcn/ui token system (dark, tweakcn-flavoured) ─────────────────────── */
+:root{
+  --background:240 10% 3.9%;   --foreground:0 0% 98%;
+  --card:240 8% 5.5%;          --card-foreground:0 0% 98%;
+  --popover:240 10% 7%;        --popover-foreground:0 0% 98%;
+  --primary:162 72% 46%;       --primary-foreground:160 30% 6%;
+  --secondary:240 4% 12%;      --secondary-foreground:0 0% 96%;
+  --muted:240 4% 11%;          --muted-foreground:240 5% 62%;
+  --accent:240 5% 15%;         --accent-foreground:0 0% 98%;
+  --destructive:358 72% 56%;   --destructive-foreground:0 0% 98%;
+  --warning:38 92% 55%;        --success:151 66% 47%;  --info:212 92% 62%;
+  --border:240 5% 14%;         --input:240 5% 16%;     --ring:162 72% 46%;
+  --radius:.65rem;
+  --chart-1:162 72% 46%; --chart-2:212 92% 62%; --chart-3:266 78% 68%;
+  --chart-4:38 92% 55%;  --chart-5:358 72% 56%; --chart-6:180 60% 50%;
+  --sidebar:240 9% 4.6%;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:hsl(var(--background));color:hsl(var(--foreground));
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:hsl(var(--border));border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:hsl(var(--accent))}
+a{color:inherit}
+code,pre,.mono{font-family:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace}
+
+/* ── shell ─────────────────────────────────────────────────────────────────── */
+#app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+.sidebar{
+  background:hsl(var(--sidebar));border-right:1px solid hsl(var(--border));
+  padding:16px 12px;position:sticky;top:0;height:100vh;overflow-y:auto;
+  display:flex;flex-direction:column;gap:4px;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
+.brand .logo{
+  width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;
+  background:linear-gradient(145deg,hsl(var(--primary)),hsl(var(--chart-2)));
+  color:hsl(var(--primary-foreground));font-weight:800;font-size:15px;
+}
+.brand b{font-size:14px;letter-spacing:-.01em;display:block}
+.brand span{font-size:11px;color:hsl(var(--muted-foreground))}
+.nav-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:hsl(var(--muted-foreground));padding:14px 8px 6px;font-weight:600}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:calc(var(--radius) - 2px);
+  color:hsl(var(--muted-foreground));cursor:pointer;font-weight:500;font-size:13.5px;border:1px solid transparent;
+  transition:background .12s,color .12s;user-select:none;
+}
+.nav-item:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
+.nav-item.active{background:hsl(var(--accent));color:hsl(var(--foreground));border-color:hsl(var(--border))}
+.nav-item .ico{width:16px;text-align:center;opacity:.9}
+.nav-item .n{margin-left:auto;font-size:11px;color:hsl(var(--muted-foreground));
+  background:hsl(var(--muted));border-radius:6px;padding:1px 6px}
+main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);
+  background:hsl(var(--background)/.82);border-bottom:1px solid hsl(var(--border));
+  padding:12px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.topbar h1{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.topbar .sub{font-size:12px;color:hsl(var(--muted-foreground))}
+.spacer{flex:1}
+.view{padding:20px 24px 56px;display:none;animation:fade .18s ease}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.section-head{display:flex;align-items:flex-end;gap:12px;margin:26px 0 12px}
+.section-head:first-child{margin-top:4px}
+.section-head h2{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.section-head p{font-size:12.5px;color:hsl(var(--muted-foreground))}
+
+/* ── primitives ────────────────────────────────────────────────────────────── */
+.card{
+  background:hsl(var(--card));border:1px solid hsl(var(--border));
+  border-radius:var(--radius);color:hsl(var(--card-foreground));overflow:hidden;
+}
+.card-header{padding:16px 18px 0;display:flex;align-items:flex-start;gap:10px}
+.card-header .t{font-weight:600;font-size:13.5px;letter-spacing:-.01em}
+.card-header .d{font-size:12px;color:hsl(var(--muted-foreground));margin-top:2px}
+.card-content{padding:14px 18px 18px}
+.card-content.tight{padding:10px 12px 12px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.span2{grid-column:span 2}
+@media(max-width:1180px){.g6{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){#app{grid-template-columns:1fr}.sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;overflow:visible}.nav-label{display:none}.g2,.g3,.g4,.g6{grid-template-columns:1fr}.span2{grid-column:auto}}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
+  border-radius:calc(var(--radius) - 2px);font-size:12.5px;font-weight:500;padding:6px 11px;
+  border:1px solid hsl(var(--border));background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));
+  cursor:pointer;transition:background .12s,border-color .12s,opacity .12s;
+}
+.btn:hover{background:hsl(var(--accent))}
+.btn:active{transform:translateY(.5px)}
+.btn.primary{background:hsl(var(--primary));color:hsl(var(--primary-foreground));border-color:hsl(var(--primary));font-weight:600}
+.btn.primary:hover{opacity:.9;background:hsl(var(--primary))}
+.btn.ghost{background:transparent;border-color:transparent;color:hsl(var(--muted-foreground))}
+.btn.ghost:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
+.btn.outline{background:transparent}
+.btn.xs{padding:3px 8px;font-size:11.5px}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.badge{
+  display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;
+  font-size:11px;font-weight:600;border:1px solid hsl(var(--border));background:hsl(var(--muted));
+  color:hsl(var(--muted-foreground));white-space:nowrap;line-height:1.5;
+}
+.badge.done,.badge.up,.badge.success{background:hsl(var(--success)/.13);color:hsl(var(--success));border-color:hsl(var(--success)/.3)}
+.badge.partial,.badge.warn,.badge.todo{background:hsl(var(--warning)/.13);color:hsl(var(--warning));border-color:hsl(var(--warning)/.3)}
+.badge.gap,.badge.down,.badge.critical,.badge.destructive{background:hsl(var(--destructive)/.13);color:hsl(var(--destructive));border-color:hsl(var(--destructive)/.3)}
+.badge.info,.badge.live{background:hsl(var(--info)/.13);color:hsl(var(--info));border-color:hsl(var(--info)/.3)}
+.badge.by-design-off,.badge.muted{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+.dot{width:7px;height:7px;border-radius:99px;background:currentColor;box-shadow:0 0 0 3px currentColor;opacity:.9;transform:scale(.85)}
+.pulse{animation:pulse 2.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+.kpi .v{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:hsl(var(--muted-foreground));font-weight:600}
+.kpi .s{font-size:11.5px;color:hsl(var(--muted-foreground));margin-top:3px}
+
+.progress{height:7px;border-radius:99px;background:hsl(var(--muted));overflow:hidden}
+.progress>span{display:block;height:100%;border-radius:99px;background:hsl(var(--primary));transition:width .5s ease}
+.progress.warn>span{background:hsl(var(--warning))}
+.progress.bad>span{background:hsl(var(--destructive))}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{
+  text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;
+  color:hsl(var(--muted-foreground));padding:8px 10px;border-bottom:1px solid hsl(var(--border));
+  position:sticky;top:0;background:hsl(var(--card));cursor:pointer;user-select:none;white-space:nowrap;
+}
+thead th:hover{color:hsl(var(--foreground))}
+tbody td{padding:8px 10px;border-bottom:1px solid hsl(var(--border)/.7);vertical-align:top}
+tbody tr:hover{background:hsl(var(--accent)/.5)}
+tbody tr:last-child td{border-bottom:none}
+.tbl-wrap{max-height:520px;overflow:auto;border-radius:calc(var(--radius) - 2px)}
+.muted{color:hsl(var(--muted-foreground))}
+.num{font-variant-numeric:tabular-nums;text-align:right}
+
+input[type=text],input[type=search],select,textarea{
+  background:hsl(var(--muted));border:1px solid hsl(var(--input));color:hsl(var(--foreground));
+  border-radius:calc(var(--radius) - 2px);padding:6px 10px;font-size:12.5px;font-family:inherit;outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:hsl(var(--ring));box-shadow:0 0 0 3px hsl(var(--ring)/.16)}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+
+.chart-box{position:relative;height:240px}
+.chart-box.tall{height:320px}
+.chart-box.short{height:180px}
+
+/* diagrams */
+svg .lbl{font:600 11px Inter,system-ui,sans-serif;fill:hsl(var(--foreground))}
+svg .sub{font:10px Inter,system-ui,sans-serif;fill:hsl(var(--muted-foreground))}
+svg .box{fill:hsl(var(--muted));stroke:hsl(var(--border))}
+svg .flow{stroke:hsl(var(--border));stroke-width:1.5;fill:none;marker-end:url(#arrow)}
+svg .flow.ok{stroke:hsl(var(--primary))}
+svg .flow.bad{stroke:hsl(var(--destructive));stroke-dasharray:4 3}
+
+.tree{font-size:12.5px;line-height:1.9}
+.tree .n{display:flex;align-items:center;gap:8px}
+.tree .n .bar{height:5px;border-radius:99px;background:hsl(var(--primary)/.55);min-width:2px}
+.tree .lvl1{padding-left:14px}.tree .lvl2{padding-left:30px}
+.tree .grp{font-weight:600}
+
+.matrix{display:grid;gap:4px;font-size:11px}
+.matrix .cell{border:1px solid hsl(var(--border));border-radius:6px;padding:6px 4px;text-align:center;background:hsl(var(--muted))}
+.matrix .cell.on{background:hsl(var(--primary)/.22);border-color:hsl(var(--primary)/.5);color:hsl(var(--foreground));font-weight:600}
+.matrix .hdr{color:hsl(var(--muted-foreground));font-weight:600;text-align:center;padding:4px 2px;border:none;background:none}
+
+.gantt-row{display:grid;grid-template-columns:210px 1fr;gap:10px;align-items:center;margin-bottom:8px}
+.gantt-track{position:relative;height:26px;background:hsl(var(--muted));border-radius:7px;overflow:hidden}
+.gantt-bar{position:absolute;top:3px;height:20px;border-radius:6px;display:flex;align-items:center;padding:0 8px;
+  font-size:10.5px;font-weight:600;color:hsl(var(--primary-foreground));white-space:nowrap;overflow:hidden}
+
+.funnel-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.funnel-bar{height:30px;border-radius:7px;display:flex;align-items:center;padding:0 10px;font-size:11.5px;font-weight:600;
+  color:hsl(var(--primary-foreground));min-width:60px}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border:1px solid hsl(var(--border));border-radius:calc(var(--radius) - 2px);background:hsl(var(--muted)/.4)}
+.row .g{flex:1;min-width:0}
+.row .h{font-weight:600;font-size:12.5px}
+.row .p{font-size:11.5px;color:hsl(var(--muted-foreground));margin-top:2px}
+
+.stat-strip{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+pre.out{background:hsl(var(--muted));border:1px solid hsl(var(--border));border-radius:calc(var(--radius) - 2px);
+  padding:10px;font-size:11px;max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+
+#toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:100}
+.toast{background:hsl(var(--popover));border:1px solid hsl(var(--border));border-radius:var(--radius);
+  padding:11px 14px;font-size:12.5px;min-width:260px;box-shadow:0 12px 32px rgba(0,0,0,.5);animation:fade .2s}
+.toast b{display:block;margin-bottom:2px}
+dialog{background:hsl(var(--popover));color:hsl(var(--foreground));border:1px solid hsl(var(--border));
+  border-radius:var(--radius);padding:0;width:min(560px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.6);backdrop-filter:blur(2px)}
+.dlg-head{padding:16px 18px 0}.dlg-body{padding:12px 18px}.dlg-foot{padding:0 18px 16px;display:flex;gap:8px;justify-content:flex-end}
+textarea{width:100%;min-height:110px;resize:vertical}
+.empty{padding:26px;text-align:center;color:hsl(var(--muted-foreground));font-size:12.5px}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div><b>SemiSkill</b><span>Command Centre</span></div>
+    </div>
+    <div class="nav-label">Build</div>
+    <div class="nav-item active" data-view="overview"><span class="ico">◎</span>Overview</div>
+    <div class="nav-item" data-view="architecture"><span class="ico">▤</span>Architecture</div>
+    <div class="nav-item" data-view="pipeline"><span class="ico">⇉</span>Pipeline</div>
+    <div class="nav-item" data-view="features"><span class="ico">✦</span>Features<span class="n" id="n-features">–</span></div>
+    <div class="nav-item" data-view="quality"><span class="ico">✓</span>Quality &amp; Bugs<span class="n" id="n-tests">–</span></div>
+    <div class="nav-label">Product</div>
+    <div class="nav-item" data-view="security"><span class="ico">⛨</span>Security<span class="n" id="n-attacks">–</span></div>
+    <div class="nav-item" data-view="catalog"><span class="ico">▩</span>Catalog<span class="n" id="n-seeds">–</span></div>
+    <div class="nav-label">Business</div>
+    <div class="nav-item" data-view="launch"><span class="ico">🚀</span>Launch</div>
+    <div class="nav-item" data-view="growth"><span class="ico">📈</span>Growth &amp; GTM</div>
+    <div class="nav-item" data-view="analytics"><span class="ico">◫</span>Analytics</div>
+    <div class="nav-label">Control</div>
+    <div class="nav-item" data-view="queue"><span class="ico">⌘</span>Action Queue<span class="n" id="n-queue">0</span></div>
+    <div style="flex:1"></div>
+    <button class="btn wide outline" data-ask="1" style="margin-top:12px">＋ Ask Claude anything</button>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div>
+        <h1 id="page-title">Overview</h1>
+        <div class="sub" id="page-sub">Loading live state…</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="stat-strip" id="health"></div>
+      <button class="btn" id="btn-refresh">↻ Refresh</button>
+    </header>
+
+    <section class="view active" id="view-overview"></section>
+    <section class="view" id="view-architecture"></section>
+    <section class="view" id="view-pipeline"></section>
+    <section class="view" id="view-features"></section>
+    <section class="view" id="view-quality"></section>
+    <section class="view" id="view-security"></section>
+    <section class="view" id="view-catalog"></section>
+    <section class="view" id="view-launch"></section>
+    <section class="view" id="view-growth"></section>
+    <section class="view" id="view-analytics"></section>
+    <section class="view" id="view-queue"></section>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<dialog id="ask-dlg">
+  <form method="dialog">
+    <div class="dlg-head">
+      <div class="card-header" style="padding:0">
+        <div><div class="t" id="ask-title">Send a task to Claude</div>
+        <div class="d">It lands in <code>dashboard/inbox.jsonl</code>. Say “work the queue” in chat and Claude picks it up.</div></div>
+      </div>
+    </div>
+    <div class="dlg-body">
+      <input type="text" id="ask-subject" placeholder="Short title" style="width:100%;margin-bottom:8px">
+      <textarea id="ask-prompt" placeholder="What should Claude do?"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <label class="muted" style="font-size:11.5px">Priority</label>
+        <select id="ask-priority"><option>normal</option><option>high</option><option>low</option></select>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn ghost" value="cancel">Cancel</button>
+      <button class="btn primary" id="ask-send" value="send">Queue task</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ═══════════════════════════ state + utils ═══════════════════════════════ */
+let S = null, CHARTS = {}, VIEW = 'overview';
+const $ = s => document.querySelector(s);
+const CSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const hsl = (n, a = 1) => `hsl(${CSS(n)} / ${a})`;
+const PALETTE = () => ['--chart-1','--chart-2','--chart-3','--chart-4','--chart-5','--chart-6'].map(v => hsl(v));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+
+function toast(title, body, kind) {
+  const d = document.createElement('div');
+  d.className = 'toast';
+  d.innerHTML = `<b>${kind === 'bad' ? '⚠ ' : '✓ '}${esc(title)}</b><span class="muted">${esc(body || '')}</span>`;
+  $('#toast').appendChild(d);
+  setTimeout(() => d.remove(), 4200);
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+/* card helper — every card can carry a "work on this" action button */
+function card(title, desc, body, opts = {}) {
+  const act = opts.action ? `<button class="btn xs outline" data-action-id="${opts.action}">⌘ Work on this</button>` : '';
+  const extra = opts.extra || '';
+  return `<div class="card ${opts.cls || ''}">
+    <div class="card-header"><div style="flex:1;min-width:0"><div class="t">${title}</div>${desc ? `<div class="d">${desc}</div>` : ''}</div>
+    <div style="display:flex;gap:6px;flex:0 0 auto">${extra}${act}</div></div>
+    <div class="card-content ${opts.tight ? 'tight' : ''}">${body}</div></div>`;
+}
+function kpi(label, value, sub, opts = {}) {
+  return `<div class="card kpi"><div class="card-content">
+    <div class="l">${label}</div><div class="v" style="${opts.color ? `color:${opts.color}` : ''}">${value}</div>
+    <div class="s">${sub || ''}</div>
+    ${opts.progress !== undefined ? `<div class="progress ${opts.progressCls || ''}" style="margin-top:10px"><span style="width:${opts.progress}%"></span></div>` : ''}
+  </div></div>`;
+}
+function badge(text, cls) { return `<span class="badge ${cls || ''}">${esc(text)}</span>`; }
+
+function chart(id, cfg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (CHARTS[id]) CHARTS[id].destroy();
+  Chart.defaults.color = hsl('--muted-foreground');
+  Chart.defaults.borderColor = hsl('--border');
+  Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+  Chart.defaults.font.size = 11;
+  cfg.options = Object.assign({
+    responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+  }, cfg.options || {});
+  CHARTS[id] = new Chart(el.getContext('2d'), cfg);
+}
+const gridOpts = (stacked = false) => ({
+  x: { stacked, grid: { display: false }, border: { color: hsl('--border') } },
+  y: { stacked, beginAtZero: true, grid: { color: hsl('--border', .55) }, border: { display: false } }
+});
+
+/* ═══════════════════════════ views ═══════════════════════════════════════ */
+const TITLES = {
+  overview:  ['Overview', 'Live build, security and launch posture'],
+  architecture: ['Architecture', 'AIOS 6-layer map, modules and decisions'],
+  pipeline:  ['Verification Pipeline', 'Six stages, the gate, and the lifecycle'],
+  features:  ['Features', 'What is implemented, partial, or a gap — with evidence'],
+  quality:   ['Quality & Bugs', 'Test inventory, risks, and open defects'],
+  security:  ['Security', 'Red-team results, invariants and exposure'],
+  catalog:   ['Catalog', 'Published skills, role coverage, reuse'],
+  launch:    ['Launch', 'Readiness scoring, blockers and timeline'],
+  growth:    ['Growth & GTM', 'ICP, funnel, channels, assets, pricing'],
+  analytics: ['Analytics', 'The metrics tree and what is instrumented'],
+  queue:     ['Action Queue', 'Tasks you have sent to Claude'],
+};
+
+function renderAll() {
+  renderHealth();
+  ({ overview: vOverview, architecture: vArchitecture, pipeline: vPipeline, features: vFeatures,
+     quality: vQuality, security: vSecurity, catalog: vCatalog, launch: vLaunch,
+     growth: vGrowth, analytics: vAnalytics, queue: vQueue })[VIEW]();
+  const [t, s] = TITLES[VIEW];
+  $('#page-title').textContent = t;
+  $('#page-sub').textContent = `${s} · state generated ${S.generated_at}`;
+  $('#n-features').textContent = S.model.features.length;
+  $('#n-tests').textContent = S.repo.collected_tests || S.repo.total_tests;
+  $('#n-attacks').textContent = S.attacks.length;
+  $('#n-seeds').textContent = S.seeds.length;
+  $('#n-queue').textContent = S.inbox.filter(i => i.status === 'queued').length;
+}
+
+function renderHealth() {
+  const r = S.runtime;
+  const pill = (label, ok, detail) =>
+    `<span class="badge ${ok ? 'up' : 'down'}" title="${esc(detail || '')}"><span class="dot ${ok ? 'pulse' : ''}"></span>${label}</span>`;
+  $('#health').innerHTML =
+    pill('Docker', r.docker === 'up') +
+    pill('Postgres', r.db.status === 'up', r.db.detail) +
+    pill('Read API', r.api.status === 'up', r.api.detail) +
+    `<span class="badge ${S.repo.dirty ? 'warn' : 'muted'}">git ${esc(S.repo.branch)} · ${S.repo.dirty} dirty</span>`;
+}
+
+/* ── overview ─────────────────────────────────────────────────────────────── */
+function readiness() {
+  const lc = S.model.launch_checklist;
+  const w = lc.reduce((a, x) => a + x.weight, 0);
+  const got = lc.reduce((a, x) => a + x.weight * (x.status === 'done' ? 1 : x.status === 'partial' ? .5 : 0), 0);
+  return { pct: Math.round(got / w * 100), done: lc.filter(x => x.status === 'done').length, total: lc.length };
+}
+
+function vOverview() {
+  const f = S.model.features, R = readiness();
+  const done = f.filter(x => x.status === 'done').length;
+  const gaps = f.filter(x => x.status === 'gap').length;
+  const partial = f.filter(x => x.status === 'partial').length;
+  const crit = S.model.risks.filter(r => r.severity === 'critical').length;
+
+  const phases = [['A',21],['B',59],['C',146],['D',171],['E',176],['F',180],['G',183]];
+
+  $('#view-overview').innerHTML = `
+    <div class="grid g6">
+      ${kpi('Build', 'A–G', 'all planned phases complete', { color: hsl('--primary') })}
+      ${kpi('Tests', S.repo.collected_tests || S.repo.total_tests, `${S.repo.tests.length} files · ${S.repo.total_loc} LOC · last full green run: Phase G gate`)}
+      ${kpi('Features done', `${done}/${f.length}`, `${partial} partial · ${gaps} gaps`, { progress: pct(done, f.length) })}
+      ${kpi('Red-team escapes', '0', `${S.attacks.length} novel attacks + battery blocked`, { color: hsl('--success') })}
+      ${kpi('Published skills', S.runtime.api.status === 'up' ? S.runtime.api.catalog : S.seeds.length,
+            S.runtime.api.status === 'up' ? 'live from the read API' : 'from the seed fixture (API down)')}
+      ${kpi('Launch ready', R.pct + '%', `${R.done}/${R.total} checklist items done`,
+            { progress: R.pct, progressCls: R.pct < 40 ? 'bad' : R.pct < 70 ? 'warn' : '' })}
+    </div>
+
+    <div class="section-head"><h2>Where the build stands</h2><p class="muted">From MEMORY.md / STATUS.md — the actual project state files</p></div>
+    <div class="grid g3">
+      ${card('Right now', S.state.phase, `<div style="font-size:12.5px;line-height:1.65">${esc(S.state.right_now).replace(/\n/g, ' ')}</div>`, { cls: 'span2' })}
+      ${card('Open blockers', 'BLOCKERS.md', S.state.blockers.length
+        ? S.state.blockers.map(b => `<div class="row"><div class="g"><div class="h">${esc(b)}</div></div></div>`).join('')
+        : `<div style="text-align:center;padding:16px 0"><div style="font-size:30px;font-weight:700;color:${hsl('--success')}">0</div><div class="muted" style="font-size:12px">no active blockers</div></div>`)}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Test suite growth by phase', 'Cumulative green tests at each phase gate',
+        `<div class="chart-box"><canvas id="c-growth"></canvas></div>`)}
+      ${card('Feature status by layer', 'done / partial / gap across the 6 AIOS layers + product',
+        `<div class="chart-box"><canvas id="c-featlayer"></canvas></div>`)}
+    </div>
+
+    <div class="section-head"><h2>What needs a decision or a hand</h2><p class="muted">Click any button to queue the work for Claude</p></div>
+    <div class="grid g3">
+      ${S.model.risks.slice(0, 6).map(r => card(
+        `${badge(r.severity, r.severity === 'critical' ? 'critical' : r.severity === 'high' ? 'gap' : r.severity === 'medium' ? 'warn' : 'muted')} ${esc(r.title)}`,
+        esc(r.area),
+        `<div style="font-size:12px;line-height:1.6">${esc(r.detail)}</div>
+         <div class="muted" style="font-size:11.5px;margin-top:8px"><b>Mitigation:</b> ${esc(r.mitigation)}</div>
+         <button class="btn xs outline" style="margin-top:10px" data-adhoc="${esc('Mitigate ' + r.title)}|${esc('Work on this risk from the SemiSkill dashboard: ' + r.title + '. ' + r.detail + ' Proposed mitigation: ' + r.mitigation + '. Investigate, propose the smallest correct fix, and implement it with tests.')}">⌘ Take this on</button>`)).join('')}
+    </div>
+
+    <div class="section-head"><h2>Quick actions</h2><p class="muted">Whitelisted commands run locally; everything else queues a task</p></div>
+    <div class="grid g4">
+      ${S.runnable.map(r => `<div class="card"><div class="card-content">
+        <div class="l" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:${hsl('--muted-foreground')};font-weight:600">${esc(r.id)}</div>
+        <div style="font-weight:600;margin:4px 0 2px">${esc(r.label)}</div>
+        <div class="muted" style="font-size:11.5px;min-height:32px">${esc(r.note)}</div>
+        <button class="btn primary wide" data-run="${esc(r.id)}" style="margin-top:8px">▶ Run</button>
+      </div></div>`).join('')}
+    </div>
+
+    <div class="section-head"><h2>Commit history</h2><p class="muted">${S.repo.commits.length} commits · branch ${esc(S.repo.branch)}</p></div>
+    ${card('Recent commits', '', `<div class="tbl-wrap"><table><thead><tr><th>SHA</th><th>When</th><th>Subject</th></tr></thead><tbody>
+      ${S.repo.commits.slice(0, 18).map(c => `<tr><td class="mono muted">${esc(c.sha)}</td>
+        <td class="muted">${esc(c.date.slice(0, 16).replace('T', ' '))}</td>
+        <td>${badge(c.kind, c.kind === 'rotate' ? 'info' : c.kind === 'feat' ? 'done' : 'muted')} ${esc(c.subject)}</td></tr>`).join('')}
+    </tbody></table></div>`, { tight: true })}
+  `;
+
+  chart('c-growth', {
+    type: 'line',
+    data: { labels: phases.map(p => 'Phase ' + p[0]), datasets: [{
+      label: 'green tests', data: phases.map(p => p[1]),
+      borderColor: hsl('--chart-1'), backgroundColor: hsl('--chart-1', .16),
+      fill: true, tension: .35, pointRadius: 4, pointBackgroundColor: hsl('--chart-1'), borderWidth: 2 }] },
+    options: { plugins: { legend: { display: false } }, scales: gridOpts() }
+  });
+
+  const layers = [...S.model.layers.map(l => l.id), 'Product', 'Ops'];
+  const byStatus = st => layers.map(L => S.model.features.filter(x => x.layer === L && x.status === st).length);
+  chart('c-featlayer', {
+    type: 'bar',
+    data: { labels: layers, datasets: [
+      { label: 'done', data: byStatus('done'), backgroundColor: hsl('--success', .85), borderRadius: 4 },
+      { label: 'partial', data: byStatus('partial'), backgroundColor: hsl('--warning', .85), borderRadius: 4 },
+      { label: 'gap', data: byStatus('gap'), backgroundColor: hsl('--destructive', .8), borderRadius: 4 }] },
+    options: { plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 7 } } }, scales: gridOpts(true) }
+  });
+}
+
+/* ── architecture ─────────────────────────────────────────────────────────── */
+function vArchitecture() {
+  const L = S.model.layers;
+  const loc = {};
+  S.repo.modules.forEach(m => { loc[m.layer] = (loc[m.layer] || 0) + m.loc; });
+
+  const layerBox = (l, i) => {
+    const y = 18 + i * 62;
+    return `<g>
+      <rect x="26" y="${y}" width="300" height="50" rx="9" class="box" fill="${hsl('--card')}" stroke="${l.color}55"/>
+      <rect x="26" y="${y}" width="4" height="50" rx="2" fill="${l.color}"/>
+      <text x="42" y="${y + 21}" class="lbl">${l.id} · ${esc(l.name)}</text>
+      <text x="42" y="${y + 38}" class="sub">${esc(l.modules.join(' '))} · ${loc[l.id] || 0} LOC</text>
+      <text x="316" y="${y + 30}" class="sub" text-anchor="end">${S.model.features.filter(f => f.layer === l.id).length} features</text>
+      ${i < 5 ? `<path d="M176 ${y + 50} L176 ${y + 62}" class="flow"/>` : ''}
+    </g>`;
+  };
+
+  const tree = () => {
+    const byDir = {};
+    S.repo.modules.forEach(m => {
+      const parts = m.path.split('/');
+      const dir = parts.length > 2 ? parts[1] : 'root';
+      (byDir[dir] = byDir[dir] || []).push(m);
+    });
+    const max = Math.max(...S.repo.modules.map(m => m.loc));
+    return Object.entries(byDir).sort((a, b) => b[1].reduce((s, m) => s + m.loc, 0) - a[1].reduce((s, m) => s + m.loc, 0))
+      .map(([dir, ms]) => `<div class="n grp lvl1">📁 ${esc(dir)} <span class="muted">(${ms.reduce((s, m) => s + m.loc, 0)} LOC)</span></div>` +
+        ms.sort((a, b) => b.loc - a.loc).map(m => `<div class="n lvl2">
+          <span style="width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="muted">${esc(m.path.split('/').pop())}</span>
+          <span class="bar" style="width:${Math.max(2, m.loc / max * 130)}px"></span>
+          <span class="muted">${m.loc}</span></div>`).join('')).join('');
+  };
+
+  $('#view-architecture').innerHTML = `
+    <div class="grid g2">
+      ${card('AIOS 6-layer block diagram', 'Every component maps to exactly one layer; data flows bottom-up, control flows top-down',
+        `<svg viewBox="0 0 640 400" style="width:100%;height:400px">
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="${hsl('--border')}"/></marker></defs>
+          ${L.map(layerBox).join('')}
+          <rect x="380" y="18" width="230" height="112" rx="9" class="box" fill="${hsl('--card')}" stroke="${hsl('--primary', .4)}"/>
+          <text x="396" y="40" class="lbl">Gated actuator</text>
+          <text x="396" y="58" class="sub">governance.publish.publish_skill</text>
+          <text x="396" y="76" class="sub">re-checks verdict + no hard-fail</text>
+          <text x="396" y="94" class="sub">writes the catalog — nothing else does</text>
+          <text x="396" y="118" class="sub" fill="${hsl('--primary')}">ADR-002 · structural, not prompted</text>
+          <rect x="380" y="150" width="230" height="92" rx="9" class="box" fill="${hsl('--card')}" stroke="${hsl('--destructive', .35)}"/>
+          <text x="396" y="172" class="lbl">Held-out corpus</text>
+          <text x="396" y="190" class="sub">outside anything the pipeline</text>
+          <text x="396" y="206" class="sub">role can read or modify</text>
+          <text x="396" y="230" class="sub" fill="${hsl('--destructive')}">verified by test, not policy</text>
+          <rect x="380" y="262" width="230" height="118" rx="9" class="box" fill="${hsl('--card')}" stroke="${hsl('--border')}"/>
+          <text x="396" y="284" class="lbl">Artifact spine</text>
+          <text x="396" y="302" class="sub">Captured → Analyzed → Proposed</text>
+          <text x="396" y="318" class="sub">→ Executed → Observed</text>
+          <text x="396" y="342" class="sub">append-only · corrections never edits</text>
+          <text x="396" y="362" class="sub">${S.runtime.db.status === 'up' ? (S.runtime.db.artifacts + ' artifacts live') : 'DB offline — start it to see live counts'}</text>
+        </svg>`, { action: 'A-13' })}
+      <div class="grid" style="gap:14px;align-content:start">
+        ${card('Code distribution by layer', `${S.repo.total_loc} LOC across ${S.repo.modules.length} modules`,
+          `<div class="chart-box short"><canvas id="c-loc"></canvas></div>`)}
+        ${card('Module tree', 'Live from the repo', `<div class="tree" style="max-height:300px;overflow:auto">${tree()}</div>`, { tight: true })}
+      </div>
+    </div>
+
+    <div class="section-head"><h2>Architecture decisions</h2><p class="muted">DECISIONS.md — append-only ADRs</p></div>
+    ${card('ADR register', `${S.adrs.length} decisions recorded`,
+      `<table><thead><tr><th style="width:90px">ID</th><th>Decision</th><th style="width:120px"></th></tr></thead><tbody>
+      ${S.adrs.map(a => `<tr><td class="mono">${esc(a.id)}</td><td>${esc(a.title)}</td>
+        <td><button class="btn xs ghost" data-adhoc="${esc('Review ' + a.id)}|${esc('Re-examine ' + a.id + ' (' + a.title + ') in DECISIONS.md: is it still the right call given where the build is now? If it needs qualifying or superseding, write the new ADR.')}">review</button></td></tr>`).join('')}
+      </tbody></table>`, { tight: true, action: 'A-13' })}
+
+    <div class="section-head"><h2>Canonical artifact schema</h2><p class="muted">Every event carries these fields — this is what makes the system queryable</p></div>
+    ${card('Artifact fields', 'semiskill/artifacts/schema.py',
+      `<div class="grid g4" style="gap:8px">${[
+        ['artifact_id', 'uuid, immutable'], ['artifact_type', 'skill_version | scan_run | review | approval | comment | rating | reuse_event | injection_test'],
+        ['source_system', 'github | sharepoint | cli | web'], ['actor', 'human | service-account | agent'],
+        ['timestamp_start/end', 'wall-clock bounds'], ['input_refs[] / output_refs[]', 'provenance edges'],
+        ['permissions_label', 'public | team | need-to-know | regulated'], ['objective_tag', 'safety | velocity | reuse | compliance'],
+        ['ground_truth_ref', 'scanner output / human verdict'], ['eval_score', 'security verdict / risk score'],
+        ['rollback_ref', 'unpublish path'], ['payload', 'type-specific body']
+      ].map(([k, v]) => `<div class="row"><div class="g"><div class="h mono" style="font-size:11.5px">${esc(k)}</div><div class="p">${esc(v)}</div></div></div>`).join('')}</div>`)}
+  `;
+
+  const ids = [...new Set(S.repo.modules.map(m => m.layer))];
+  chart('c-loc', {
+    type: 'doughnut',
+    data: { labels: ids, datasets: [{ data: ids.map(i => loc[i] || 0), backgroundColor: PALETTE(), borderColor: hsl('--card'), borderWidth: 2 }] },
+    options: { cutout: '62%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 7, padding: 10 } } } }
+  });
+}
+
+/* ── pipeline ─────────────────────────────────────────────────────────────── */
+function vPipeline() {
+  const st = S.model.pipeline_stages;
+  const w = 128, gap = 14;
+  const stageBox = (s, i) => {
+    const x = 14 + i * (w + gap);
+    const col = s.status === 'live' ? hsl('--success') : hsl('--warning');
+    return `<g>
+      <rect x="${x}" y="54" width="${w}" height="72" rx="9" fill="${hsl('--card')}" stroke="${col}55"/>
+      <circle cx="${x + 14}" cy="70" r="4" fill="${col}"/>
+      <text x="${x + 26}" y="74" class="lbl" style="font-size:10.5px">Stage ${s.n}</text>
+      <text x="${x + 10}" y="96" class="lbl" style="font-size:10.5px">${esc(s.name.length > 20 ? s.name.slice(0, 19) + '…' : s.name)}</text>
+      <text x="${x + 10}" y="112" class="sub">${s.status === 'live' ? 'live · ' + s.tests + ' tests' : 'stub · fake-tested'}</text>
+      ${i < st.length - 1 ? `<path d="M${x + w} 90 L${x + w + gap} 90" class="flow ok"/>` : ''}
+      <path d="M${x + w / 2} 126 L${x + w / 2} 152" class="flow bad"/>
+      <text x="${x + w / 2 + 4}" y="146" class="sub" fill="${hsl('--destructive')}" style="font-size:9px">hard-fail</text>
+    </g>`;
+  };
+
+  $('#view-pipeline').innerHTML = `
+    <div class="grid g4">
+      ${kpi('Stages live', st.filter(s => s.status === 'live').length + '/6', 'four deterministic stages run on 100% of submissions')}
+      ${kpi('Stages stubbed', st.filter(s => s.status !== 'live').length + '/6', 'security-audit + LLM judge need external resources', { color: hsl('--warning') })}
+      ${kpi('Pipeline tests', st.reduce((a, s) => a + s.tests, 0), 'across scanners, sensor and orchestrator')}
+      ${kpi('Lifecycle states', S.model.lifecycle.length, S.model.lifecycle.join(' → '))}
+    </div>
+
+    <div style="margin-top:14px">
+      ${card('Verification flow', 'A hard-fail at any stage short-circuits: no later stage runs, no aggregate review is written, and the skill can never advance to publish',
+        `<svg viewBox="0 0 880 240" style="width:100%;height:250px">
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="${hsl('--border')}"/></marker></defs>
+          <rect x="14" y="8" width="140" height="34" rx="8" fill="${hsl('--muted')}" stroke="${hsl('--border')}"/>
+          <text x="30" y="30" class="lbl">① submitted (untrusted)</text>
+          <path d="M84 42 L84 54" class="flow"/>
+          ${st.map(stageBox).join('')}
+          <rect x="14" y="152" width="300" height="36" rx="8" fill="${hsl('--destructive')}18" stroke="${hsl('--destructive')}55"/>
+          <text x="30" y="175" class="lbl" fill="${hsl('--destructive')}">BLOCKED · quarantined with full artifact trail</text>
+          <rect x="620" y="152" width="246" height="36" rx="8" fill="${hsl('--card')}" stroke="${hsl('--border')}"/>
+          <text x="636" y="175" class="lbl">② human review queue (risk-ranked)</text>
+          <path d="M743 188 L743 200" class="flow ok"/>
+          <rect x="620" y="200" width="246" height="34" rx="8" fill="${hsl('--primary')}18" stroke="${hsl('--primary')}66"/>
+          <text x="636" y="222" class="lbl" fill="${hsl('--primary')}">③ approval actuator → catalog</text>
+        </svg>`, { action: 'A-08' })}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Stage detail', 'Click a stage to queue work on it',
+        `<table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Status</th><th class="num">Tests</th><th></th></tr></thead><tbody>
+        ${st.map(s => `<tr><td class="mono muted">${s.n}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:11px">${esc(s.detail)}</div></td>
+          <td>${badge(s.kind, s.kind === 'deterministic' ? 'info' : 'muted')}</td>
+          <td>${badge(s.status, s.status === 'live' ? 'done' : 'partial')}</td><td class="num">${s.tests}</td>
+          <td><button class="btn xs ghost" data-adhoc="${esc('Stage ' + s.n + ': ' + s.name)}|${esc('Work on pipeline stage ' + s.n + ' (' + s.name + ', ' + s.module + '). Current status: ' + s.status + '. ' + s.detail + ' Improve or complete it, tests first.')}">⌘</button></td></tr>`).join('')}
+        </tbody></table>`, { tight: true })}
+      <div class="grid" style="gap:14px;align-content:start">
+        ${card('Lifecycle state machine', 'State is derived from artifacts, never stored — so it cannot be forged',
+          `<svg viewBox="0 0 380 150" style="width:100%;height:150px">
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M0 0 L10 5 L0 10 z" fill="${hsl('--border')}"/></marker></defs>
+            ${S.model.lifecycle.map((s, i) => {
+              const x = 10 + (i % 3) * 124, y = i < 3 ? 16 : 88;
+              return `<g><rect x="${x}" y="${y}" width="108" height="38" rx="8" fill="${hsl('--muted')}" stroke="${i === 4 ? hsl('--primary', .6) : hsl('--border')}"/>
+                <text x="${x + 12}" y="${y + 24}" class="lbl" ${i === 4 ? `fill="${hsl('--primary')}"` : ''}>${esc(s)}</text>
+                ${i < 4 ? (i === 2 ? `<path d="M${x + 54} ${y + 38} L${x + 54} ${y + 60} L64 ${y + 60} L64 ${y + 72}" class="flow"/>`
+                  : `<path d="M${x + 108} ${y + 19} L${x + 124} ${y + 19}" class="flow"/>`) : ''}</g>`;
+            }).join('')}
+          </svg>`)}
+        ${card('Scan artifacts by type', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Postgres offline — start the DB for live counts',
+          S.runtime.db.status === 'up'
+            ? `<div class="chart-box short"><canvas id="c-arts"></canvas></div>`
+            : `<div class="empty">No live connection.<br><button class="btn primary xs" data-run="db-up" style="margin-top:10px">▶ Start Postgres</button></div>`)}
+      </div>
+    </div>
+  `;
+
+  if (S.runtime.db.status === 'up') {
+    const bt = S.runtime.db.by_type || [];
+    chart('c-arts', {
+      type: 'bar',
+      data: { labels: bt.map(b => b.type), datasets: [{ data: bt.map(b => b.n), backgroundColor: hsl('--chart-2', .8), borderRadius: 4 }] },
+      options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: gridOpts() }
+    });
+  }
+}
+
+/* ── features ─────────────────────────────────────────────────────────────── */
+let fFilter = { layer: 'all', status: 'all', q: '' };
+function vFeatures() {
+  const f = S.model.features;
+  const layers = [...new Set(f.map(x => x.layer))];
+  const rows = f.filter(x =>
+    (fFilter.layer === 'all' || x.layer === fFilter.layer) &&
+    (fFilter.status === 'all' || x.status === fFilter.status) &&
+    (!fFilter.q || (x.name + x.note + x.evidence).toLowerCase().includes(fFilter.q.toLowerCase())));
+
+  $('#view-features').innerHTML = `
+    <div class="grid g4">
+      ${['done', 'partial', 'gap', 'by-design-off'].map(s => {
+        const n = f.filter(x => x.status === s).length;
+        return kpi(s === 'by-design-off' ? 'By design off' : s, n, `${pct(n, f.length)}% of ${f.length} features`,
+          { color: s === 'done' ? hsl('--success') : s === 'partial' ? hsl('--warning') : s === 'gap' ? hsl('--destructive') : undefined,
+            progress: pct(n, f.length) });
+      }).join('')}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Verification evidence', 'Tests backing each implemented feature', `<div class="chart-box"><canvas id="c-evidence"></canvas></div>`)}
+      ${card('Gap burn-down candidates', 'Every gap is a queued task away', `<div class="list" style="max-height:240px;overflow:auto">
+        ${f.filter(x => x.status !== 'done' && x.status !== 'by-design-off').map(x => `<div class="row">
+          <div class="g"><div class="h">${esc(x.name)} ${badge(x.status, x.status)}</div><div class="p">${esc(x.note)}</div></div>
+          <button class="btn xs outline" data-adhoc="${esc('Close ' + x.id + ': ' + x.name)}|${esc('Close the SemiSkill gap ' + x.id + ' — ' + x.name + '. Context: ' + x.note + ' Layer: ' + x.layer + '. Write the failing test first, then implement, then verify.')}">⌘</button>
+        </div>`).join('')}</div>`, { tight: true })}
+    </div>
+
+    <div class="section-head"><h2>Feature register</h2><p class="muted">${rows.length} of ${f.length} shown</p></div>
+    <div class="toolbar">
+      <input type="search" id="f-q" placeholder="Search features…" value="${esc(fFilter.q)}" style="min-width:220px">
+      <select id="f-layer"><option value="all">All layers</option>${layers.map(l => `<option ${fFilter.layer === l ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select id="f-status"><option value="all">All statuses</option>${['done', 'partial', 'gap', 'by-design-off'].map(s => `<option ${fFilter.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+      <div class="spacer"></div>
+      <button class="btn outline" data-action-id="A-29">⌘ Ask Claude to pick the highest-leverage gap</button>
+    </div>
+    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Feature</th><th>Layer</th><th>Status</th><th class="num">Tests</th><th>Evidence</th><th></th></tr></thead><tbody>
+      ${rows.map(x => `<tr>
+        <td class="mono muted">${esc(x.id)}</td>
+        <td><b>${esc(x.name)}</b><div class="muted" style="font-size:11px;max-width:420px">${esc(x.note)}</div></td>
+        <td>${badge(x.layer, 'muted')}</td>
+        <td>${badge(x.status, x.status)}</td>
+        <td class="num">${x.tests || '–'}</td>
+        <td class="mono muted" style="font-size:11px">${esc(x.evidence)}</td>
+        <td><button class="btn xs ghost" data-adhoc="${esc(x.id + ': ' + x.name)}|${esc('Work on SemiSkill feature ' + x.id + ' — ' + x.name + ' (' + x.layer + ', status ' + x.status + '). Note: ' + x.note + ' Evidence: ' + x.evidence)}">⌘</button></td>
+      </tr>`).join('')}
+    </tbody></table></div>`, { tight: true })}
+  `;
+
+  $('#f-q').oninput = e => { fFilter.q = e.target.value; vFeatures(); $('#f-q').focus(); };
+  $('#f-layer').onchange = e => { fFilter.layer = e.target.value; vFeatures(); };
+  $('#f-status').onchange = e => { fFilter.status = e.target.value; vFeatures(); };
+
+  const groups = [...new Set(S.repo.tests.map(t => t.group))];
+  chart('c-evidence', {
+    type: 'bar',
+    data: { labels: groups, datasets: [{ label: 'tests', data: groups.map(g => S.repo.tests.filter(t => t.group === g).reduce((a, t) => a + t.count, 0)), backgroundColor: hsl('--chart-1', .8), borderRadius: 4 }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: gridOpts() }
+  });
+}
+
+/* ── quality ──────────────────────────────────────────────────────────────── */
+function vQuality() {
+  const t = S.repo.tests, groups = [...new Set(t.map(x => x.group))];
+  const runs = S.runs.slice().reverse();
+  const risks = S.model.risks;
+
+  $('#view-quality').innerHTML = `
+    <div class="grid g4">
+      ${kpi('Tests collected', S.repo.collected_tests || S.repo.total_tests, `${t.length} files · ${groups.length} suites · ${S.repo.total_tests} test functions`)}
+      ${kpi('Last run', runs.find(r => r.id === 'tests') ? (runs.find(r => r.id === 'tests').ok ? 'PASS' : 'FAIL') : 'not run here',
+        runs.find(r => r.id === 'tests') ? runs.find(r => r.id === 'tests').started : 'click Run tests to verify now',
+        { color: runs.find(r => r.id === 'tests') ? (runs.find(r => r.id === 'tests').ok ? hsl('--success') : hsl('--destructive')) : undefined })}
+      ${kpi('Open risks', risks.length, `${risks.filter(r => r.severity === 'critical' || r.severity === 'high').length} critical/high`,
+        { color: hsl('--warning') })}
+      ${kpi('Uncommitted', S.repo.dirty, S.repo.dirty ? 'working tree is dirty' : 'working tree clean',
+        { color: S.repo.dirty ? hsl('--warning') : hsl('--success') })}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Test distribution', 'Where the verification effort actually sits', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
+        { extra: `<button class="btn xs primary" data-run="tests">▶ Run suite</button>` })}
+      ${card('Risk register', 'Ranked by severity — click to take one on',
+        `<div class="list" style="max-height:260px;overflow:auto">${risks.map(r => `<div class="row">
+          <div class="g"><div class="h">${badge(r.severity, r.severity === 'critical' ? 'critical' : r.severity === 'high' ? 'gap' : r.severity === 'medium' ? 'warn' : 'muted')} ${esc(r.title)}</div>
+          <div class="p">${esc(r.detail)}</div></div>
+          <button class="btn xs outline" data-adhoc="${esc('Risk ' + r.id + ': ' + r.title)}|${esc('Address SemiSkill risk ' + r.id + ' — ' + r.title + '. ' + r.detail + ' Mitigation: ' + r.mitigation)}">⌘</button>
+        </div>`).join('')}</div>`, { tight: true })}
+    </div>
+
+    <div class="section-head"><h2>Command output</h2><p class="muted">Whitelisted local runs (this session)</p></div>
+    <div class="grid g2">
+      ${card('Run history', runs.length ? `${runs.length} runs` : 'Nothing run yet',
+        runs.length ? `<div class="list">${runs.map(r => `<div class="row"><div class="g">
+          <div class="h">${badge(r.ok ? 'ok' : 'failed', r.ok ? 'done' : 'gap')} ${esc(r.label)}</div>
+          <div class="p mono">${esc(r.started)} · exit ${r.code}</div></div></div>`).join('')}</div>`
+          : `<div class="empty">Run the suite, the demo, or the DB from the Overview page.</div>`, { tight: true })}
+      ${card('Latest output', '', runs.length ? `<pre class="out">${esc(runs[0].output || '')}</pre>` : `<div class="empty">No output yet.</div>`, { tight: true })}
+    </div>
+
+    <div class="section-head"><h2>Test inventory</h2></div>
+    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>Suite</th><th>File</th><th class="num">Tests</th></tr></thead><tbody>
+      ${t.slice().sort((a, b) => b.count - a.count).map(x => `<tr><td>${badge(x.group, 'muted')}</td><td class="mono muted">${esc(x.path)}</td><td class="num">${x.count}</td></tr>`).join('')}
+    </tbody></table></div>`, { tight: true })}
+  `;
+
+  chart('c-tests', {
+    type: 'bar',
+    data: { labels: groups, datasets: [{ data: groups.map(g => t.filter(x => x.group === g).reduce((a, x) => a + x.count, 0)), backgroundColor: PALETTE(), borderRadius: 4 }] },
+    options: { plugins: { legend: { display: false } }, scales: gridOpts() }
+  });
+}
+
+/* ── security ─────────────────────────────────────────────────────────────── */
+function vSecurity() {
+  const a = S.attacks, classes = [...new Set(a.map(x => x.attack_class))];
+  const invariants = [
+    ['Catalog written only by the approval actuator', 'done', 'ADR-002 · tests/governance/test_publish.py'],
+    ['Lifecycle state derived, never stored', 'done', 'tests/spine/test_lifecycle.py'],
+    ['Hard-fail short-circuits the pipeline', 'done', 'tests/spine/test_pipeline.py'],
+    ['Held-out corpus unreadable by the pipeline role', 'done', 'migration 0004 + role test'],
+    ['Submitter cannot forge verification artifacts', 'done', 'semiskill_submitter role, migration 0003'],
+    ['Skill bodies treated as untrusted at retrieval', 'done', 'context/untrusted.py'],
+    ['Need-to-know is invisible, not redacted-visible', 'done', 'tests/context/test_retrieve.py'],
+    ['Gate audit is fail-closed (write precedes execution)', 'done', 'governance/gate.py'],
+    ['Principals bound to a real identity provider', 'gap', 'X-Principal-Labels is caller-asserted today'],
+    ['Live security-audit + judge stages in production', 'partial', 'injected fakes tested; live needs egress/keys'],
+  ];
+
+  $('#view-security').innerHTML = `
+    <div class="grid g4">
+      ${kpi('Escapes', '0', 'malicious skills that reached the catalog', { color: hsl('--success') })}
+      ${kpi('Attack classes covered', classes.length, esc(classes.join(', ')))}
+      ${kpi('Invariants held', invariants.filter(i => i[1] === 'done').length + '/' + invariants.length, 'structurally enforced + tested',
+        { progress: pct(invariants.filter(i => i[1] === 'done').length, invariants.length) })}
+      ${kpi('Exposure', S.model.risks.filter(r => r.area === 'security').length, 'open security risks', { color: hsl('--destructive') })}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Attack classes blocked', 'Novel LLM-crafted attacks kept as a regression fixture', `<div class="chart-box"><canvas id="c-attacks"></canvas></div>`,
+        { action: 'A-10' })}
+      ${card('Security invariants', 'The load-bearing properties — each is a test, not a promise',
+        `<div class="list" style="max-height:250px;overflow:auto">${invariants.map(([n, s, e]) => `<div class="row">
+          <div class="g"><div class="h">${badge(s, s)} ${esc(n)}</div><div class="p mono">${esc(e)}</div></div></div>`).join('')}</div>`, { tight: true })}
+    </div>
+
+    <div class="section-head"><h2>Red-team corpus</h2><p class="muted">Every one of these was generated to beat the pipeline — all blocked</p></div>
+    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>Attack</th><th>Class</th><th>Technique</th><th>Outcome</th></tr></thead><tbody>
+      ${a.map(x => `<tr><td><b>${esc(x.name)}</b></td><td>${badge(x.attack_class, 'destructive')}</td>
+        <td class="muted" style="max-width:520px">${esc(x.technique)}</td><td>${badge('blocked', 'done')}</td></tr>`).join('')}
+    </tbody></table></div>`, { tight: true })}
+
+    <div class="section-head"><h2>Security actions</h2></div>
+    <div class="grid g4">
+      ${S.model.actions.filter(x => x.group === 'Security').map(x => `<div class="card"><div class="card-content">
+        <div style="font-weight:600">${esc(x.label)}</div>
+        <div class="muted" style="font-size:11.5px;margin:6px 0 10px;min-height:52px">${esc(x.prompt.slice(0, 130))}…</div>
+        <button class="btn primary wide" data-action-id="${x.id}">⌘ Queue</button></div></div>`).join('')}
+    </div>
+  `;
+
+  chart('c-attacks', {
+    type: 'doughnut',
+    data: { labels: classes, datasets: [{ data: classes.map(c => a.filter(x => x.attack_class === c).length), backgroundColor: PALETTE(), borderColor: hsl('--card'), borderWidth: 2 }] },
+    options: { cutout: '62%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 7, padding: 9 } } } }
+  });
+}
+
+/* ── catalog ──────────────────────────────────────────────────────────────── */
+function vCatalog() {
+  const s = S.seeds;
+  const roles = [...new Set(s.map(x => x.role))].filter(Boolean);
+  const levels = ['fresher', 'junior', 'intermediate', 'senior', 'staff', 'principal'];
+  const has = (r, l) => s.some(x => x.role === r && x.level === l);
+
+  $('#view-catalog').innerHTML = `
+    <div class="grid g4">
+      ${kpi('Published', S.runtime.api.status === 'up' ? S.runtime.api.catalog : s.length,
+        S.runtime.api.status === 'up' ? 'live from /catalog' : 'from the seed fixture')}
+      ${kpi('Roles covered', roles.length, `of ${levels.length} levels each — see the matrix`)}
+      ${kpi('Functions', '1', 'design-verification only — cold start elsewhere', { color: hsl('--warning') })}
+      ${kpi('Reuse events', S.runtime.db.status === 'up' ? (S.runtime.db.by_type.find(b => b.type === 'reuse_event')?.n ?? 0) : '–',
+        'the demand signal — instrument it before launch')}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Role × level coverage', 'Green = a published skill exists for that cell',
+        `<div class="matrix" style="grid-template-columns:150px repeat(${levels.length},1fr)">
+          <div class="hdr"></div>${levels.map(l => `<div class="hdr">${esc(l)}</div>`).join('')}
+          ${roles.map(r => `<div class="hdr" style="text-align:left">${esc(r)}</div>` +
+            levels.map(l => `<div class="cell ${has(r, l) ? 'on' : ''}">${has(r, l) ? '●' : '·'}</div>`).join('')).join('')}
+        </div>
+        <div class="muted" style="font-size:11.5px;margin-top:10px">${s.length} published cells of ${roles.length * levels.length} possible in this function alone. Every empty cell is a skill nobody has written down yet.</div>`,
+        { action: 'A-06' })}
+      ${card('Tools requested by published skills', 'Bash/Exec class tools hard-fail at stage 1 — nothing published asks for them',
+        `<div class="chart-box"><canvas id="c-tools"></canvas></div>`)}
+    </div>
+
+    <div class="section-head"><h2>Published catalog</h2><p class="muted">Each of these reached the catalog only via a passing scan + a human approval</p></div>
+    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>Slug</th><th>Skill</th><th>Role</th><th>Level</th><th>Allowed tools</th><th></th></tr></thead><tbody>
+      ${s.map(x => `<tr><td class="mono muted">${esc(x.slug)}</td><td><b>${esc(x.name)}</b></td>
+        <td>${badge(x.role, 'info')}</td><td>${badge(x.level, 'muted')}</td>
+        <td class="mono muted" style="font-size:11px">${esc(x.tools)}</td>
+        <td><button class="btn xs ghost" data-adhoc="${esc('Review skill ' + x.slug)}|${esc('Review the published SemiSkill catalog entry ' + x.slug + ' (' + x.name + '): is the content actually good, is the tool list minimal, and does its scan report hold up? Report findings.')}">⌘</button></td></tr>`).join('')}
+    </tbody></table></div>`, { tight: true })}
+  `;
+
+  const tools = {};
+  s.forEach(x => x.tools.split(',').map(t => t.trim().replace(/^-\s*/, '')).filter(Boolean).forEach(t => tools[t] = (tools[t] || 0) + 1));
+  chart('c-tools', {
+    type: 'bar',
+    data: { labels: Object.keys(tools), datasets: [{ data: Object.values(tools), backgroundColor: hsl('--chart-3', .8), borderRadius: 4 }] },
+    options: { plugins: { legend: { display: false } }, scales: gridOpts() }
+  });
+}
+
+/* ── launch ───────────────────────────────────────────────────────────────── */
+function vLaunch() {
+  const lc = S.model.launch_checklist, R = readiness();
+  const sections = [...new Set(lc.map(x => x.section))];
+  const secScore = sec => {
+    const items = lc.filter(x => x.section === sec);
+    const w = items.reduce((a, x) => a + x.weight, 0);
+    const g = items.reduce((a, x) => a + x.weight * (x.status === 'done' ? 1 : x.status === 'partial' ? .5 : 0), 0);
+    return Math.round(g / w * 100);
+  };
+  const tl = S.model.gtm.timeline, span = 72;
+
+  $('#view-launch').innerHTML = `
+    <div class="grid g4">
+      ${kpi('Launch readiness', R.pct + '%', `${R.done} done · ${lc.filter(x => x.status === 'partial').length} partial · ${lc.filter(x => x.status === 'todo').length} to do`,
+        { progress: R.pct, progressCls: R.pct < 40 ? 'bad' : R.pct < 70 ? 'warn' : '' })}
+      ${kpi('Hard blockers', lc.filter(x => x.status === 'todo' && x.weight === 3).length, 'weight-3 items still open', { color: hsl('--destructive') })}
+      ${kpi('Weeks of work left', Math.max(1, Math.round(lc.filter(x => x.status === 'todo').reduce((a, x) => a + x.weight, 0) / 6)), 'rough estimate at 6 weight-points/week')}
+      ${kpi('Target', 'Internal alpha', '3 design-partner guilds, then org-wide')}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Readiness by section', 'Weighted — a weight-3 item counts triple', `<div class="chart-box"><canvas id="c-ready"></canvas></div>`)}
+      ${card('Launch timeline', 'Working backwards from an internal launch',
+        tl.map((p, i) => `<div class="gantt-row">
+          <div><div style="font-weight:600;font-size:12px">${esc(p.phase)}</div><div class="muted" style="font-size:11px">${esc(p.track)} · ${p.days}d</div></div>
+          <div class="gantt-track"><div class="gantt-bar" style="left:${p.start / span * 100}%;width:${p.days / span * 100}%;background:${PALETTE()[i % 6]}">${esc(p.items[0])}${p.items.length > 1 ? ` +${p.items.length - 1}` : ''}</div></div>
+        </div>`).join('') + `<div class="muted" style="font-size:11px;margin-top:6px">Day 0 → day ${span}. Hover a bar's row for its workstream.</div>`,
+        { action: 'A-21' })}
+    </div>
+
+    <div class="section-head"><h2>Launch checklist</h2><p class="muted">${lc.length} items · click any row to queue it</p></div>
+    <div class="grid g2">
+      ${sections.map(sec => card(sec, `${secScore(sec)}% ready`,
+        `<div class="progress ${secScore(sec) < 40 ? 'bad' : secScore(sec) < 70 ? 'warn' : ''}" style="margin-bottom:10px"><span style="width:${secScore(sec)}%"></span></div>
+         <div class="list">${lc.filter(x => x.section === sec).map(x => `<div class="row">
+          <div class="g"><div class="h">${badge(x.status, x.status)} ${esc(x.item)}</div>
+          <div class="p">weight ${x.weight} · owner ${esc(x.owner)}</div></div>
+          <button class="btn xs outline" data-adhoc="${esc(x.id + ': ' + x.item)}|${esc('Work the SemiSkill launch checklist item ' + x.id + ' — ' + x.item + ' (section ' + x.section + ', owner ' + x.owner + ', status ' + x.status + '). Do the work end to end and tell me what changed.')}">⌘</button>
+        </div>`).join('')}</div>`)).join('')}
+    </div>
+
+    <div class="section-head"><h2>Launch assets</h2><p class="muted">Everything the launch needs written, filmed or built</p></div>
+    <div class="grid g3">
+      ${S.model.gtm.assets.map(a => `<div class="card"><div class="card-content">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">${badge(a.status, a.status === 'partial' ? 'partial' : 'todo')}${badge(a.type, 'muted')}</div>
+        <div style="font-weight:600">${esc(a.name)}</div>
+        <div class="muted" style="font-size:11.5px;margin:4px 0 10px;min-height:40px">${esc(a.note)}</div>
+        <button class="btn primary wide" data-adhoc="${esc('Produce: ' + a.name)}|${esc('Produce the SemiSkill launch asset “' + a.name + '” (' + a.type + ', channel: ' + a.channel + '). Context: ' + a.note + ' Save it under marketing/ and tell me where.')}">⌘ Produce this</button>
+      </div></div>`).join('')}
+    </div>
+  `;
+
+  chart('c-ready', {
+    type: 'bar',
+    data: { labels: sections, datasets: [{ data: sections.map(secScore), backgroundColor: sections.map(s2 => secScore(s2) >= 70 ? hsl('--success', .8) : secScore(s2) >= 40 ? hsl('--warning', .8) : hsl('--destructive', .75)), borderRadius: 4 }] },
+    options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, max: 100, grid: { color: hsl('--border', .55) }, ticks: { callback: v => v + '%' } } } }
+  });
+}
+
+/* ── growth ───────────────────────────────────────────────────────────────── */
+function vGrowth() {
+  const g = S.model.gtm, maxF = Math.max(...g.funnel.map(f => f.target));
+
+  $('#view-growth').innerHTML = `
+    ${card('Positioning', 'The one paragraph everything else derives from',
+      `<div style="font-size:13.5px;line-height:1.7">${esc(g.positioning)}</div>`, { action: 'A-20' })}
+
+    <div class="section-head"><h2>Who it is for</h2></div>
+    <div class="grid g3">
+      ${g.icp.map(i => card(`${badge(i.size, i.size === 'primary' ? 'done' : i.size === 'expansion' ? 'info' : 'muted')} ${esc(i.segment)}`, '',
+        `<div style="font-size:12px;line-height:1.6">${esc(i.why)}</div>
+         <div class="muted" style="font-size:11.5px;margin-top:8px"><b>Entry point:</b> ${esc(i.entry)}</div>`)).join('')}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Adoption funnel', 'Targets for the first 90 days — instrument each step as an artifact',
+        g.funnel.map((f, i) => `<div class="funnel-row">
+          <div style="width:96px;font-size:12px;font-weight:600">${esc(f.stage)}</div>
+          <div class="funnel-bar" style="width:${Math.max(12, f.target / maxF * 100)}%;background:${PALETTE()[i % 6]}">${f.target}</div>
+          <div class="muted" style="font-size:11px;flex:1">${esc(f.definition)}</div>
+        </div>`).join(''), { action: 'A-15' })}
+      ${card('Channel mix', 'Impact vs effort — top-left is where to start',
+        `<div class="chart-box"><canvas id="c-chan"></canvas></div>`, { action: 'A-18' })}
+    </div>
+
+    <div class="section-head"><h2>Channels</h2></div>
+    ${card('', '', `<table><thead><tr><th>Channel</th><th>Type</th><th>Effort</th><th>Impact</th><th>Why it works here</th><th></th></tr></thead><tbody>
+      ${g.channels.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${badge(c.type, c.type === 'internal' ? 'info' : 'muted')}</td>
+        <td>${badge(c.effort, c.effort === 'low' ? 'done' : c.effort === 'med' ? 'partial' : 'gap')}</td>
+        <td>${badge(c.impact, c.impact === 'high' ? 'done' : 'partial')}</td>
+        <td class="muted">${esc(c.note)}</td>
+        <td><button class="btn xs ghost" data-adhoc="${esc('Activate channel: ' + c.name)}|${esc('Plan and produce what SemiSkill needs to activate the “' + c.name + '” channel (' + c.type + '). Why it works: ' + c.note + ' Give me the concrete artifacts, not a strategy essay.')}">⌘</button></td></tr>`).join('')}
+    </tbody></table>`, { tight: true })}
+
+    <div class="section-head"><h2>Packaging</h2><p class="muted">Internal stays free — the external track is a future decision</p></div>
+    <div class="grid g4">
+      ${g.pricing.map(p => `<div class="card"><div class="card-content">
+        <div class="l">${esc(p.tier)}</div>
+        <div class="v" style="font-size:22px;font-weight:700;margin:2px 0">${esc(p.price)}</div>
+        <div class="muted" style="font-size:11.5px">${esc(p.for)}</div>
+        <div style="font-size:12px;margin:10px 0 6px">${esc(p.includes)}</div>
+        <div class="muted" style="font-size:11px">${esc(p.note)}</div>
+      </div></div>`).join('')}
+    </div>
+    <div style="margin-top:12px"><button class="btn outline" data-action-id="A-24">⌘ Turn packaging into an ADR</button></div>
+
+    <div class="section-head"><h2>Go-to-market actions</h2></div>
+    <div class="grid g4">
+      ${g.channels.length && S.model.actions.filter(x => ['Marketing', 'Sales'].includes(x.group)).map(x => `<div class="card"><div class="card-content">
+        <div style="display:flex;gap:6px;margin-bottom:6px">${badge(x.group, 'info')}</div>
+        <div style="font-weight:600">${esc(x.label)}</div>
+        <div class="muted" style="font-size:11.5px;margin:6px 0 10px;min-height:48px">${esc(x.prompt.slice(0, 120))}…</div>
+        <button class="btn primary wide" data-action-id="${x.id}">⌘ Queue</button></div></div>`).join('')}
+    </div>
+  `;
+
+  chart('c-chan', {
+    type: 'scatter',
+    data: { datasets: g.channels.map((c, i) => ({
+      label: c.name,
+      // deterministic jitter so channels sharing a cell stay distinguishable
+      data: [{ x: { low: 1, med: 2, high: 3 }[c.effort] + ((i % 3) - 1) * .12,
+               y: { low: 1, med: 2, high: 3 }[c.impact] + (Math.floor(i / 3) - 1) * .12 }],
+      backgroundColor: PALETTE()[i % 6], pointRadius: 9, pointHoverRadius: 12 })) },
+    options: {
+      plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 7, padding: 6, font: { size: 10 } } } },
+      scales: {
+        x: { min: .5, max: 3.5, title: { display: true, text: 'effort →' }, grid: { color: hsl('--border', .5) }, ticks: { callback: v => ({ 1: 'low', 2: 'med', 3: 'high' }[v] || '') } },
+        y: { min: .5, max: 3.5, title: { display: true, text: 'impact →' }, grid: { color: hsl('--border', .5) }, ticks: { callback: v => ({ 1: 'low', 2: 'med', 3: 'high' }[v] || '') } }
+      }
+    }
+  });
+}
+
+/* ── analytics ────────────────────────────────────────────────────────────── */
+function vAnalytics() {
+  const m = S.model.gtm.metrics;
+  const instrumented = m.filter(x => x.current !== 'unmeasured').length;
+
+  $('#view-analytics').innerHTML = `
+    <div class="grid g4">
+      ${kpi('Metrics defined', m.length, 'the tree the business runs on')}
+      ${kpi('Instrumented', `${instrumented}/${m.length}`, 'the rest need the funnel wiring', { progress: pct(instrumented, m.length), progressCls: 'warn' })}
+      ${kpi('Artifacts stored', S.runtime.db.status === 'up' ? S.runtime.db.artifacts : '–', S.runtime.db.status === 'up' ? 'live count from Postgres' : 'DB offline')}
+      ${kpi('Source of truth', 'artifacts', 'every metric derives from an immutable row')}
+    </div>
+
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Metric tree', 'What we measure, the target, and where it comes from',
+        `<div class="tbl-wrap"><table><thead><tr><th>Metric</th><th>Target</th><th>Now</th><th>Source</th><th></th></tr></thead><tbody>
+        ${m.map(x => `<tr><td><b>${esc(x.name)}</b><div class="muted" style="font-size:11px">${esc(x.why)}</div></td>
+          <td class="mono">${esc(x.target)}</td>
+          <td>${x.current === 'unmeasured' ? badge('unmeasured', 'gap') : badge(x.current, 'done')}</td>
+          <td class="muted mono" style="font-size:11px">${esc(x.source)}</td>
+          <td><button class="btn xs ghost" data-adhoc="${esc('Instrument: ' + x.name)}|${esc('Instrument the SemiSkill metric “' + x.name + '” (target ' + x.target + ', source: ' + x.source + '). Emit it as artifacts and expose it so the dashboard can chart it live.')}">⌘</button></td></tr>`).join('')}
+        </tbody></table></div>`, { tight: true, action: 'A-15' })}
+      <div class="grid" style="gap:14px;align-content:start">
+        ${card('Artifact mix', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Start the DB for live data',
+          S.runtime.db.status === 'up' ? `<div class="chart-box short"><canvas id="c-mix"></canvas></div>`
+            : `<div class="empty">No live connection.<br><button class="btn primary xs" data-run="db-up" style="margin-top:10px">▶ Start Postgres</button></div>`)}
+        ${card('Weekly business review', 'Queue the report — Claude reads the store and writes it',
+          `<div class="list">
+            <div class="row"><div class="g"><div class="h">Weekly metrics report</div><div class="p">submissions, blocks, publishes, reuse, time-to-publish, cost</div></div>
+            <button class="btn xs primary" data-action-id="A-25">⌘</button></div>
+            <div class="row"><div class="g"><div class="h">Block rate / false positives</div><div class="p">over-blocking kills adoption faster than under-blocking kills security</div></div>
+            <button class="btn xs primary" data-action-id="A-26">⌘</button></div>
+          </div>`, { tight: true })}
+      </div>
+    </div>
+  `;
+
+  if (S.runtime.db.status === 'up') {
+    const bt = S.runtime.db.by_type || [];
+    chart('c-mix', {
+      type: 'doughnut',
+      data: { labels: bt.map(b => b.type), datasets: [{ data: bt.map(b => b.n), backgroundColor: PALETTE(), borderColor: hsl('--card'), borderWidth: 2 }] },
+      options: { cutout: '60%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 7, padding: 8, font: { size: 10 } } } } }
+    });
+  }
+}
+
+/* ── queue ────────────────────────────────────────────────────────────────── */
+function vQueue() {
+  const q = S.inbox.slice().reverse();
+  const groups = [...new Set(S.model.actions.map(a => a.group))];
+
+  $('#view-queue').innerHTML = `
+    <div class="grid g4">
+      ${kpi('Queued', q.filter(x => x.status === 'queued').length, 'waiting for Claude to pick up')}
+      ${kpi('Total sent', q.length, 'this session and before')}
+      ${kpi('Inbox file', 'inbox.jsonl', 'dashboard/inbox.jsonl — one JSON line per task')}
+      ${kpi('How to run it', 'say “work the queue”', 'Claude reads the file and starts at the top')}
+    </div>
+
+    <div style="margin:14px 0">
+      ${card('Send a task', 'Anything at all — it lands in the same queue',
+        `<div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="text" id="q-title" placeholder="Title" style="flex:1;min-width:200px">
+          <select id="q-priority"><option>normal</option><option>high</option><option>low</option></select>
+        </div>
+        <textarea id="q-prompt" placeholder="What should Claude do?" style="margin-top:8px"></textarea>
+        <button class="btn primary" id="q-send" style="margin-top:8px">⌘ Queue task</button>`)}
+    </div>
+
+    <div class="section-head"><h2>Task library</h2><p class="muted">${S.model.actions.length} prepared actions across ${groups.length} groups</p></div>
+    ${groups.map(gr => `<div class="section-head" style="margin:16px 0 8px"><h2 style="font-size:13.5px">${esc(gr)}</h2></div>
+      <div class="grid g4">${S.model.actions.filter(a => a.group === gr).map(a => `<div class="card"><div class="card-content">
+        <div style="font-weight:600;font-size:12.5px">${esc(a.label)}</div>
+        <div class="muted" style="font-size:11px;margin:6px 0 10px;min-height:46px">${esc(a.prompt.slice(0, 118))}…</div>
+        <button class="btn wide outline" data-action-id="${a.id}">⌘ Queue</button></div></div>`).join('')}</div>`).join('')}
+
+    <div class="section-head"><h2>Sent tasks</h2>
+      <div class="spacer"></div>
+      ${q.length ? `<button class="btn ghost xs" id="q-clear">Archive queue</button>` : ''}
+    </div>
+    ${card('', '', q.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Kind</th><th>Title</th><th>Prompt</th><th>Status</th></tr></thead><tbody>
+      ${q.map(x => `<tr><td class="mono muted">${esc((x.ts || '').slice(5, 16).replace('T', ' '))}</td>
+        <td>${badge(x.kind, 'muted')}</td><td><b>${esc(x.title)}</b>${x.priority === 'high' ? ' ' + badge('high', 'warn') : ''}</td>
+        <td class="muted" style="max-width:460px;font-size:11.5px">${esc(x.prompt.slice(0, 220))}${x.prompt.length > 220 ? '…' : ''}</td>
+        <td>${badge(x.status, x.status === 'queued' ? 'info' : 'done')}</td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="empty">Nothing queued yet. Click any ⌘ button anywhere on this dashboard.</div>`, { tight: true })}
+  `;
+
+  $('#q-send').onclick = async () => {
+    const title = $('#q-title').value.trim();
+    const prompt = $('#q-prompt').value.trim();
+    if (!title && !prompt) return toast('Nothing to send', 'Add a title or a prompt', 'bad');
+    await queue({ kind: 'ask', title: title || prompt.slice(0, 60), prompt: prompt || title, priority: $('#q-priority').value });
+    $('#q-title').value = ''; $('#q-prompt').value = '';
+  };
+  const clr = $('#q-clear');
+  if (clr) clr.onclick = async () => {
+    await api('/api/inbox/clear', { method: 'POST', body: '{}' });
+    toast('Queue archived', 'inbox.jsonl rotated');
+    refresh();
+  };
+}
+
+/* ═══════════════════════════ actions ═════════════════════════════════════ */
+async function queue(row) {
+  try {
+    const r = await api('/api/action', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(row)
+    });
+    S.inbox.push(r.action);
+    $('#n-queue').textContent = S.inbox.filter(i => i.status === 'queued').length;
+    toast('Queued for Claude', r.action.title);
+    if (VIEW === 'queue') vQueue();
+  } catch (e) {
+    toast('Could not queue', 'Is dashboard/server.py running?', 'bad');
+  }
+}
+
+document.addEventListener('click', async ev => {
+  const nav = ev.target.closest('.nav-item');
+  if (nav) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    nav.classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    VIEW = nav.dataset.view;
+    document.getElementById('view-' + VIEW).classList.add('active');
+    if (S) renderAll();
+    window.scrollTo({ top: 0 });
+    return;
+  }
+  const act = ev.target.closest('[data-action-id]');
+  if (act) {
+    const a = S.model.actions.find(x => x.id === act.dataset.actionId);
+    if (a) queue({ action_id: a.id, kind: a.group.toLowerCase(), title: a.label, prompt: a.prompt, context: VIEW });
+    return;
+  }
+  const adhoc = ev.target.closest('[data-adhoc]');
+  if (adhoc) {
+    const [title, prompt] = adhoc.dataset.adhoc.split('|');
+    queue({ kind: VIEW, title, prompt, context: VIEW });
+    return;
+  }
+  const run = ev.target.closest('[data-run]');
+  if (run) {
+    const id = run.dataset.run, label = run.textContent;
+    run.disabled = true; run.textContent = '⏳ running…';
+    try {
+      const r = await api('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      toast(r.ok ? 'Command finished' : 'Command failed', `${r.label} · exit ${r.code}`, r.ok ? '' : 'bad');
+      await refresh();
+    } catch (e) { toast('Run failed', String(e).slice(0, 120), 'bad'); }
+    run.disabled = false; run.textContent = label;
+    return;
+  }
+  if (ev.target.closest('[data-ask]')) { $('#ask-dlg').showModal(); return; }
+});
+
+$('#ask-send').addEventListener('click', () => {
+  const title = $('#ask-subject').value.trim(), prompt = $('#ask-prompt').value.trim();
+  if (title || prompt) queue({ kind: 'ask', title: title || prompt.slice(0, 60), prompt: prompt || title, priority: $('#ask-priority').value, context: VIEW });
+  $('#ask-subject').value = ''; $('#ask-prompt').value = '';
+});
+
+/* ═══════════════════════════ boot ════════════════════════════════════════ */
+async function refresh() {
+  try {
+    S = await api('/api/state');
+    renderAll();
+  } catch (e) {
+    $('#view-overview').innerHTML = `<div class="card"><div class="card-content">
+      <h2 style="margin-bottom:8px">Command centre server is not running</h2>
+      <p class="muted" style="font-size:13px">This dashboard reads live repo, database and queue state from a small local server. Start it:</p>
+      <pre class="out" style="margin-top:10px">python dashboard/server.py</pre>
+      <p class="muted" style="font-size:12px;margin-top:8px">Then reload this page. Error: ${esc(String(e).slice(0, 200))}</p>
+    </div></div>`;
+  }
+}
+$('#btn-refresh').onclick = () => { $('#btn-refresh').textContent = '↻ …'; refresh().then(() => $('#btn-refresh').textContent = '↻ Refresh'); };
+$('#view-overview').innerHTML = `<div class="card"><div class="card-content"><div class="empty">
+  Reading live state from the repo, the database and the queue…</div></div></div>`;
+refresh();
+setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
+</script>
+</body>
+</html>
