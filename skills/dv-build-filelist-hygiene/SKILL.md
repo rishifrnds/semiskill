@@ -92,15 +92,13 @@ Read a window of about 40 lines around the ranked-first error and place it in th
 | module already defined | the same module reached the build twice | the duplicate check in step 5 |
 | implicit net declaration in a file that looks innocent | a preceding file changed the default net type and never restored it | inspect the entry immediately before it in the flat list |
 
-Record the classification and its one piece of evidence. A classification with no cited line is a
-guess, and must be reported as one.
+Record the classification and its one piece of evidence. A classification with no cited line is a guess, and must be reported as one.
 
 ### 4. Flatten the filelist
 
 Use **Glob** to locate the entry-point filelist named in the slot table. **Read** it, then **Grep**
 it for the nested-inclusion directive recorded in the slots. If that slot is unfilled, stop and ask —
 expanding the wrong directive audits the wrong file set entirely.
-
 Produce a numbered **flat list** in the order the build would see it, with four columns: position,
 originating filelist and line, the raw entry, and its classification (source file, nested filelist,
 include path, define, library search directory, tool switch, comment). Apply the relative-path rule
@@ -113,11 +111,9 @@ This is the part that never gets done. Work through the flat list mechanically.
 
 - **Stale.** For each source entry, **Glob** the path. A miss is a stale entry — unless it is a
   generated source from the slot table, in which case the generation step did not happen.
-- **Duplicate path.** The same resolved path twice is usually harmless noise, but it means a nested
-  filelist is being pulled in from two places, which is how the next problem arises.
-- **Duplicate module.** For each module named in the failing diagnostics, **Grep** for its
-  declaration across the flat-list directories. Two hits in two files is the real hazard; report both
-  paths and both flat-list positions.
+- **Duplicate path.** The same resolved path twice is harmless noise, but it means a nested filelist arrives from two places — which is how the next problem starts.
+- **Duplicate module.** **Grep** for the declaration of each module named in the diagnostics across
+  the flat-list directories. Two hits in two files is the real hazard; report both positions.
 - **Shadowed basename.** The same basename under two directories is a shadow candidate. Rank by
   flat-list position and say which the build would take, using the duplicate policy slot.
 - **Stale release root.** Entries under a directory that no longer exists mean an old release path
@@ -126,8 +122,8 @@ This is the part that never gets done. Work through the flat list mechanically.
 ### 6. Audit include paths and defines
 
 - **Include shadowing.** For every include-path entry, in order, **Glob** the basename of each header
-  named in the diagnostics. Include-path search is first-match-wins, so the earliest directory
-  holding that basename is used, whether or not it is the one intended.
+  named in the diagnostics. Search is first-match-wins, so the earliest directory holding that
+  basename is used, intended or not.
 - **Missing defines.** **Grep** the sources for conditional-compilation directives and collect the
   macro names they test. Compare against the macros set in the filelists. A macro tested but never
   set anywhere is a strong candidate cause.
@@ -182,9 +178,8 @@ If this failure must be handed on or matched against an existing one, derive the
 - **One unknown type produces twenty diagnostics.** A single missing package import makes every
   declaration using its types fail. The error count says nothing about the problem count.
 - **Macros do not cross file boundaries reliably.** A macro is visible only within its compilation
-  unit and only from its definition onward. A block build analysing everything as one unit hides
-  this; a top build analysing per-file exposes it as an undefined macro in a file unchanged for a
-  year. Guarded headers that each consumer includes are the durable answer.
+  unit, only from its definition onward. A block build analysing everything as one unit hides this; a
+  top build analysing per-file exposes it as an undefined macro in a file unchanged for a year.
 - **A changed default net type leaks forward.** A file that turns implicit nets off and never
   restores them hands that setting to the next file in the same compilation unit, so the diagnostic
   lands on an innocent file. That is why it survives so long.
@@ -207,8 +202,7 @@ If this failure must be handed on or matched against an existing one, derive the
 
 Before acting on the output, check:
 
-- every claim cites a **flat-list position or a Grep result**. "File X is missing from the filelist"
-  with nothing behind it is a guess wearing a fact's clothing.
+- every claim cites a **flat-list position or a Grep result**; a bare "file X is missing from the filelist" is a guess wearing a fact's clothing.
 - the named first diagnostic is the earliest by dependency, not the last printed nor the most
   alarmingly worded.
 - any proposed filelist addition was checked for the file being **already present at a different

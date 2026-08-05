@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T05:05Z_
+_Last updated: 2026-08-05T05:25Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-014..H-016 (done) — 6 skills authored and published through the gate
-- Sub-state: next H-017 (Cursor pack builder), then the SharePoint catalog
+- Step ID: H-017/H-018 (done) — pack builder; dist/semiskill-dv.zip is installable
+- Sub-state: next H-019..H-022 (truthful install string, SharePoint page, delimiter hardening)
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 4e9b6e4
-- Message: wip: H-010..H-013 wave driver
+- SHA: 5a35ae8
+- Message: wip: H-014..H-016 six skills published
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
@@ -46,4 +46,4 @@ tenant. Plus: no auth, nothing deployed, no CI, no backups.
 
 ## If resumed
 Read MEMORY.md (Phase H) and the approved plan above. DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest` (310, Docker PG running). Nothing pushed to remote.
+Tests: `pytest` (320, Docker PG running). Nothing pushed to remote.

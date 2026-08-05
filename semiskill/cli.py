@@ -109,6 +109,32 @@ def cmd_wave(args, store, out) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_pack(args, store, out) -> int:
+    """Build the deliverable pack from what the catalog says is published (ADR-008/009)."""
+    from datetime import datetime, timezone
+    from semiskill.artifacts.store import PostgresArtifactStore
+    from semiskill.authoring.pack import PackRefused, build_pack
+
+    dsn = args.dsn or Config.from_env().database_url
+    store = store or PostgresArtifactStore(dsn)
+    try:
+        root, manifest = build_pack(
+            store=store, source_root=args.path, out_dir=args.out, pack_name=args.name,
+            generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            make_zip=not args.no_zip)
+    except PackRefused as e:
+        print(f"pack refused: {e}", file=out)
+        return 1
+    print(f"{manifest.skill_count} skill(s) packed to {root}", file=out)
+    for s_ in manifest.skills:
+        print(f"  {s_.name:32} {s_.slots} slot(s)  {s_.sha256[:12]}", file=out)
+    if not args.no_zip:
+        print(f"\nzip: {Path(args.out) / (args.name + '.zip')}", file=out)
+    print("install: unzip and drop the folder into ~/.cursor/skills/ — see README-INSTALL.md",
+          file=out)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="semiskill", description="SemiSkill CLI (L1 capture)")
     sub = p.add_subparsers(dest="command", required=True)
@@ -147,6 +173,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="skip the pre-flight lint (not recommended)")
         w.add_argument("--yes", action="store_true", help="confirm writing to this database")
         w.set_defaults(func=cmd_wave, needs_store=needs_store)
+
+    pk = sub.add_parser("pack", help="build the installable pack from the published catalog")
+    pk.add_argument("path", help="the skill source tree")
+    pk.add_argument("--dsn", default=None, help="catalog database (defaults to DATABASE_URL)")
+    pk.add_argument("--out", default="dist", help="output directory")
+    pk.add_argument("--name", default="semiskill-dv", help="pack folder name")
+    pk.add_argument("--no-zip", action="store_true")
+    pk.set_defaults(func=cmd_pack, needs_store=False)
     return p
 
 

@@ -129,6 +129,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: skills/*/SKILL.md (6), reports/wave-*.md, semiskill/cli.py
   next: H-017 (pack builder)
 
+- [H-017/H-018] 2026-08-05T05:25Z  status: done
+  what: semiskill/authoring/pack.py + `semiskill pack` — the last mile. What goes in the pack is
+  decided by the CATALOG (only skills whose active approval says published), never the filesystem, so
+  a blocked skill structurally cannot reach an engineer. Packaging PLACES bytes (shutil.copy2) and
+  refuses outright if the source has drifted since it published, so nothing ever ships carrying a
+  badge it did not earn — verified live: it refused, the wave was re-run, then it packed. Ships
+  README-INSTALL.md (the real Cursor paths; states plainly that the badge is not a runtime guarantee
+  because Cursor does not enforce allowed-tools), PERSONALIZING.md, _shared/, MANIFEST.json with a
+  checksum of the DELIVERED bytes, and tools/lint_body.py so a fork can be checked inside the
+  firewall. 10 pack tests
+  fix: the manifest hashed newline-normalised text, so its checksum would not have matched the file
+  a recipient actually holds — it now hashes the delivered bytes
+  artifacts: semiskill/authoring/pack.py, semiskill/cli.py, tests/authoring/test_pack.py,
+  dist/semiskill-dv.zip (6 skills, 44 fill-in slots, 48K) — 320 tests green
+  next: H-019..H-022 (truthful install string, SharePoint catalog generator, delimiter hardening)
+
 ## In-Flight Step
 _(none)_
 

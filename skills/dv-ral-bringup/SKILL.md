@@ -20,10 +20,8 @@ metadata:
 Register bring-up fails in about a dozen distinct ways, each with a short list of causes. The
 expensive part is never the fix — it is spending a day rediscovering which of the dozen you are in,
 because every one presents as the same sentence in the log: a mismatch at some address. This skill
-turns that day into a lookup — classify the symptom, then check only what can produce it.
-
-The output is a **classification, the evidence line behind it, and which of three owners it belongs
-to**: the register spec, the RTL, or the testbench integration. Not a narrative.
+turns that day into a lookup. The output is a **classification, the evidence line behind it, and
+which of three owners it belongs to**: the register spec, the RTL, or the testbench integration.
 
 ## Fill this in for our team
 
@@ -39,23 +37,22 @@ to**: the register spec, the RTL, or the testbench integration. Not a narrative.
 | Log location | [[FILL: where the bring-up log is saved so it can be read from disk]] | your mentor |
 
 **If a slot is unfilled, stop and ask. Do not guess.** An invented register path, generator name or
-reset convention gives an answer that is confidently wrong, and unpicking that costs more than
-having no answer at all.
+reset convention gives a confidently wrong answer, and unpicking that costs more than no answer.
 
 ## Retrieval budget
 
-A generated register model for a mid-size block runs to tens of thousands of machine-written lines,
-uniformly boring — reading it end to end teaches nothing and burns the whole context. Work in this
-order and stop once the classification is settled:
+A generated register model for a mid-size block runs to tens of thousands of machine-written lines —
+reading it end to end teaches nothing and burns the context. Work in this order, and stop once the
+classification is settled:
 
 1. **Glob** first for the generated model and the environment file that builds the map, adapter and
    predictor. Never open a generated file with **Read** as the first move.
-2. **Grep** for the exact register or field name to get line numbers. One symptom, one register.
-3. **Read** bounded windows only: about 40 lines around the register declaration and about 40 around
-   its map entry. Two or three windows total.
-4. If a **Grep** returns more than about 100 hits the name is a substring of something common —
-   anchor it (leading `"` or trailing `,`) before reading anything.
-5. Stopping rule: after four windowed **Read** calls with no settled classification, stop and report
+2. **Grep** for the exact register or field name to get line numbers — one symptom, one register.
+   More than about 100 hits means the name is a substring of something common; anchor it (leading
+   `"` or trailing `,`) before reading anything.
+3. **Read** bounded windows only — about 40 lines around the register declaration and 40 around its
+   map entry, two or three windows in total.
+4. Stopping rule: after four windowed **Read** calls with no settled classification, stop and report
    what is known plus the one thing you still need. Past that point answers get invented.
 
 ## Procedure
@@ -63,18 +60,16 @@ order and stop once the classification is settled:
 ### 1. Name the source of truth before reading the model
 
 The register model is generated, and so, usually, is the RTL register block. Built from one source at
-one revision they cannot disagree, so a real mismatch means one of three things: different revisions,
-a hand edit after generation, or RTL that ignores the generated block. **Grep** both files' headers
-for a version, date or source stamp and record them verbatim. If they differ, stop — that is the
-finding, and no debug below improves on it.
+one revision they cannot disagree, so a real mismatch means different revisions, a hand edit after
+generation, or RTL that ignores the generated block. **Grep** both files' headers for a version, date
+or source stamp, record them verbatim, and if they differ stop — that is the finding.
 
 ### 2. Locate the register, its map entry, and its fields
 
-Three **Grep** calls, in this order: the register class or type name, for its declaration; `add_reg`
-with the register name, for its offset and rights in the map; `configure` inside that register, for
-each field's size, lsb, access policy, volatility and reset value. Then two bounded **Read** windows
-— the field declarations, and the map construction (`create_map`, `add_submap`, `set_base_addr`).
-Quote the numbers; do not restate them from memory a paragraph later.
+Three **Grep** calls: the register class or type name, for its declaration; `add_reg` with the
+register name, for its offset and rights in the map; `configure` inside that register, for each
+field's size, lsb, access policy, volatility and reset value. Then two bounded **Read** windows — the
+fields, and the map construction (`create_map`, `add_submap`, `set_base_addr`).
 
 ### 3. Confirm the bring-up order, and that it was followed
 
@@ -82,19 +77,18 @@ The standard order is not arbitrary — each stage assumes the previous one pass
 
 1. **Hardware reset check.** A front-door read of every register right after reset, compared against
    the model's reset values. First, because with no prior state it proves three things at once: the
-   map addresses decode, the adapter moves data in the right direction, and the reset values agree.
-   If it fails, nothing after it is evidence of anything.
+   addresses decode, the adapter moves data the right way, and the reset values agree.
 2. **Bit-bash.** Walks a one through every bit of every field through the front door, checking the
    read-back against what the field's *declared access policy* predicts. Second, because it assumes
    addressing is proven — so its failures point at policy, width or lsb, not at the map.
 3. **Access test.** Writes front door and reads back door, then the reverse. Last, because it needs
-   both doors working and every hdl path resolved; run early it yields addressing bugs wearing a
-   back-door costume. If back doors are used, put a path-resolution check just ahead of it — a path
-   that fails to resolve returns X or zero on some simulators with no error at all.
+   both doors working and every hdl path resolved; earlier it yields addressing bugs in a back-door
+   costume. A path that fails to resolve returns X or zero on some simulators with no error at all,
+   so put a path-resolution check just ahead of it.
 
 To get this evidence, **ask the engineer to run the bring-up test with the register sequences enabled
-and save the log where it can be read from disk**, then work from that file. The agent cannot start a
-simulation, and must not invent what one would have printed.
+and save the log where it can be read from disk**. The agent cannot start a simulation and must not
+invent what one would have printed.
 
 ### 4. Classify the symptom
 
@@ -132,42 +126,40 @@ Read this before concluding anything about a non-RW field.
 | W1 | stores on the first write after reset only; later writes ignored | returns the stored value |
 | NOACCESS | no effect | no effect; excluded from every test |
 
-The rest compose these two columns rather than adding anything new: `RS` and `WS` are `RC` and `WC`
+The rest compose those two columns rather than adding anything new: `RS` and `WS` are `RC` and `WC`
 with set for clear, `WRC` stores on write and clears on read, `WCRS` clears on write and sets on
-read, `W1CRS` clears the written ones and sets all bits on read.
-
-Two consequences. Bit-bash derives its expected read-back entirely from the declared policy, so a
-policy wrong *in the model* makes the sequence complain loudly about correct RTL — confirm the string
-against the spec before escalating to the designer. And quote the policy exactly as the model spells
-it (`W1C`), never as a paraphrase; the whole value of these names is that they are distinguishable.
+read, `W1CRS` clears the written ones and sets all bits on read. Bit-bash derives its expected
+read-back entirely from the declared policy, so a policy wrong *in the model* makes the sequence
+complain loudly about correct RTL — confirm the string against the spec before escalating to the
+designer, and quote it exactly as the model spells it (`W1C`), never as a paraphrase.
 
 Keep the model's operations straight too: `get`/`set` touch only the desired value and make no bus
 traffic; `read`/`write` make front-door traffic and update the mirror; `peek`/`poke` are back-door
 and need an hdl path; `mirror` reads and optionally compares; `update` writes only where desired and
 mirrored differ; `predict` forces the mirror with no traffic. A report saying a register "was
-written" without saying which of these was used is not yet a report.
+written", without saying which of these was used, is not yet a report.
 
 ### 6. Address, width and lsb
 
 **Read** the map construction and check, in order: base address, bus width in bytes, whether byte
 addressing is set, and this register's offset. Offsets are in the map's own addressing units, so a
 register list written in word units against a byte-addressed map puts every register at a fraction of
-its intended address — a uniform stride error across the block, not one bad register. For a
-sub-block, check the offset at which its map was added to the parent: a wrong submap offset moves a
-whole block at once and is indistinguishable from an interconnect decode bug. For field position,
-compare size and lsb against the spec field by field — shifted by a constant is an lsb error,
-truncated is a size error, byte-reversed is the map's endianness and not a field problem at all.
+its address — a uniform stride error across the block, not one bad register. For a sub-block, check
+the offset its map was added at: a wrong submap offset moves a whole block at once and is
+indistinguishable from an interconnect decode bug. For field position, compare size and lsb field by
+field — shifted by a constant is an lsb error, truncated is a size error, byte-reversed is the map's
+endianness and not a field problem at all.
 
 ### 7. Front door versus back door
 
 Some disagreements are correct and must not be filed as bugs. A back-door access has **no read side
 effects**, so on an RC field the two doors are supposed to differ after a front-door read. On a WO
-field the front-door read is meaningless while the back door returns the stored value. A register
-that is a captured snapshot in the RTL — a shadow or holding register — legitimately differs from the
-live counter its hdl path points at. The real bugs are a path that does not resolve, a path left
-pointing at the old hierarchy after an RTL rename, and a back-door check sampling before the value
-has crossed a synchroniser into the register's clock domain. The tell for the last is that the
-mismatch disappears when the check moves later — say that, rather than calling it intermittent.
+field the front-door read is meaningless while the back door returns the stored value. A captured
+snapshot in the RTL — a shadow or holding register — legitimately differs from the live counter its
+hdl path points at. The real bugs are a path that does not resolve, a path left pointing at the old
+hierarchy after an RTL rename, and a back-door check sampling before the value has crossed a
+synchroniser into the register's clock domain. The tell for the last is that the mismatch disappears
+when the check moves later — say that rather than calling it intermittent.
 
 ### 8. Adapter and predictor
 
@@ -175,68 +167,62 @@ These sit between a correct model and a correct design and cause a large share o
 like model bugs. The adapter converts a register operation to a bus item and back; if the reverse
 conversion does not set the operation's status, every access looks failed even when the data was
 right. If the driver returns read data on a separate response path, the adapter must declare that
-responses are provided, or the model reads the request item and returns whatever was in it. Byte-
-enable support is declared on the adapter — with it off, a single-field write becomes a full-register
-write of the mirrored contents.
+responses are provided, or the model reads the request item and returns whatever was in it.
+Byte-enable support is also declared there — with it off, a single-field write becomes a
+full-register write of the mirrored contents.
 
 The predictor observes the bus monitor and updates the mirror from what actually happened. Use it
 *or* automatic prediction inside the map, never both: two updates for one access silently corrupt any
 clear-on-access field. Explicit prediction is mandatory if anything besides this sequence writes
-these registers — another master, firmware, or a back-door poke elsewhere. On a pipelined bus with
-separate address and data channels the monitor must publish one complete item; a half-formed item
-makes the predictor write plausible garbage into the mirror.
+these registers — another master, firmware, or a back-door poke elsewhere. On a pipelined bus the
+monitor must publish one complete item; a half-formed one makes the predictor write plausible
+garbage into the mirror.
 
 ### 9. Record the finding
 
 Write the result as a failure signature following `_shared/failure-signature-schema.md` — same field
 order, same normalisation rules — then add three lines: the symptom class from step 4, the file and
-line number of the evidence, and the owner. If any of the three cannot be filled from text actually
-on disk, write `?` rather than an inference.
+line number of the evidence, and the owner. If one cannot be filled from text actually on disk, write
+`?` rather than an inference.
 
 ## Gotchas
 
 - **The design's reset does not reset the model.** The mirror is initialised by an explicit reset
-  call in the testbench; skip it and every reset check compares against zero, which looks exactly
-  like an RTL that never resets and sends you to the wrong person.
+  call in the testbench; skip it and every check compares against zero, which looks exactly like an
+  RTL that never resets and sends you to the wrong person.
 - **Automatic prediction plus an explicit predictor updates the mirror twice.** Nobody notices on RW.
-  On W1C or RC the second update applies the clear again, and the mirror drifts from the design a few
-  accesses later, far from the cause.
+  On W1C or RC the second update applies the clear again and the mirror drifts a few accesses later.
 - **A field-level write is a whole-register write.** Writing one RW field of a register that also
-  holds W1C bits writes the mirrored W1C bits back too and can clear live status. Check byte-enable
+  holds W1C bits writes the mirrored W1C bits back and can clear live status — check byte-enable
   support before reporting that the design clears status spuriously.
 - **Volatile is load-bearing, not decoration.** A hardware-updated field not declared volatile makes
   every mirror comparison a race; a field wrongly declared volatile is excluded from the comparison,
   so real bugs pass silently. Both errors are invisible in a passing log.
 - **A field declared with no reset value is skipped by the reset check** — an excluded field and a
   correct field produce the identical log line: nothing.
-- **Register data and address widths are compile-time settings.** A model holding a register wider
-  than the compiled data width truncates without complaint, and it reads as an RTL bug in the upper
-  bits.
+- **Register data and address widths are compile-time settings.** A register wider than the compiled
+  data width truncates without complaint, and reads as an RTL bug in the upper bits.
 - **Bit-bash on a write-once field fails from the second bit onward** — the register stopped
   accepting writes after the first, exactly as specified. Same shape for a register behind a lock,
   and for anything gated by an enable the sequence cleared two registers earlier.
 - **Overlapping addresses are usually a warning, not an error.** A submap added at the wrong offset
-  shadows real registers, and the only evidence is one warning line near the start of the log,
-  hundreds of lines before the first mismatch.
+  shadows real registers, and the only evidence is one warning line near the start of the log.
 - **A register in the block but never added to a map has no address.** It either errors at access
-  time or quietly resolves to the block base, which then reads as a duplicate-address bug in a
-  completely different register.
+  time or quietly resolves to the block base, reading as a duplicate-address bug elsewhere.
 
 ## Human verification — what a wrong answer looks like
 
 Before acting on the output, check:
 
-- the classification names **one** owner — spec, RTL, or integration. "Could be either" means step 4
-  was not finished.
+- the classification names **one** owner. "Could be either" means step 4 was not finished.
 - every number (reset value, offset, size, lsb, policy) is quoted with a file path and line number.
-- a reset-value finding shows **three** values from three sources: the spec, the generated model, and
-  what the design returned.
+- a reset-value finding shows **three** values from three sources — spec, generated model, design.
 - an access-policy finding quotes the policy string exactly as the model spells it.
 - nothing the step 5 table calls correct behaviour has been filed as a bug.
 
 A wrong answer typically declares "the register model is wrong" without naming a field; reports a
 W1C, RC or WO field working exactly as specified as a mismatch; blames the RTL for a reset mismatch
-that was really an uninitialised mirror; or explains a front-door versus back-door gap with
+that was really an uninitialised mirror; or explains a front-door versus back-door gap by
 clock-domain lag without first checking that the hdl path resolves at all.
 
 ## Done when
