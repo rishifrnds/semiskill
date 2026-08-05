@@ -375,6 +375,33 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: rerun round 2 over the 32, then the gate over the 49, then publish + scoreboard + site
 
 
+- [J-006] 2026-08-05T17:05Z  status: done
+  what: extracted the project's authoring contract into ONE file and wrote the learnings down.
+  docs/AUTHORING_CONTRACT.md is now the single source of truth (what a skill is, the 13 standing
+  rules with the defect each was written for, the mechanical lint-blockers, ADR-011 handoff
+  vocabulary, ADR-008 frontmatter, body structure, the verify commands, the BLOCKING/NON-BLOCKING
+  review calibration, and the gate). It had been pasted inline in tools/dv-wave.js, dv-gate.js and
+  dv-gate2.js -- three copies of a contract is three contracts -- so all three now point at the file
+  and inline only the mechanical constraints, since a lint failure wastes a whole agent run.
+  bug caught while doing it: the pointer paths were written as Windows backslash paths inside a JS
+  TEMPLATE LITERAL, where \c \V \s \d collapse to c V s d -- every path would have rendered as
+  "E:codeVLSIsemiskilldocs...". Switched to forward slashes and verified all three parse and render.
+  docs/LEARNINGS.md records why the rules exist: lint 1.000 is a SECURITY score; a rule with zero
+  precision is worse than no rule (C002, 105/105 false); a linter can CAUSE the drift it catches
+  (facets vs registry); field-name identity is not field identity (ADR-011); a governed value set
+  must be exempt from local-reachability rules (C005 vs the registry); snapshot tests that pin
+  current defects go stale when you fix them (assert shape or a ceiling instead); one fix pass then a
+  strict recheck converges on zero; a wave that dies halfway must leave NO gate record rather than a
+  false one; fix agents introduce defects so re-run check_pack after every batch; never run pytest
+  while an agent runs it. Plus the four representative content defects the recheck found, and a table
+  of every mechanism in this project that can record something that did not happen.
+  HANDOFF.md carries a paste-ready resume prompt, the measured state, the ordered pending list and
+  the full known-gaps list, so a new terminal can pick this up cold.
+  artifacts: docs/AUTHORING_CONTRACT.md, docs/LEARNINGS.md, HANDOFF.md, tools/dv-{wave,gate,gate2}.js,
+  CLAUDE.md (current phase), and 3 durable cross-session memories
+  next: J-003a round 2 over the 32 not-ready, then J-003b over the 49 never-reviewed, then publish
+
+
 ## In-Flight Step
 - [J-003] gate the 80 unreviewed/not-ready skills: adversarial review -> fix -> INDEPENDENT recheck
   -> REVIEW.json, in 7 batches of 12 via tools/dv-gate.js. Blocked on J-004 landing first.

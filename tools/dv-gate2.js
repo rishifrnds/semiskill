@@ -19,36 +19,38 @@ if (!CELLS.length) {
 // The standing content rules. Round 2 assumes the author knows them; what it adds is the
 // blocking/non-blocking distinction that round 1 lacked.
 const RULES = `
-# What a skill in this pack is
+# READ THE CONTRACT FIRST — it is a file, not a summary
 
-A single Markdown procedure a DV engineer's agent loads and follows. The reader is a working
-verification engineer at an EDA-and-IP company. The agent executing it has ONLY Read, Grep and Glob
-over text files already on disk.
+Before you do anything else, read **E:/code/VLSI/semiskill/docs/AUTHORING_CONTRACT.md**
+in full. It is the single source of truth for what a skill in this pack must be: the standing rules,
+the handoff vocabulary, the required frontmatter and body structure, and the review calibration.
+It used to be pasted into three workflow scripts; three copies of a contract is three contracts.
 
-# The standing rules
+Also read, as the contract tells you to:
+  E:/code/VLSI/semiskill/skills/_shared/team-profile.md
+  E:/code/VLSI/semiskill/skills/_shared/failure-signature-schema.md
+  E:/code/VLSI/semiskill/skills/_shared/handoff-vocabulary.md
+  E:/code/VLSI/semiskill/skills/dv-sim-log-first-error/SKILL.md   (golden: voice, density)
+  E:/code/VLSI/semiskill/skills/dv-ral-bringup/SKILL.md          (golden: decision tree)
 
-1. **Verb honesty.** The agent cannot run a simulator, formal engine, emulator, waveform viewer or
-   farm job. Every step is an analysis/authoring verb OR an explicit handoff ("ask the engineer to
-   run X and give you the path to the output").
-2. **No proprietary lookup.** Tool flags, message strings, house conventions and licensed spec text
-   are \`[[FILL: ...]]\` slots, never invented.
-3. **A retrieval budget the procedure actually obeys.** Every Grep and Read a step spends must be
-   accounted for in the stated budget, and no step may need more than the budget allows.
-4. **Markers must be slots**; **every slot must be spent** (C001).
-5. **Every value a handoff block offers must have a step that assigns it** (C005).
-6. Handoff fields follow \`_shared/handoff-vocabulary.md\`; signatures follow
-   \`_shared/failure-signature-schema.md\`; pack-wide facts live in \`_shared/team-profile.md\`.
-7. **State your own coverage** when the procedure stops early.
+# The mechanical constraints, inlined because a lint failure wastes a whole agent run
 
-# Mechanical constraints — any one silently prevents publication (must stay at lint 1.000)
+The skill is scanned by a security pipeline and must score exactly 1.000. Any ONE of these blocks it:
+ - ANY url (\`http\` followed by \`://\`). Cite documents by name and clause.
+ - curl, wget, urllib, requests.get, socket., fetch(, "nc -".
+ - Any of {eval, exec, function} immediately followed by "(" — CASE INSENSITIVE. Write "function H(s)".
+ - "run the following command/script/shell/bash"; "you are now a/an/the ..." — instant hard fails.
+ - "ignore ... previous/prior/above instructions"; "disregard the above/previous/system".
+ - The letters "exfiltrat" in any word — write "unauthorised data egress".
+ - "execute arbitrary code/commands"; a dotted quad (10.2.1.4); an NNN-NN-NNNN number;
+   four groups of four digits; a 200+ character unbroken alphanumeric run.
+ - {token, secret, password, api_key, passwd, pwd} followed by ":" or "=" then 16+ chars, even as a
+   fake placeholder — use \`token: <your-token>\`. No [[FILL:]] slot named after a credential.
+ - "<<<" or ">>>" anywhere.
+ - Unquoted YAML values containing ": " or starting with @ \` % * & ! | > [ or {.
 
-No url (\`http\` + \`://\`); no curl/wget/urllib/requests.get/socket./fetch(/"nc -"; no
-{eval,exec,function} immediately followed by "(" (case-insensitive — write "function H(s)");
-no "run the following command/script/shell/bash"; no "you are now a/an/the"; no
-"ignore/disregard ... previous instructions"; no "exfiltrat" (write "unauthorised data egress");
-no "execute arbitrary code"; no dotted quad (10.2.1.4); no NNN-NN-NNNN; no four groups of four
-digits; no {token,secret,password,api_key,passwd,pwd} followed by ":"/"=" then 16+ chars; no "<<<"
-or ">>>"; unquoted YAML values may not contain ": " or start with @ \` % * & ! | > [ {.
+**lint 1.000 is a SECURITY score. It says nothing about whether the DV content is correct.**
+
 `
 
 const FIX_SCHEMA = {

@@ -20,110 +20,38 @@ if (!CELLS.length) {
 }
 
 const RULES = `
-# What a skill in this pack is
+# READ THE CONTRACT FIRST — it is a file, not a summary
 
-A single Markdown procedure a DV engineer's agent loads and follows. The reader is a working
-verification engineer at an EDA-and-IP company. The agent that will execute it has ONLY Read, Grep
-and Glob over text files already on disk.
+Before you do anything else, read **E:/code/VLSI/semiskill/docs/AUTHORING_CONTRACT.md**
+in full. It is the single source of truth for what a skill in this pack must be: the standing rules,
+the handoff vocabulary, the required frontmatter and body structure, and the review calibration.
+It used to be pasted into three workflow scripts; three copies of a contract is three contracts.
 
-# Standing rules — all of these are checked, most of them mechanically
+Also read, as the contract tells you to:
+  E:/code/VLSI/semiskill/skills/_shared/team-profile.md
+  E:/code/VLSI/semiskill/skills/_shared/failure-signature-schema.md
+  E:/code/VLSI/semiskill/skills/_shared/handoff-vocabulary.md
+  E:/code/VLSI/semiskill/skills/dv-sim-log-first-error/SKILL.md   (golden: voice, density)
+  E:/code/VLSI/semiskill/skills/dv-ral-bringup/SKILL.md          (golden: decision tree)
 
-1. **Verb honesty.** The agent cannot run VCS, Verdi, URG, a formal engine, an emulator, or submit to
-   a compute farm. Every step is an analysis or authoring verb (read, locate, classify, rank, draft,
-   cross-check) OR an explicit handoff: "ask the engineer to run X and give you the path to the
-   output". Never write a bare Run/Execute/Merge/Compute as something the agent performs. This is the
-   single most common way a skill like this becomes shelfware.
-2. **No proprietary lookup.** You do not know their tool flags, message strings, house conventions,
-   VIP knob names, or licensed spec text — and you must not pretend to. Every such fact is a
-   \`[[FILL: ...]]\` slot. A skill whose value depends on a fact you invented is worse than no skill.
-3. **Retrieval budget that the procedure obeys.** DV artifacts are enormous — 100MB+ logs, filelists
-   with thousands of entries. State an explicit bounded budget (Grep first to locate, then bounded
-   windowed Reads, with a stopping rule), then make sure NO step exceeds it and the budget accounts
-   for every Grep the steps actually spend. A step that cannot be carried out inside the skill's own
-   caps is broken.
-4. **Markers must be slots.** If a step Greps for a "fatal marker" or "pass marker", the slot table
-   must declare it. Never Grep for something the engineer was never asked to define.
-5. **Every slot must be spent.** A slot the procedure never consumes sends the reader to interrupt a
-   colleague for nothing. Drop it or use it. (Machine-checked: rule C001.)
-6. **Logs are files on disk.** Grep and Read cannot search text pasted into a chat. If the
-   description advertises the pasted-in case, step 1 must resolve it to a path first, or say plainly
-   what cannot be done and mark the result provisional.
-7. **State your own coverage.** If the procedure stops early under its budget, the output says how
-   much it actually covered. An unstated shortcut is far worse than a stated one.
-8. **Pack-wide facts live in \`_shared/team-profile.md\`** — log locations, fatal/pass/infra markers,
-   run identity, known-issue list, area-to-owner map, sign-off, simulator, filelist convention.
-   Reference them; do not re-ask them. If the skill needs something NARROWER than the profile
-   records, say exactly how it is narrower. Never claim two differently-named facts are "the same
-   fact" unless they genuinely are — that error propagated wrong marker strings across two skills.
-9. **Signatures** come from \`_shared/failure-signature-schema.md\`. Use its field names and rules as
-   written rather than re-deriving them.
-10. **Handoff-block fields** follow \`_shared/handoff-vocabulary.md\` — the pack-wide field registry.
-    Read it before touching a fenced report block. Registered fields carry a canonical enum; an
-    unregistered field name must not collide with another skill's meaning for the same word.
-11. Every skill ends with **"Human verification — what a wrong answer looks like"**.
+# The mechanical constraints, inlined because a lint failure wastes a whole agent run
 
-# Mechanical constraints — any violation silently prevents publication
-
-The skill is scanned by a security pipeline and must score exactly 1.000. These block it:
- - ANY url (\`http\` followed by \`://\`). Cite documents by name and clause instead.
- - The words curl, wget, urllib, requests.get, socket., fetch(, or "nc -".
- - Any word from {eval, exec, function} immediately followed by "(" — CASE INSENSITIVE. So
-   "transfer function (H(s))" is fatal; write "transfer function H(s)".
- - "run the following command/script/shell/bash" — instant hard fail. Use the handoff phrasing.
- - "you are now a/an/the ..." — instant hard fail. Write "as the block owner, you ...".
- - "ignore ... previous/prior/above instructions", "disregard the above/previous/system".
- - The letters "exfiltrat" in any word. Write "unauthorised data egress".
- - "execute arbitrary code/commands".
- - A dotted quad like 10.2.1.4 (reads as a private IP). Write "v10.2 patch 1.4".
- - A NNN-NN-NNNN number (reads as a US SSN). Re-punctuate part numbers and clause numbers.
- - Four groups of four digits; a 200+ character unbroken alphanumeric run.
- - {token, secret, password, api_key, passwd, pwd} followed by ":" or "=" then 16+ characters, even
-   as a fake placeholder. Use angle brackets: \`token: <your-token>\`.
- - "<<<" or ">>>" anywhere. A [[FILL:]] slot named after a credential.
+The skill is scanned by a security pipeline and must score exactly 1.000. Any ONE of these blocks it:
+ - ANY url (\`http\` followed by \`://\`). Cite documents by name and clause.
+ - curl, wget, urllib, requests.get, socket., fetch(, "nc -".
+ - Any of {eval, exec, function} immediately followed by "(" — CASE INSENSITIVE. Write "function H(s)".
+ - "run the following command/script/shell/bash"; "you are now a/an/the ..." — instant hard fails.
+ - "ignore ... previous/prior/above instructions"; "disregard the above/previous/system".
+ - The letters "exfiltrat" in any word — write "unauthorised data egress".
+ - "execute arbitrary code/commands"; a dotted quad (10.2.1.4); an NNN-NN-NNNN number;
+   four groups of four digits; a 200+ character unbroken alphanumeric run.
+ - {token, secret, password, api_key, passwd, pwd} followed by ":" or "=" then 16+ chars, even as a
+   fake placeholder — use \`token: <your-token>\`. No [[FILL:]] slot named after a credential.
+ - "<<<" or ">>>" anywhere.
  - Unquoted YAML values containing ": " or starting with @ \` % * & ! | > [ or {.
 
-# Required frontmatter (ADR-008) — exactly these keys, nothing else at top level
+**lint 1.000 is a SECURITY score. It says nothing about whether the DV content is correct.**
 
-\`\`\`
----
-name: <the kebab folder name, identical to the directory>
-description: <what it does>. Use when <concrete triggers in the engineer's own words>.
-license: Proprietary - internal use only
-compatibility: Any Agent Skills runtime with Read, Grep and Glob over files on disk (Cursor 2.4+, Claude Code). Read-only; no shell, no network.
-allowed-tools: Read, Grep, Glob
-metadata:
-  semiskill-title: <human title>
-  semiskill-function: design-verification
-  semiskill-role: <given below>
-  semiskill-level: <given below>
-  semiskill-owner: dv-guild
-  semiskill-version: <bump>
-  semiskill-review-by: <a date 6-14 months out; STAGGER it, do not reuse a sibling's>
-  semiskill-tags: <comma separated>
----
-\`\`\`
-
-# Required body structure
-
-1. \`# <Title>\` then two or three sentences framing what actually goes wrong.
-2. \`## When to use something else\` — route to the sibling skills honestly.
-3. \`## Fill this in for our team\` — a table of 5-10 \`[[FILL: ...]]\` slots with a "Who knows" column.
-4. \`## Retrieval budget — read this before opening anything\` — numbered, with a stopping rule.
-5. \`## Procedure\` — numbered \`### \` steps naming the tool in bold at each step.
-6. \`## Gotchas\` — 6-10 bullets of hard-won specifics. **This is the most valuable section**; it is
-   what actually transfers experience between people. Be concrete and technically correct.
-7. \`## Human verification — what a wrong answer looks like\`
-8. \`## Done when\` — one line.
-
-Length 180-260 lines. Substantial, not padded.
-
-# Golden references
-
-${REPO}\\skills\\dv-sim-log-first-error\\SKILL.md  (voice, structure, density)
-${REPO}\\skills\\dv-ral-bringup\\SKILL.md          (a decision-tree skill, reviewer-approved)
-${REPO}\\skills\\_shared\\team-profile.md
-${REPO}\\skills\\_shared\\failure-signature-schema.md
-${REPO}\\skills\\_shared\\handoff-vocabulary.md
 `
 
 const VERIFY = `

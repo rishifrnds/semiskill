@@ -89,6 +89,20 @@ traversal, not bolted on after. Treat every submitted skill body as an untrusted
   and the AIOS project at `E:\code\aios` (layer implementations to mirror).
 
 ## Current phase
-See `MEMORY.md` → **Current Phase**. We are in **Phase 0: Foundation & Plan** — instantiate the
-state system, lock the canonical artifact schema (ADR-001), and finalize the ultra-mode build
-plan before writing pipeline code.
+See `MEMORY.md` → **Current Phase** and `STATUS.md` for the right-now snapshot. Phases 0/A–H are
+archived under `archive/`. We are in **Phase J: verify and publish the catalog** — 84 DV skills are
+authored across 16 roles (≥5 each) and all lint clean, but publication is gated on an *independent*
+content recheck per skill, and most do not have one yet. Measure, never assume: `HANDOFF.md` has the
+resume prompt and the commands that report real state.
+
+## Before authoring, reviewing or changing a check — read these
+- **`docs/AUTHORING_CONTRACT.md`** — the single source of truth for what a skill must be: standing
+  rules, mechanical lint-blockers, handoff vocabulary (ADR-011), frontmatter (ADR-008), body
+  structure, and the BLOCKING/NON-BLOCKING review calibration.
+- **`docs/LEARNINGS.md`** — why those rules exist. Read it before "simplifying" any check; several
+  rules look arbitrary and are not.
+- **`HANDOFF.md`** — current state, pending tasks, known gaps, and how to resume in a new terminal.
+
+Two rules that cost real time: **`lint 1.000` is a SECURITY score and says nothing about whether the
+DV content is correct**, and **never run `pytest` while a subagent is also running it** (the fixture
+TRUNCATEs the shared dev database).
