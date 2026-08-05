@@ -62,6 +62,14 @@ _Last updated: 2026-07-13_
   - Exit criterion met: <which criterion from MEMORY.md triggered rotation>
 -->
 
+- MEMORY-G.md — Phase G: Seed the catalog with role-based skills (dogfood the pipeline)
+  - Timespan: 2026-07-13T08:20Z → 2026-08-05T03:19Z
+  - STEP-IDs: G-001 → G-006
+  - Step count: 6 done, 0 abandoned, 0 rolled-back
+  - Exit criterion met: every published seed reached the catalog via a passing scan_run + approval (no
+    back-door), a deliberately-broken seed blocked identically, catalog faceted by function/role/level,
+    183 tests green; plus `scripts/demo.py` and the `dashboard/` command centre
+
 ## DECISIONS archives (quarterly)
 _No quarterly rotations yet._
 

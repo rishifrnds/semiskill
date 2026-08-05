@@ -16,21 +16,21 @@ _Last updated: 2026-08-05T03:19Z_
 - Session goal: Phase H — make the catalog reach a real DV team (Cursor pack + SharePoint page).
 
 ## Right now
-Phases A–G complete (183 tests). Committing the dashboard command centre as G-006, then rotating into
+Phases A–G complete (183 tests), dashboard committed, Phase G archived. Now in
 **Phase H**: author a validated first wave of DV skills and deliver them as an Agent-Skills pack a
 Cursor user can install, plus a SharePoint-native catalog page.
 
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: G-006 (done) → rotating to Phase H
-- Sub-state: committing dashboard, then MEMORY rotation
+- Step ID: H-000 (done) — lock taken over, dashboard committed, Phase G archived
+- Sub-state: Phase H started; next H-001 (ADR-008)
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 14e5bb9 (pre-checkpoint)
-- Message: feat: scripts/demo.py — one-command live demo
-- Time: 2026-07-13
+- SHA: 3a07124
+- Message: wip: G-006 dashboard command centre
+- Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
 - **Cursor 2.4+ supports Agent Skills natively** (`.cursor/skills/`, `~/.cursor/skills/`, legacy
