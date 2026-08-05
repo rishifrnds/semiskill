@@ -1,0 +1,57 @@
+{
+ "slug": "dv-repo-orientation",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "wave": 0,
+ "recorded_at": "2026-08-05T07:52:13Z",
+ "lint": {
+  "verdict": "approve",
+  "aggregate": 1.0,
+  "line": "skills\\dv-repo-orientation\\SKILL.md  [approve 1.000]  (stage 3 not evaluated — advisory only) — clean, 0 errors, 0 advisories, 1 predicted to publish"
+ },
+ "fix": {
+  "agent": "fix:dv-repo-orientation",
+  "fixed": [
+   "Step 1 over-budget on non-brace runtimes: replaced 'run the alternatives one at a time and count each' (25 patterns vs a 12-pattern cap) with a bounded fallback that resolves the contradiction in favour of the cap — spend the 8-pattern survey allowance in priority order (Makefile*/*.mk, the filelist extensions the Filelist directives slot records instead of all three guesses, README*, the wrapper extension the Build entry point slot names, remainder on *.md/one config extension), probe source with one extension per tree (.sv, .v only where .sv missed) inside the 12-pattern cap, and list every un-run alternative on the map coverage line. Arithmetic now fits: 8 + up to 3 source probes + the *test*.sv probe = 12.",
+   "Step 2 read from a doc/ directory nothing locates: the documentation file is now taken from wherever step 1's README*/*.md hits cluster — those recorded paths name any doc/-like directory in their directory components, costing no extra Glob — with an explicit 'no docs found by the survey' map entry when no hit landed in one; also bounded the READMEs to root plus at most two one level below (was unbounded 'any README ... one level below').",
+   "Restored the pack-wide Grep-hit guard the previous pass deleted: new budget rule 5 'If a Grep returns more than about 200 hits, the pattern is too broad' with the same narrow-before-reading and truncated-count-is-not-a-count language the other five skills carry; renumbered old rules 5/6 to 6/7 (the one numbered cross-reference in the body, 'budget rule 4', still points at the unchanged Glob-300 rule).",
+   "Corrected the factually wrong cross-reference at old line 54: it claimed Build entry point (a makefile/wrapper you invoke) and dv-build-filelist-hygiene's Filelist entry point (the filelist the top build consumes) are 'the same fact' — they are not, and the note now says so explicitly ('they name different files; do not fill one from the other'). The genuine overlap (the nesting directive and relative-path rule, shared with build-filelist-hygiene's Filelist directives slot) is kept and stated precisely.",
+   "Consolidation routed to the now-existing _shared/team-profile.md, mirroring the pattern of dv-regression-triage-routing (the reviewer's hand-over-today skill): the simulator inside Build entry point = the profile's Simulator fact, nesting/relative-path inside Filelist directives = its Filelist convention fact, the kept combined coverage area inside Coverage output = its Coverage output fact — each stated as a partial overlap (wrapper path, elaborator command, filelist extensions, include-path directive, coverage option strings remain local), never a false identity, per standing rule 7.",
+   "Bounded step 7's sibling comparison ('two test classes, two filelists, two env files' read as up to six Reads) to one pair at a time inside whatever remains of the ten-Read budget.",
+   "Facets restored from the registry and version bumped (see facets_set)."
+  ],
+  "not_fixed": [
+   "The '(Cursor 2.4+, Claude Code)' compatibility phrasing: kept unchanged because the review's 'unverifiable Cursor 2.4+' complaint is attributed to dv-sim-log-first-error's frozen-golden bundle, and the corrected siblings (dv-build-filelist-hygiene, dv-regression-triage-routing) carry the identical line — changing it in this one skill would desynchronize the pack, and siblings are out of scope for this pass.",
+   "The review's missing _shared/retrieval-budget.md: the task forbids touching _shared/, so the retrieval budget stays in-skill (it is internally consistent after the step 1/2/7 fixes).",
+   "Pack-wide marker-name unification (Fatal vs Error vs Mismatch markers): dv-repo-orientation has no marker slots and Greps for no markers, so there is nothing to change in this file; the four-names-for-marker finding belongs to the sibling skills' passes."
+  ],
+  "facets_set": "semiskill-role: dv-infra-engineer, semiskill-level: fresher (semiskill-version: 1.2.0)"
+ },
+ "review": {
+  "agent": "recheck:dv-repo-orientation",
+  "remaining_at_recheck": [
+   "Pack-wide, not this skill: the 'Cursor 2.4+' compatibility claim (line 5) is uniform across all six skills but was called unverifiable by the previous review of the golden; if it is ever removed it must be removed from all six at once, and this file currently matches its siblings.",
+   "Nit: budget rule 2 says Read windows of about 60 lines while rule 3 caps windowed Reads at about 80 lines — consistent in effect (60<=80) but worth unifying to one number.",
+   "Nit: the 'asked only here' enumeration (lines 58-60) omits 'what combines them' from the Coverage output row; the shared/local partition is still unambiguous because the note only claims the kept, combined area is shared, but the enumeration is incomplete.",
+   "Nit: step 4's Grep for +UVM_TESTNAME needs the leading '+' escaped in regex-based Grep runtimes; a one-word '(escaped)' hint would remove the only way that step can error out."
+  ],
+  "vagueness": []
+ },
+ "dispositions": [
+  {
+   "finding": "compatibility names 'Cursor 2.4+', called an unverifiable third-party version claim",
+   "disposition": "rejected",
+   "why": "Verified this session from two primary sources: cursor.com/docs/skills and cursor.com/changelog/2-4 (Agent Skills shipped in Cursor 2.4, 22 Jan 2026). The reviewers reasoned 'the author cannot verify this from this repo', which is a sound heuristic and false here. The claim is load-bearing: on Cursor 2.3 the skill silently does not load, so removing it would make the pack less accurate, not more honest."
+  }
+ ],
+ "recheck": {
+  "ready": true,
+  "agent": "recheck:dv-repo-orientation + maintainer disposition",
+  "why": "All four wave-0 findings are closed by real mechanisms, not hedging. (1) The non-brace-runtime overflow is resolved: step 1 now names the 16-alternative blowup, rules \"The allowance wins, not the list\", gives a concrete 8-pattern priority order sourced from slots, folds the source probe inside the 12-Glob cap, and forces every unrun alternative onto the map-coverage line; arithmetic verifies on bo || Maintainer: the sole blocker common to all six was the Cursor 2.4+ claim, rejected with a verified source. Every other finding was either accepted and fixed by hand or is a recorded nit.",
+  "reviewer_verdict_was": true,
+  "remaining_nits": [
+   "Nit: budget rule 2 says Read windows of about 60 lines while rule 3 caps windowed Reads at about 80 lines — consistent in effect (60<=80) but worth unifying to one number.",
+   "Nit: the 'asked only here' enumeration (lines 58-60) omits 'what combines them' from the Coverage output row; the shared/local partition is still unambiguous because the note only claims the kept, combined area is shared, but the enumeration is incomplete.",
+   "Nit: step 4's Grep for +UVM_TESTNAME needs the leading '+' escaped in regex-based Grep runtimes; a one-word '(escaped)' hint would remove the only way that step can error out."
+  ]
+ }
+}

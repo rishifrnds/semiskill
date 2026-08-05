@@ -1,0 +1,59 @@
+{
+ "slug": "dv-sim-log-first-error",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "wave": 0,
+ "recorded_at": "2026-08-05T07:52:13Z",
+ "lint": {
+  "verdict": "approve",
+  "aggregate": 1.0,
+  "line": "skills\\dv-sim-log-first-error\\SKILL.md  [approve 1.000]  (stage 3 not evaluated - advisory only) / clean / 1/1 clean, 0 errors, 0 advisories, 1 predicted to publish"
+ },
+ "fix": {
+  "agent": "fix:dv-sim-log-first-error",
+  "fixed": [
+   "allowed-tools normalised from space-separated 'Read Grep Glob' to the pack-wide comma form 'Read, Grep, Glob' (was the only file diverging)",
+   "Added the missing 'When not to use this' section, routing accurately per what each sibling actually says: night of failures -> dv-regression-triage-routing, shrink an existing signature -> dv-minimal-reproducer, known register-access failure -> dv-ral-bringup, build break before simulation -> dv-build-filelist-hygiene",
+   "Step 3 now routes compile/elaboration breaks to dv-build-filelist-hygiene, making that sibling's existing claim ('It classifies build breaks as infrastructure and routes them back here', its line 38-39) true instead of dangling",
+   "Closed the 'no coverage line' finding: the output now carries a mandatory one-line coverage statement under the repro block ('signature derived from the log' with path, or 'reasoned from a pasted fragment only, log not searched' with all fields provisional); intro, step 6, Human verification and Done-when all reference it consistently",
+   "Closed the pasted-input hole in the procedure itself: step 1 now opens by resolving a pasted log to a path on disk (per budget rule 1), matching the description's advertised trigger 'when you are about to paste a log into a chat'",
+   "Step 5 (known-issue check) rewritten to be verb-honest: branches on file-on-disk (one bounded Grep) vs tracker/page (explicit human handoff, check marked pending) vs unfilled (say so, do not call the failure new) - previously it said 'compare the signature against it' regardless of whether the list was even reachable by Read/Grep",
+   "Resolved the internal budget contradiction that rewrite would otherwise create: retrieval-budget rule 3 now explicitly includes the one known-issue-list Grep, so no step exceeds the skill's own stated caps",
+   "Slot table renamed 'Known issues' -> 'Known-issue list' and 'Bug tracker convention' -> 'Bug convention' with FILL text matching _shared/team-profile.md verbatim, so the 'these are pack-wide facts, read them from the profile' cross-reference maps name-for-name (the wrong-'same fact' cross-reference class the re-review flagged pack-wide)",
+   "'to repeat' now sourced explicitly from the profile's Rerun convention slot (referenced, not re-asked), keeping 'leave empty rather than invent'"
+  ],
+  "not_fixed": [
+   "The two 'remaining_technical_errors' (dv-minimal-reproducer:52 wrong 'first four are the same slots' claim; dv-ral-bringup:50 wrong 'same three facts' claim) live in sibling files I am forbidden to edit - and I verified both were already corrected by a later pass: dv-minimal-reproducer now says 'Several of these are pack-wide facts... Only fill in a slot above if this skill needs something narrower', and dv-ral-bringup now says 'Mismatch markers is narrower than the profile's Fatal markers... If they differ, record both'. Nothing in my file could make them wronger or righter.",
+   "The 'Cursor 2.4+' compatibility claim was left in place: all six skills now carry the byte-identical compatibility string, the regression actually charged to this file was being the odd one out (it no longer is), and stripping the version claim from this file alone would recreate exactly that set-level divergence in the one file the other five route to. Removing 'Cursor 2.4+' is a pack-level change touching five files I may not edit.",
+   "Deliberately did NOT add a 'coverage' field inside the repro block despite the 'no coverage line' finding - the coverage statement is a mandatory line under the block instead - because dv-ral-bringup:263-264 explicitly lists 'coverage' among the fields it adds relative to this block, and dv-minimal-reproducer:208 matches this block's field names mechanically; a coverage field inside the block would falsify both siblings' cross-references, which I cannot touch."
+  ],
+  "facets_set": "semiskill-role: dv-engineer, semiskill-level: fresher (exactly as the registry specifies for this slug; semiskill-version bumped 1.1.0 -> 1.2.0, semiskill-review-by moved to 2027-08-05 to clear the staleness the finding flagged)"
+ },
+ "review": {
+  "agent": "recheck:dv-sim-log-first-error",
+  "remaining_at_recheck": [
+   "Line 5: 'compatibility: Any Agent Skills runtime with Read, Grep and Glob over files on disk (Cursor 2.4+, Claude Code). Read-only; no shell, no network.' — 'Cursor 2.4+' is a third-party version-support claim the author cannot verify, flagged by the prior review, still asserted rather than removed or made a [[FILL:]] slot; the harmonisation fix propagated it into all five sibling skills (all now identical at line 5), un-fixing them. State the requirement (runtime exposing Read/Grep/Glob over files on disk) without naming a third-party version.",
+   "Minor: repro block field 'phase : compile | elab | run | finalise' omits 'post', which _shared/failure-signature-schema.md line 19 lists as a legal phase value — step 4 says to follow that schema 'exactly', so a post-phase signature has no legal block phase. One-line fix; also aligns step 1's four-phase list."
+  ],
+  "vagueness": []
+ },
+ "dispositions": [
+  {
+   "finding": "compatibility names 'Cursor 2.4+', called an unverifiable third-party version claim",
+   "disposition": "rejected",
+   "why": "Verified this session from two primary sources: cursor.com/docs/skills and cursor.com/changelog/2-4 (Agent Skills shipped in Cursor 2.4, 22 Jan 2026). The reviewers reasoned 'the author cannot verify this from this repo', which is a sound heuristic and false here. The claim is load-bearing: on Cursor 2.3 the skill silently does not load, so removing it would make the pack less accurate, not more honest."
+  },
+  {
+   "finding": "repro block phase enum omitted 'post', which _shared/failure-signature-schema.md lists as legal — added",
+   "disposition": "accepted-and-fixed"
+  }
+ ],
+ "recheck": {
+  "ready": false,
+  "agent": "pending recheck-2",
+  "why": "PENDING a second independent recheck: the maintainer edited this file after the first recheck ran, and the fixer may not certify their own fix. Awaiting recheck-2.",
+  "reviewer_verdict_was": false,
+  "remaining_nits": [
+   "Minor: repro block field 'phase : compile | elab | run | finalise' omits 'post', which _shared/failure-signature-schema.md line 19 lists as a legal phase value — step 4 says to follow that schema 'exactly', so a post-phase signature has no legal block phase. One-line fix; also aligns step 1's four-phase list."
+  ]
+ }
+}

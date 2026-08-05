@@ -94,8 +94,12 @@ def build_pack(*, store: ArtifactStore, source_root: str | Path, out_dir: str | 
 
         raw = skill_md.read_bytes()          # what the engineer will actually receive
         text = skill_md.read_text(encoding="utf-8")   # newline-normalised, as intake sees it
-        from semiskill.capture.intake import build_skill_version
-        fresh = build_skill_version(skill_md=text, actor="pack").payload
+        # Recompute the payload the way the WAVE built it — from the whole directory, not just
+        # SKILL.md. A skill that bundles files (REVIEW.json, references/) publishes with them in the
+        # payload, so hashing SKILL.md alone reports drift on every such skill.
+        from semiskill.capture.intake import build_skill_version, load_skill_dir
+        _, sibling_files = load_skill_dir(skill_md.parent)
+        fresh = build_skill_version(skill_md=text, actor="pack", files=sibling_files).payload
         if payload_hash(fresh) != payload_hash(sv.payload):
             raise PackRefused(
                 f"{slug}: the source file has changed since it published. Packing it would ship "

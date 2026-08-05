@@ -3,15 +3,15 @@ name: dv-sim-log-first-error
 description: Find the true first error in a simulation log, normalise it into a stable failure signature, and produce the exact block needed to reproduce it. Use when a simulation or regression test has failed and the log is too large to read, when you are about to paste a log into a chat, or when you need to hand a failure to someone else.
 license: Proprietary - internal use only
 compatibility: Any Agent Skills runtime with Read, Grep and Glob over files on disk (Cursor 2.4+, Claude Code). Read-only; no shell, no network.
-allowed-tools: Read Grep Glob
+allowed-tools: Read, Grep, Glob
 metadata:
   semiskill-title: First-Error Extraction and Repro Block
   semiskill-function: design-verification
   semiskill-role: dv-engineer
-  semiskill-level: intermediate
+  semiskill-level: fresher
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
-  semiskill-review-by: 2027-04-14
+  semiskill-version: 1.2.0
+  semiskill-review-by: 2027-08-05
   semiskill-tags: logs, triage, debug, regression, reproducer
 ---
 
@@ -23,8 +23,15 @@ without the word "error" in it. This procedure finds the real first failure, tur
 signature that can be matched against other people's failures, and produces a repro block someone
 else can act on without asking you three follow-up questions.
 
-The output is three things: **a signature, a cause line, and a repro block.** Not a summary of the
-log.
+The output is three things: **a signature, a cause line, and a repro block**, plus one line under
+the block saying how much of the log that rests on. Not a summary of the log.
+
+**When not to use this.** A whole night of regression failures needs sorting and routing before any
+one log deserves this much attention — that is `dv-regression-triage-routing`. Once you have a
+signature from here and want the smallest, fastest run that still shows it, use
+`dv-minimal-reproducer`. A failure already known to be a register access belongs to
+`dv-ral-bringup`. And a build that failed before any simulation started belongs to
+`dv-build-filelist-hygiene` — step 3 routes it there.
 
 ## Fill this in for our team
 
@@ -34,8 +41,8 @@ log.
 | Fatal markers | [[FILL: the strings our flow prints on a real failure, beyond UVM_ERROR and UVM_FATAL]] | DV lead |
 | Pass marker | [[FILL: the string a clean run prints at the end]] | DV lead |
 | Run identity | [[FILL: what identifies one run for us — seed, test name, config, build tag]] | your mentor |
-| Known issues | [[FILL: where our known-issue list lives]] | DV lead |
-| Bug tracker convention | [[FILL: what a bug title looks like here]] | DV lead |
+| Known-issue list | [[FILL: where our known-issue list lives, how each entry is keyed, and whether it is a file that can be read or a tracker that must be searched by a person]] | DV lead |
+| Bug convention | [[FILL: what a bug title and a bug's required fields look like here]] | DV lead |
 
 These are pack-wide facts and live in `_shared/team-profile.md` — fill that in once for the team and
 read the answers from there rather than re-interviewing anyone.
@@ -54,8 +61,9 @@ Work in this order and stop as soon as the cause is identified:
    what you did. You have not searched the log, only the fragment you were shown.
 2. **Never open the log with Read first.** Use **Grep** to locate lines, then Read only a bounded
    window around a specific line number.
-3. Budget roughly: one Grep for markers, one Grep for the earliest marker's line number, then at most
-   three windowed Reads of about 80 lines each.
+3. Budget roughly: one Grep for markers, one Grep for the earliest marker's line number, at most
+   three windowed Reads of about 80 lines each, and — only when the known-issue list is a file on
+   disk — one Grep of that list in step 5.
 4. If a Grep returns more than about 200 hits, the pattern is too broad — narrow it before reading
    anything.
 5. If after three windowed Reads the cause is still unclear, stop and report what is known. Guessing
@@ -66,6 +74,9 @@ Work in this order and stop as soon as the cause is identified:
 ## Procedure
 
 ### 1. Establish that the run actually failed, and how far it got
+
+If the log arrived pasted into the chat rather than as a path on disk, resolve that before anything
+else — budget rule 1.
 
 Use **Grep** for the pass marker and for the fatal markers. A log with no pass marker and no fatal
 marker usually means the run died before the testbench started — a build, licence, or environment
@@ -95,8 +106,9 @@ Before going further, classify. These are infrastructure and belong to a differe
 - a test that never started, or a log truncated mid-line
 - an out-of-disk or timeout with no design activity near the end
 
-If it is infrastructure, stop the analysis here and say so plainly. Do not produce a design bug
-report for a build break.
+If it is infrastructure, stop the analysis here and say so plainly — do not produce a design bug
+report for a build break. For a compile or elaboration break, hand it to `dv-build-filelist-hygiene`
+with the phase and the first diagnostic line; that skill expects breaks routed from here.
 
 ### 4. Normalise into a failure signature
 
@@ -104,11 +116,19 @@ Follow `_shared/failure-signature-schema.md` exactly — same field order, same 
 Every field must be traceable to text that was actually in the log; write `?` for anything that is
 not, rather than inventing it.
 
-### 5. Check it against known issues
+### 5. Check it against the known-issue list, not memory
 
-If the known-issues slot above is filled, compare the signature against it. A match means this is
-already tracked — say which entry, and stop. Matching from memory rather than from the list is how
-duplicate bugs get filed.
+What you can do depends on what the known-issue slot resolved to:
+
+- **A file on disk.** One **Grep** of it for the signature's `where` and for the distinctive
+  fragment of `what`. Compare exactly. A match means this is already tracked — say which entry,
+  using whatever key that list itself uses, and stop.
+- **A tracker or page that is not a file on disk.** Read and Grep cannot reach it. Produce the repro
+  block anyway and ask the person who can query the list to compare the signature; say the
+  known-issue check is pending their answer.
+- **Unfilled.** Say the check did not happen. Do not call the failure new.
+
+Matching from memory rather than from the list is how duplicate bugs get filed.
 
 ### 6. Produce the repro block
 
@@ -118,7 +138,7 @@ The point of the repro block is that the next person needs nothing else from you
 signature : <phase>|<kind>|<where>|<what>
 cause     : <verbatim cause line, with line number>
 first err : <verbatim first fatal line, with line number>
-phase     : compile | elab | run | finalise
+phase     : compile | elab | run | finalise | post
 class     : design | infrastructure | unknown
 run id    : <whatever identifies this run for us>
 to repeat : <the invocation the human should run, taken from our conventions>
@@ -126,8 +146,15 @@ log       : <path, and the line range worth reading>
 notes     : <anything the next person would otherwise have to rediscover>
 ```
 
-Leave `to repeat` empty rather than inventing an invocation. An invented rerun command is the single
-most expensive mistake available here.
+Take `to repeat` from the team profile's **Rerun convention**; if that is unfilled, leave the field
+empty rather than inventing an invocation. An invented rerun command is the single most expensive
+mistake available here.
+
+Under the block, add one line stating the coverage — "signature derived from the log" (give the
+path) or "reasoned from a pasted fragment only, log not searched", in which case every field above
+it is provisional. The line goes under the block rather than inside it: the block's field set is
+fixed, because `dv-minimal-reproducer` and `dv-ral-bringup` reuse these field names in their own
+handoff blocks.
 
 ## Gotchas
 
@@ -152,11 +179,13 @@ Before acting on the output, check:
 - the cause line is quoted **verbatim** and its line number really is lower than the first fatal line
 - the signature contains no run-specific values — no times, seeds, indices, or data
 - `class` is design only if there is actual testbench or design activity near the failure
-- `to repeat` is either taken from the team's real convention or left empty
+- `to repeat` is either taken from the team's real rerun convention or left empty
+- the coverage line is present under the block, and if it says the log was never searched, nothing
+  above it is being treated as verified
 
 A wrong answer typically names a cascade line as the root cause, or produces a signature that still
 carries a seed or a timestamp and therefore matches nothing.
 
 ## Done when
 
-You can hand someone the repro block and they need to ask you nothing.
+You can hand someone the repro block, with its coverage line, and they need to ask you nothing.

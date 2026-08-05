@@ -1,0 +1,52 @@
+{
+ "slug": "dv-minimal-reproducer",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "wave": 0,
+ "recorded_at": "2026-08-05T07:52:13Z",
+ "lint": {
+  "verdict": "approve",
+  "aggregate": 1.0,
+  "line": "skills\\dv-minimal-reproducer\\SKILL.md  [approve 1.000]  (stage 3 not evaluated — advisory only)  clean"
+ },
+ "fix": {
+  "agent": "fix:dv-minimal-reproducer",
+  "fixed": [
+   "Finding dv-minimal-reproducer:52 (wrong 'first four are the same slots' cross-reference): a previous pass had deleted the falsifiable claim and left a vague 'Several of these are pack-wide facts' sentence. Restored it in correct form in E:\\code\\VLSI\\semiskill\\skills\\dv-minimal-reproducer\\SKILL.md: it now names exactly which slots are pack-wide (Fatal markers, Pass marker, Run identity), states those are the three slots the table shares with dv-sim-log-first-error, and explicitly says Determinism controls is NOT one of them (no counterpart in the team profile or in that skill; answered in this skill only). Verified: the golden's slot table is {Log location, Fatal markers, Pass marker, Run identity, Known issues, Bug tracker convention}, so the intersection is exactly three; all three exist under the same names in _shared/team-profile.md; grep confirms 'Determinism controls' occurs nowhere else in the pack. Also kept the fill-once/do-not-re-interview directive and made the 'narrower' caveat concrete and falsifiable (this skill's Run identity additionally asks where the string is printed, which the profile's entry does not).",
+   "Bumped semiskill-version 1.1.0 -> 1.2.0.",
+   "Restored registry facets: semiskill-level senior -> intermediate (semiskill-role was already dv-engineer and was kept)."
+  ],
+  "not_fixed": [
+   "'Cursor 2.4+' in the compatibility line: the re-review verdict attributes the unverifiable-claim finding to dv-sim-log-first-error (the frozen golden), not to this skill's remaining_technical_errors; the identical line is pack-wide across all six skills, so changing it in one skill would desync the pack convention — it needs a pack-wide decision, and the golden/siblings are out of scope for this task.",
+   "Everything else in the verdict paragraph (golden's space-separated allowed-tools, version 1.0.0, missing coverage line/pasted-input branch; sibling cross-reference errors; _shared file gaps): those files are explicitly out of scope — edits were restricted to skills/dv-minimal-reproducer/. Note that _shared/team-profile.md and _shared/failure-signature-schema.md now exist on disk, so the verdict's 'still no _shared/team-profile.md' complaint is already resolved outside this task."
+  ],
+  "facets_set": "semiskill-role: dv-engineer, semiskill-level: intermediate (per registry; version bumped to 1.2.0)"
+ },
+ "review": {
+  "agent": "recheck:dv-minimal-reproducer",
+  "remaining_at_recheck": [
+   "Step 3, line 138: 'Use **Grep** on the original log for the simulated time of failure and any end-of-run resource line' — 'any end-of-run resource line' has no slot in the Fill-this-in table and no entry in _shared/team-profile.md, so the Grep pattern would have to be invented (standing rules 2 and 4), and this Grep is not one of the budget's enumerated purposes (rules 3-4). Either add a '[[FILL: end-of-run resource line marker]]' slot or cut the clause and rely on the engineer-reported numbers the same paragraph already asks for.",
+   "Pack-wide nit, not specific to this skill: compatibility (line 5) asserts 'Cursor 2.4+', an unverifiable version claim not in a [[FILL:]] slot — but it is byte-identical across all six skills including the golden and the two wave0-approved skills, so fix it pack-wide or accept it as house frontmatter."
+  ],
+  "vagueness": []
+ },
+ "dispositions": [
+  {
+   "finding": "compatibility names 'Cursor 2.4+', called an unverifiable third-party version claim",
+   "disposition": "rejected",
+   "why": "Verified this session from two primary sources: cursor.com/docs/skills and cursor.com/changelog/2-4 (Agent Skills shipped in Cursor 2.4, 22 Jan 2026). The reviewers reasoned 'the author cannot verify this from this repo', which is a sound heuristic and false here. The claim is load-bearing: on Cursor 2.3 the skill silently does not load, so removing it would make the pack less accurate, not more honest."
+  },
+  {
+   "finding": "step 3 Grepped for an 'end-of-run resource line' that had no slot — added an End-of-run summary slot and made the unfilled case explicit",
+   "disposition": "accepted-and-fixed"
+  }
+ ],
+ "recheck": {
+  "ready": false,
+  "agent": "pending recheck-2",
+  "why": "PENDING a second independent recheck: the maintainer edited this file after the first recheck ran, and the fixer may not certify their own fix. Awaiting recheck-2.",
+  "reviewer_verdict_was": false,
+  "remaining_nits": [
+   "Step 3, line 138: 'Use **Grep** on the original log for the simulated time of failure and any end-of-run resource line' — 'any end-of-run resource line' has no slot in the Fill-this-in table and no entry in _shared/team-profile.md, so the Grep pattern would have to be invented (standing rules 2 and 4), and this Grep is not one of the budget's enumerated purposes (rules 3-4). Either add a '[[FILL: end-of-run resource line marker]]' slot or cut the clause and rely on the engineer-reported numbers the same paragraph already asks for."
+  ]
+ }
+}

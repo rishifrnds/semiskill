@@ -47,6 +47,7 @@ before anyone shrinks anything, use `dv-regression-triage-routing`.
 | Time-window controls | [[FILL: how our flow limits simulated time, or saves and restores a checkpoint, if it can]] | DV infra owner |
 | Testbench tiers | [[FILL: which smaller tiers exist for this block, and what stimulus each can reach]] | block owner |
 | Runtime budget | [[FILL: how fast and how small a reproducer must be before the recipient will accept it]] | verification lead |
+| End-of-run summary | [[FILL: the line our flow prints at the end of a run carrying simulated time and resource use, if it prints one]] | DV infra owner |
 | Handoff template | [[FILL: what our bug ticket or handoff note requires as mandatory fields]] | DV lead |
 
 Three of these are pack-wide facts rather than facts about this procedure: **Fatal markers**,
@@ -135,7 +136,9 @@ change, which step 5 and the Gotchas handle. It cannot make two runs of the unmo
 
 ### 3. Record the baseline cost
 
-Use **Grep** on the original log for the simulated time of failure and any end-of-run resource line.
+Use **Grep** on the original log for the simulated time of failure, and for the end-of-run summary
+line from the slot table if that slot is filled. If it is unfilled, say so and record the baseline
+without it — do not guess what the line looks like.
 Ask the engineer for wall-clock duration, tier, and whether a build was needed — none of those are
 readable from here, so if the engineer does not report one, leave that part of the baseline empty
 rather than estimating it. A shrink with no baseline is a claim, not a measurement.
@@ -215,7 +218,7 @@ matched mechanically against one produced there:
 signature   : <phase>|<kind>|<where>|<what>
 cause       : <verbatim cause line, with line number>
 first err   : <verbatim first fatal line, with line number>
-phase       : compile | elab | run | finalise
+phase       : compile | elab | run | finalise | post
 class       : design | infrastructure | unknown
 run id      : <whatever identifies this run for us, from the run-identity slot>
 to repeat   : <invocation taken from our conventions, or empty>

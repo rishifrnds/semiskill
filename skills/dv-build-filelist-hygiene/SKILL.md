@@ -8,9 +8,9 @@ metadata:
   semiskill-title: Compile and Elaboration Error Decode with Filelist Hygiene
   semiskill-function: design-verification
   semiskill-role: dv-infra-engineer
-  semiskill-level: senior
+  semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.2.0
   semiskill-review-by: 2027-05-23
   semiskill-tags: build, filelist, compile, elaboration, includes, defines, packages, triage
 ---
@@ -61,6 +61,17 @@ holding the entries whose order or existence is actually in question.
 | Block versus top | [[FILL: which filelist a block build uses versus the top build, and which defines differ between them]] | verification lead |
 | External filelists | [[FILL: who owns the IP release filelists we consume but do not control]] | verification lead |
 
+Two of these rows are pack-wide facts that live in `_shared/team-profile.md` — read them from there
+rather than re-interviewing anyone. **Build log location** is the profile row of the same name, and
+the nested-inclusion and relative-path half of **Filelist directives** is the profile's **Filelist
+convention** row; the include-path, macro-define and library-search directives are asked only here.
+`dv-repo-orientation` gathers those same shared filelist facts while drawing its map — fill them in
+once, reuse the answer in both skills, and if the two ever disagree, one of the maps is stale.
+**Error markers is not the profile's Fatal markers**: it is what the *compiler and elaborator* print
+at compile and elaboration time, while Fatal markers are what a simulation prints on a failing run.
+If they turn out to be the same strings for your flow, record that as a finding; copying the runtime
+strings in here unchecked makes step 2 search the build log for markers it never contains.
+
 **If a slot is unfilled, stop and ask. Do not guess a convention.** An invented filelist path, build
 command or directive name sends the engineer to audit a file set that is not the one that failed.
 
@@ -75,8 +86,11 @@ several thousand entries. Work in this order and stop as soon as the first diagn
    of interest and Read bounded windows around the hits.
 3. Expand nested filelists to a depth of **four** at most, and to **twelve** filelist files in total.
    Record the ones you did not open instead of opening them.
-4. Scope every **Glob** and **Grep** to one directory; a recursive search from the repository root
-   returns tens of thousands of paths. Above about 200 hits, narrow before reading.
+4. Scope every **Glob** and **Grep** call to one directory; a recursive search from the repository
+   root returns tens of thousands of paths. Above about 200 hits, narrow before reading. A check
+   that has to span directories — a duplicate module, a shadowed basename — is not an exception:
+   carry it out as a loop of one-directory calls over the directories the implicated filelist
+   names, and count every call in the loop against the caps in rule 5.
 5. Cap the mechanical audit at about **forty** existence checks and **forty** Greps in one pass. If
    the filelist is longer than that, check the entries named in the diagnostics first, then a
    contiguous window around them — and report the fraction you checked.
@@ -122,11 +136,15 @@ best ordering evidence available. Where the flow analyses in parallel or partiti
 output from unrelated files interleaves and print order across files means nothing. Which one applies
 is the **Build parallelism** slot. Read it before either trusting or discarding print order.
 
-- **Sequential, one log.** Print order is analysis order, so the first error printed is the first
-  error — but confirm the run really was sequential before relying on it. A flow that analyses in
-  parallel or partitions the file set interleaves its output even into a single log, and a
-  concurrency setting is easy to change without anyone re-reading this. If the file and line numbers
-  in the log do not climb monotonically, treat it as the parallel case below.
+- **Sequential, one log.** Print order is analysis order, so the first error printed is the earliest
+  diagnostic the build produced — but confirm the run really was sequential before relying on it. A
+  flow that analyses in parallel or partitions the file set interleaves its output even into a single
+  log, and a concurrency setting is easy to change without anyone re-reading this. If the file and
+  line numbers in the log do not climb monotonically, treat it as the parallel case below. And
+  earliest is all that print order establishes: the first diagnostic is still the first *consequence*
+  of the fault, not the fault — one missing package makes twenty declarations fail, and the first of
+  the twenty is merely the nearest place to start digging. Rank by print order, then let step 4 name
+  the cause behind the diagnostic.
 - **Parallel, partitioned, or one log per file.** Collect the file and line of every error with
   **Grep**, group by file, and take the lowest line number within each file. Carry forward at most
   the **three** earliest candidates. Their order relative to each other is unknown until step 5
@@ -142,11 +160,11 @@ the next reader can match on text instead of on judgement.
 
 | What the diagnostic is about | Most likely cause | What proves it |
 |---|---|---|
-| a module name cannot be resolved to a definition | the source file is absent from the file set | Grep for that module's declaration under the directories the filelist names |
+| a module name cannot be resolved to a definition | the source file is absent from the file set | Grep for that module's declaration one directory at a time over the directories the filelist names — the rule 4 loop |
 | an include file cannot be opened | include path missing, or ordered behind a stale copy | Glob that header basename under each include path, in order |
 | a macro is undefined | the define is never set, or set outside this compilation unit | Grep the macro name across the filelists and the file that failed |
 | a name is used as a type but is not one | the package is neither imported nor scope-referenced here, or its file is analysed after this file | compare both positions in the ordered slice from step 5 |
-| a port or parameter does not exist on a module | a different copy of that module elaborated | Grep for a second declaration of that module name |
+| a port or parameter does not exist on a module | a different copy of that module elaborated | the per-directory duplicate loop in step 6, for that module name |
 | a module is already defined | the same module reached the build twice | the duplicate check in step 6 |
 | an implicit net appears in a file that looks innocent | a preceding file in the same compilation unit changed the default net type and never restored it | inspect the entry immediately before it in the ordered slice |
 
@@ -192,11 +210,19 @@ filelist is longer, check the implicated entries plus a contiguous window around
   is a generated source from the slot table, in which case the generation step did not happen.
 - **Duplicate path.** The same resolved path twice is harmless noise, but it means a nested filelist
   arrives from two places — which is how the next problem starts.
-- **Duplicate module.** **Grep** for a second declaration of each module *named in the diagnostics* —
-  those modules only, not every module in the filelist. Two hits in two files is the real hazard;
-  report both positions.
-- **Shadowed basename.** The same basename under two directories is a shadow candidate. Rank by slice
-  position and say which the build would take, using the duplicate policy slot.
+- **Duplicate module.** For each module *named in the diagnostics* — those modules only, not every
+  module in the filelist — **Grep** for its declaration one directory at a time over the source
+  directories the implicated filelist names, as budget rule 4 requires. Every Grep in that loop
+  counts against the forty-Grep cap: j modules over k directories is j x k Greps, so when the loop
+  would exceed what remains of the cap, search the directories nearest the implicated entries first
+  and name the skipped ones in the coverage line. Two hits in two files is the real hazard; report
+  both positions.
+- **Shadowed basename.** The same basename under two directories is a shadow candidate. Look in the
+  slice first: it already records originating filelist and raw entry for everything it holds, so a
+  repeated basename there costs no further searching. Extend beyond the slice only for a basename
+  *named in a diagnostic*, with **Glob**, one directory per call over the directories the filelist
+  names, each call counted against the rule 5 caps. Rank the copies by slice position and say which
+  the build would take, using the duplicate policy slot.
 - **Stale release root.** Entries under a directory that no longer exists mean an old release path
   survived a version bump; say which release the surviving paths still point at.
 

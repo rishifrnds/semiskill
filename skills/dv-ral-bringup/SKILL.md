@@ -7,10 +7,10 @@ allowed-tools: Read, Grep, Glob
 metadata:
   semiskill-title: Register-Failure Decision Tree (RAL Bring-Up)
   semiskill-function: design-verification
-  semiskill-role: dv-engineer
-  semiskill-level: senior
+  semiskill-role: soc-dv-engineer
+  semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.2.0
   semiskill-review-by: 2027-06-18
   semiskill-tags: ral, registers, uvm, bring-up, adapter, predictor, debug
 ---
@@ -70,12 +70,19 @@ teaches nothing and burns the context. Work in this order, stopping once the cla
 3. **Grep** for the exact register or field name to get line numbers — one symptom, one register.
    More than about 100 hits means the name is a substring of something common; anchor it (leading
    `"` or trailing `,`) before reading anything.
-4. **Read** bounded windows only — about 40 lines at the declaration, about 40 at the map entry, and
-   at most one window of about 80 lines in the log. Four windowed **Read** calls is the whole budget,
-   and every later step reuses a window rather than opening a new one.
-5. Stopping rule: after four windowed **Read** calls with no settled classification, stop and report
-   what is known, the one thing you still need, and how much of the failure list you got through
-   (step 9). Past that point answers get invented.
+4. **Read** bounded windows only — about 40 lines at the declaration, about 40 at the map entry, at
+   most one window of about 80 lines in the log, and one spare 40-line window for wherever the
+   classification lands — usually the adapter, step 8. Four windowed **Read** calls cover our own
+   files, and steps 6 to 8 reuse open windows or the spare rather than opening more.
+5. Step 5 alone carries a library allowance on top: when the case turns on a composite policy
+   string, a silent exclusion, or what the built-in sequence does with a policy, open at most three
+   further 40-line windows in the UVM library source — the register-field class and the built-in
+   register-sequence source — each entered through a **Grep** for the exact policy string or
+   resource name, never by browsing. Count them in the `coverage` line of step 9.
+6. Stopping rule: once the budget is spent — four windows on our files, plus at most three in the
+   library if step 5 needed them — with no settled classification, stop and report what is known,
+   the one thing you still need, and how much of the failure list you got through (step 9). Past
+   that point answers get invented.
 
 ## Procedure
 
@@ -126,6 +133,12 @@ To get this evidence, **ask the engineer to run the bring-up test with the regis
 and save the log where it can be read from disk**. The agent cannot start a simulation and must not
 invent what one would have printed.
 
+Once the log is on disk, **Grep** it for the **Mismatch markers** from the slot table — the strings
+our register sequences print on a mismatch, not the profile's general Fatal markers, which may
+differ — plus `UVM_ERROR` and `UVM_FATAL`, and for the **Pass marker**, to tell a clean run from one
+that died before the end. Those hits give the line numbers; spend the budget's single 80-line log
+window on the first mismatch, not the last.
+
 Two rows of step 4 need more than a log. A clock-domain question needs a waveform or a timed
 back-door dump, and the agent cannot open either — ask a human to read it, and record in the report
 that the answer came from a person rather than from a file.
@@ -134,7 +147,8 @@ that the answer came from a person rather than from a file.
 
 The `Evidence` column says what each row can actually be settled from. `source` is the model and
 environment files; `log` is the saved bring-up log; `log + wave` means the agent can narrow it but a
-human has to finish it, per the handoff in step 3.
+human has to finish it, per the handoff in step 3. `source + log + wave` opens with a source check
+the agent can settle alone, and only then falls through to that same handoff.
 
 | Symptom | Evidence | Check first | Usual cause |
 |---|---|---|---|
@@ -149,9 +163,9 @@ human has to finish it, per the handoff in step 3.
 | The whole value reads back byte-reversed | source | the adapter's byte ordering, then the bus agent's | adapter or agent byte order — **not** map endianness (step 6) |
 | The access lands at the wrong address | source | map base, offset, bus width, byte addressing | word offsets where byte addresses are expected |
 | A read returns a different register's contents | source | two entries at one offset, or an overlapping submap | a shadowed address |
-| Front door and back door disagree | log + wave | whether the hdl path resolves at all — that part is in source — and only then the timing | wrong path, or clock-domain lag |
+| Front door and back door disagree | source + log + wave | whether the hdl path resolves at all — that part is in source — and only then the timing | wrong path, or clock-domain lag |
 | A neighbouring field changes when one field is written | source | byte-enable support and partial-write behaviour | the field write wrote back the whole register |
-| A status field mismatches only sometimes | log + wave | whether the field is declared volatile | hardware updates it between write and check |
+| A status field mismatches only sometimes | source + log + wave | whether the field is declared volatile — a source check — then the update timing | hardware updates it between write and check |
 
 ### 5. Access policy — the part that has to be exactly right
 
@@ -194,9 +208,11 @@ model spells it (`W1C`) and the rights on the `add_reg` line from step 2. A repo
 declared string sends a map-rights bug to the register owner, who looks at the spec, sees `RW`, and
 sends it straight back.
 
-The built-in bit-bash sequence derives its expected read-back from that effective access, and it
-skips some policies outright rather than bashing them. A policy wrong *in the model* therefore makes
-the sequence complain about correct RTL.
+The built-in bit-bash sequence bashes every bit; what varies is the comparison. It takes each
+expected read-back from the model's own prediction through that effective access, and it masks the
+write-only family — `WO`, `WOC`, `WOS`, `WO1` — out of the comparison entirely, because their
+read-back is undefined. A policy wrong *in the model* therefore makes the sequence complain about
+correct RTL, and a wrong policy inside a masked field is one this sequence cannot catch at all.
 
 Keep the model's operations straight too: `get`/`set` touch only the desired value and make no bus
 traffic; `read`/`write` make front-door traffic and update the mirror; `peek`/`poke` are back-door
@@ -238,8 +254,9 @@ snapshot in the RTL — a shadow or holding register — legitimately differs fr
 hdl path points at. The real bugs are a path that does not resolve, a path left on the old hierarchy
 after an RTL rename, and a back-door check sampling before the value has crossed a synchroniser into
 the register's clock domain. Take those in that order: the first two are visible in source, the third
-is not, and needs the waveform handoff from step 3. The tell for the third is that the mismatch moves
-with the check — say that rather than calling it intermittent.
+is not, and needs the waveform handoff from step 3. The tell for the third has a direction: the
+mismatch disappears when the check is moved later and returns when it is moved earlier — say that
+rather than calling it intermittent.
 
 ### 8. Adapter and predictor
 
@@ -294,7 +311,8 @@ shortcut is far worse than a stated one.
   holds W1C bits writes those mirrored bits back and can clear live status — check byte-enable
   support before reporting that the design clears status spuriously.
 - **Volatile is load-bearing, not decoration.** A hardware-updated field not declared volatile makes
-  every mirror comparison a race; a field wrongly declared volatile is skipped, so real bugs pass.
+  every mirror comparison a race; a field wrongly declared volatile is excluded from the comparison,
+  so real bugs pass silently. Both errors are invisible in a passing log.
 - **A field with no declared reset value is skipped by the reset check**, and a resource-marked
   register is skipped by the built-in sequences entirely (step 5). An excluded item and a correct one
   produce the identical log line: nothing.
@@ -302,10 +320,12 @@ shortcut is far worse than a stated one.
   data width truncates without complaint, and reads as an RTL bug in the upper bits.
 - **A write-once, locked or enable-gated field cannot behave like RW under a bit-level test.** The
   register stopped accepting writes after the first, exactly as specified — same shape for a register
-  behind a lock, and for anything gated by an enable the sequence cleared two registers earlier. What
-  the sequence *does* about that varies: the built-in one carries per-policy expected values and
-  skips some policies rather than bashing them, so read its handling of this policy in the version we
-  compile against before filing anything against the design.
+  behind a lock, and for anything gated by an enable the sequence cleared two registers earlier. The
+  built-in bit-bash sequence does not fail on write-once by itself: its expected value comes from the
+  model's own prediction, and a field the model also declares `W1` predicts the ignored writes too,
+  so model and RTL stay in agreement. It mismatches only where the two disagree — a lock or enable
+  the RTL enforces but the model's policy string does not carry is exactly that disagreement, and it
+  belongs to whoever owns the model or the Exclusions slot's waiver list, not to the RTL.
 - **Whether overlapping addresses are reported at all is a property of the generator, not of UVM.**
   Fill the Generator slot before reading a quiet log as evidence of no overlap. A submap added at the
   wrong offset shadows real registers, and the trace may be one line near the start of the log, or

@@ -248,6 +248,29 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   docs/ADOPTION.md, DECISIONS.md ADR-010, tests (+3)
   next: wave 0 recheck results, then waves 1-13
 
+- [I-007 / wave 0] 2026-08-05T08:06Z  status: done
+  what: wave 0 retrofit + the durable fix the review rounds pointed at. All six skills re-published at
+  1.000 with registry facets RESTORED — the grid went from 2 roles x 3 levels back to 4 roles x 3.
+  recheck-1 passed 3 of 6 (build-filelist, repo-orientation, ral-bringup); the other three I fixed by
+  hand, then caught myself writing ready:true on my own fix — the exact Phase-H failure — reverted
+  them to pending and ran an INDEPENDENT recheck-2, which failed all three and found two bugs my own
+  edits had introduced (a third dangling `novelty` reference I missed, and a `post` enum widened in
+  one skill that desynchronised the sibling claiming to match it mechanically).
+  The pattern across four review rounds was always the same class: CROSS-FILE inconsistency. So
+  semiskill/authoring/consistency.py now checks it deterministically — C001 slot declared but never
+  used, C003 handoff enum differing across skills (error when a skill emits a value no sibling
+  accepts, warn when merely narrower, since narrowing is often deliberate scoping), C004 prose
+  referencing a value its field no longer has. It reproduced the reviewers' phase-enum finding in
+  40ms, and `semiskill lint` now fails on a pack-level error so no wave can publish an inconsistent
+  pack. 13 tests.
+  Also fixed: build_pack recomputed the drift hash from SKILL.md alone, so every skill bundling a
+  file (which is now every skill, since the gate writes REVIEW.json beside it) was falsely reported
+  as drifted — it now rebuilds the payload from the whole directory as the wave does
+  honest status: 3 of 6 carry unresolved recheck-2 findings and would fail --strict-gate
+  artifacts: semiskill/authoring/consistency.py, semiskill/authoring/pack.py, semiskill/cli.py,
+  skills/*/REVIEW.json (6), tests (+14) — 395+ green
+  next: close recheck-2 findings, then waves 1-13
+
 ## In-Flight Step
 _(none)_
 

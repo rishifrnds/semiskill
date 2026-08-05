@@ -1,0 +1,67 @@
+{
+ "slug": "dv-regression-triage-routing",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "wave": 0,
+ "recorded_at": "2026-08-05T07:52:13Z",
+ "lint": {
+  "verdict": "approve",
+  "aggregate": 1.0,
+  "line": "skills\\dv-regression-triage-routing\\SKILL.md  [approve 1.000]  clean — 1/1 clean · 0 errors · 0 advisories · 1 predicted to publish"
+ },
+ "fix": {
+  "agent": "fix:dv-regression-triage-routing",
+  "fixed": [
+   "Outstanding finding (old line 50, wrong cross-reference): the r1 text falsely claimed Fatal markers, Pass marker and the known-issue list were 'the same three facts' as the two slots in _shared/failure-signature-schema.md and said 'keep both places identical' — unfulfillable for the pass marker. The r2 pass had merely deleted the cross-references; I restored them in correct form. The paragraph after the slot table now maps each fact to its true relationship: (1) the schema's 'Our message prefixes' is the normalisation-time set — it overlaps Fatal markers but is not the same list, so check both and never copy one into the other (a signature normalised against one prefix set will not match a table built against another); (2) the schema's 'Where known signatures are recorded' is genuinely the profile's Known-issue list fact under a second name, so the profile's answer fills it and no second answer is kept; (3) the Pass marker has no counterpart in the schema at all — it lives only in _shared/team-profile.md. Every claim is specific and falsifiable, not vague.",
+   "Bumped semiskill-version 1.1.0 -> 1.2.0 as instructed.",
+   "Verified (no change needed) that the rest of the file is internally consistent: the 15-log / 45-tool-call budget arithmetic holds against step 3's one-Grep-plus-one-Read flow; every marker the procedure Greps for (fatal, pass, infra, fail-row pattern) has a slot; the pasted-input branch, the coverage line, the unsigned-remainder handling and the human-verification section are all present and mutually consistent."
+  ],
+  "not_fixed": [
+   "The 'Cursor 2.4+' compatibility claim, called unverifiable in the set-level re-review verdict: left in place because the outstanding findings for this skill do not list it, all six skills in the pack carry the identical compatibility line, and the already-remediated wave0 sibling dv-build-filelist-hygiene (v1.2.0) also kept it — removing it from one file alone would fork a pack-wide convention that must be changed set-wide, and I was forbidden from touching sibling skills.",
+   "The slot table still carries [[FILL]] rows for Fatal markers, Pass marker, Infra markers and Known-issue list beneath the read-them-from-team-profile paragraph: deliberately kept, because this table-plus-redirect structure is the established pack convention (dv-ral-bringup and dv-sim-log-first-error use exactly the same pattern) and it satisfies the 'markers must be slots' rule; converting the rows to bare references would deviate from every sibling.",
+   "Set-level items in the verdict paragraph (dv-sim-log-first-error's five deficiencies, and the duplicate known-issue-location slot existing in both _shared/team-profile.md and _shared/failure-signature-schema.md): out of scope — editing sibling skills and _shared/ is explicitly forbidden for this task; my skill now references the duplication correctly rather than propagating it."
+  ],
+  "facets_set": "semiskill-role: ip-dv-engineer, semiskill-level: junior (semiskill-version: 1.2.0)"
+ },
+ "review": {
+  "agent": "recheck:dv-regression-triage-routing",
+  "remaining_at_recheck": [
+   "Step 7 key 3 / report field 'novelty: seen-in-baseline' (SKILL.md ~lines 186-192, 234): baseline novelty is checked against the baseline *summary*, but signatures cannot appear in a per-test status table by the skill's own definitions (slot row 1; budget rule 6). Fix: name the prior triage report (which contains step-10 signature lines) as the baseline artifact, or demote baseline novelty to a handoff/unknown like step 8's tracker branch.",
+   "Line ~190: 'Key 3 needs the baseline summary to be filled in *and* still on disk. If it is neither, drop the key' — 'neither' literally means drop only when both conditions fail; the Gotcha bullet ('If the baseline slot is unfilled, or the baseline summary is no longer on disk') states the intended either/or. One-word fix ('If either is not').",
+   "Pack-wide residual, not skill-specific: line 5 'compatibility: Any Agent Skills runtime with Read, Grep and Glob over files on disk (Cursor 2.4+, Claude Code)' — the 'Cursor 2.4+' version claim is unverifiable (wave0's own characterization) and is asserted, not slotted, in all six skills including this one.",
+   "Minor: the report's single novelty enum (new | seen-in-baseline | known-issue <key> | unknown) conflates two independent axes — baseline presence (step 7) and known-issue membership (step 8). A bucket can be both seen-in-baseline and known-issue <key>; neither step states which value wins the one field.",
+   "Minor: Human-verification check 'signed plus unsigned equals the failure total' does not say how step 6's voided victims (tests killed by an infra bucket, reclassified unrun) are removed from the failure total before the identity is checked."
+  ],
+  "vagueness": []
+ },
+ "dispositions": [
+  {
+   "finding": "compatibility names 'Cursor 2.4+', called an unverifiable third-party version claim",
+   "disposition": "rejected",
+   "why": "Verified this session from two primary sources: cursor.com/docs/skills and cursor.com/changelog/2-4 (Agent Skills shipped in Cursor 2.4, 22 Jan 2026). The reviewers reasoned 'the author cannot verify this from this repo', which is a sound heuristic and false here. The claim is load-bearing: on Cursor 2.3 the skill silently does not load, so removing it would make the pack less accurate, not more honest."
+  },
+  {
+   "finding": "step 7 key 3 claimed baseline novelty by signature, but a summary is a per-test status table and carries no log text — reworded to compare test name and status, and to say which claim is being made",
+   "disposition": "accepted-and-fixed"
+  },
+  {
+   "finding": "'If it is neither, drop the key' read as requiring both conditions to fail — changed to 'if either is missing'",
+   "disposition": "accepted-and-fixed"
+  },
+  {
+   "finding": "the single novelty enum conflated baseline presence with known-issue membership — split into two report fields, and the dangling references in step 8 updated",
+   "disposition": "accepted-and-fixed"
+  }
+ ],
+ "recheck": {
+  "ready": false,
+  "agent": "pending recheck-2",
+  "why": "PENDING a second independent recheck: the maintainer edited this file after the first recheck ran, and the fixer may not certify their own fix. Awaiting recheck-2.",
+  "reviewer_verdict_was": false,
+  "remaining_nits": [
+   "Step 7 key 3 / report field 'novelty: seen-in-baseline' (SKILL.md ~lines 186-192, 234): baseline novelty is checked against the baseline *summary*, but signatures cannot appear in a per-test status table by the skill's own definitions (slot row 1; budget rule 6). Fix: name the prior triage report (which contains step-10 signature lines) as the baseline artifact, or demote baseline novelty to a handoff/unknown like step 8's tracker branch.",
+   "Line ~190: 'Key 3 needs the baseline summary to be filled in *and* still on disk. If it is neither, drop the key' — 'neither' literally means drop only when both conditions fail; the Gotcha bullet ('If the baseline slot is unfilled, or the baseline summary is no longer on disk') states the intended either/or. One-word fix ('If either is not').",
+   "Minor: the report's single novelty enum (new | seen-in-baseline | known-issue <key> | unknown) conflates two independent axes — baseline presence (step 7) and known-issue membership (step 8). A bucket can be both seen-in-baseline and known-issue <key>; neither step states which value wins the one field.",
+   "Minor: Human-verification check 'signed plus unsigned equals the failure total' does not say how step 6's voided victims (tests killed by an infra bucket, reclassified unrun) are removed from the failure total before the identity is checked."
+  ]
+ }
+}

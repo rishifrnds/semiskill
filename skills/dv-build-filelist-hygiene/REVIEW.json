@@ -1,0 +1,53 @@
+{
+ "slug": "dv-build-filelist-hygiene",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "wave": 0,
+ "recorded_at": "2026-08-05T07:52:13Z",
+ "lint": {
+  "verdict": "approve",
+  "aggregate": 1.0,
+  "line": "skills\\dv-build-filelist-hygiene\\SKILL.md  [approve 1.000]  (stage 3 not evaluated — advisory only)  clean — 1/1 clean, 0 errors, 0 advisories, 1 predicted to publish"
+ },
+ "fix": {
+  "agent": "fix:dv-build-filelist-hygiene",
+  "fixed": [
+   "Technical error at step 3 'Sequential, one log': rewrote the branch so print order establishes only the earliest diagnostic, then added the missing qualification that the first diagnostic is the first CONSEQUENCE of the fault, not the fault itself (one missing package makes twenty declarations fail), and routed the reader to step 4 to name the cause. Kept the prior pass's correct parallel/monotonic-line-number caveat, so the fix does not re-overshoot in the old direction.",
+   "Unexecutable step (budget rule 4 vs the cross-directory audits): rule 4 now states that a check that has to span directories (duplicate module, shadowed basename) is carried out as a loop of one-directory Glob/Grep calls over the directories the implicated filelist names, every call counted against rule 5's caps. Step 6's duplicate-module bullet now costs the loop explicitly (j modules x k directories Greps against the forty-Grep cap, nearest-directories-first fallback with skipped directories named in the coverage line). Step 6's shadowed-basename bullet now finds repeats in the already-built slice first (zero extra searches) and bounds any beyond-slice check to per-directory Glob calls counted against the caps. Step 4's proof column was aligned: the unresolved-module row names the rule 4 per-directory loop, and the port/parameter-mismatch row routes through step 6's bounded duplicate loop instead of an unscoped Grep.",
+   "Regression (consolidation done as prose instead of shared profile, and this skill missing any cross-reference note): added the house-style note after the slot table referencing _shared/team-profile.md — Build log location maps to the profile row of the same name; the nested-inclusion/relative-path half of Filelist directives maps to the profile's Filelist convention row while the include-path/macro-define/library-search directives stay skill-local; added the reciprocal cross-reference to dv-repo-orientation limited to the genuinely shared filelist facts (fill once, reuse, disagreement means one map is stale); and explicitly stated that Error markers is NOT the profile's Fatal markers (compiler/elaborator strings vs runtime failure strings), so the wrong-marker propagation the standing rules warn about cannot recur through this skill."
+  ],
+  "not_fixed": [
+   "The 'Cursor 2.4+' compatibility claim: left in place. The findings file attributes that claim to dv-sim-log-first-error only, and the identical line is pack-uniform frontmatter across all six skills, including the two the reviewer would hand over today — changing it in one skill would create a new pack inconsistency without a finding directing it here.",
+   "Pack-level regression items outside this skill: the shared handoff/report block still not being a _shared file, the four marker names across sibling skills, the factually wrong same-fact claim at dv-repo-orientation line 54 (its 'Filelist entry point' equation), and the overall 44->50 slot count. The task forbids touching sibling skills and _shared/; this skill's side of each was fixed (correct reciprocal cross-reference, profile references, explicit Error-vs-Fatal marker distinction).",
+   "Note: git status also shows skills/dv-regression-triage-routing/SKILL.md modified — that change is from a concurrent wave agent, not me; I edited only skills/dv-build-filelist-hygiene/SKILL.md."
+  ],
+  "facets_set": "semiskill-role: dv-infra-engineer, semiskill-level: junior (exactly as the registry directs; semiskill-version bumped 1.1.0 -> 1.2.0)"
+ },
+ "review": {
+  "agent": "recheck:dv-build-filelist-hygiene",
+  "remaining_at_recheck": [
+   "Step 8's two dependant-searching Greps rely on the global rule 4 for scoping instead of restating the per-directory loop and its cost the way step 6 does — executable within budget, but less explicit than the house style the fix established.",
+   "The sequential-vs-parallel check phrasing 'if the file and line numbers in the log do not climb monotonically' is slightly loose (the intended check is contiguous per-file blocks with ascending line numbers); the meaning is recoverable but could be stated precisely.",
+   "The 'Cursor 2.4+' compatibility claim is unverifiable; it is pack-uniform (all six skills including the golden), so it is a pack-level editorial decision rather than a defect of this skill — resolve it pack-wide or not at all.",
+   "Pack-level from wave0, out of this skill's scope: the slot-count growth and four marker names across the pack are only partially addressed; this skill's 13-row table is large but every row is genuinely skill-local or explicitly decomposed against the profile."
+  ],
+  "vagueness": []
+ },
+ "dispositions": [
+  {
+   "finding": "compatibility names 'Cursor 2.4+', called an unverifiable third-party version claim",
+   "disposition": "rejected",
+   "why": "Verified this session from two primary sources: cursor.com/docs/skills and cursor.com/changelog/2-4 (Agent Skills shipped in Cursor 2.4, 22 Jan 2026). The reviewers reasoned 'the author cannot verify this from this repo', which is a sound heuristic and false here. The claim is load-bearing: on Cursor 2.3 the skill silently does not load, so removing it would make the pack less accurate, not more honest."
+  }
+ ],
+ "recheck": {
+  "ready": true,
+  "agent": "recheck:dv-build-filelist-hygiene + maintainer disposition",
+  "why": "Both per-skill findings are closed by becoming more specific and falsifiable, not vaguer: the sequential-branch claim now separates 'earliest diagnostic' from 'the fault' and routes cause-naming to step 4 with a monotonicity check, and the cross-directory checks (step 4 proof column, step 6 duplicate/shadow) are rewritten as per-directory loops explicitly costed against the forty-Grep cap (j x k a || Maintainer: the sole blocker common to all six was the Cursor 2.4+ claim, rejected with a verified source. Every other finding was either accepted and fixed by hand or is a recorded nit.",
+  "reviewer_verdict_was": true,
+  "remaining_nits": [
+   "Step 8's two dependant-searching Greps rely on the global rule 4 for scoping instead of restating the per-directory loop and its cost the way step 6 does — executable within budget, but less explicit than the house style the fix established.",
+   "The sequential-vs-parallel check phrasing 'if the file and line numbers in the log do not climb monotonically' is slightly loose (the intended check is contiguous per-file blocks with ascending line numbers); the meaning is recoverable but could be stated precisely.",
+   "Pack-level from wave0, out of this skill's scope: the slot-count growth and four marker names across the pack are only partially addressed; this skill's 13-row table is large but every row is genuinely skill-local or explicitly decomposed against the profile."
+  ]
+ }
+}

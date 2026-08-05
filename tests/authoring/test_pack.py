@@ -167,3 +167,17 @@ def test_pack_is_deterministic(pg_store, pg_dsn, source, tmp_path):
     _, b = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "d2",
                       generated_at="fixed", make_zip=False)
     assert a.to_json() == b.to_json()
+
+
+@pytest.mark.integration
+def test_a_skill_that_bundles_files_is_not_reported_as_drifted(pg_store, pg_dsn, source, tmp_path):
+    """The wave publishes a payload built from the whole directory. Recomputing the hash from
+    SKILL.md alone reports false drift on every skill that bundles a file — which is every skill
+    once the gate starts writing REVIEW.json beside it."""
+    (source / "dv-alpha" / "REVIEW.json").write_text('{"recheck": {"ready": true}}', encoding="utf-8")
+    (source / "dv-alpha" / "references").mkdir()
+    (source / "dv-alpha" / "references" / "notes.md").write_text("# Notes\n", encoding="utf-8")
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+
+    root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
+    assert "dv-alpha" in {s.name for s in manifest.skills}

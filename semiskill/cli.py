@@ -45,10 +45,17 @@ def cmd_list(args, store, out) -> int:
 def cmd_lint(args, store, out) -> int:
     """Pre-flight lint. Deliberately needs no database: authoring feedback must be instant, and a
     wave must be provably clean before the first artifact is ever written."""
+    from semiskill.authoring.consistency import check_pack, render as render_pack
     from semiskill.authoring.lint import lint_wave_dir, render
     report = lint_wave_dir(args.path, probe_dsn=args.probe_dsn)
     print(render(report, style="json" if args.json else "text"), file=out)
-    if not report.ok:
+
+    # Per-skill lint asks "is this file publishable"; the pack check asks "does this pack agree with
+    # itself". Four review rounds showed the second class is where the real defects hide.
+    pack = [] if args.json else check_pack(args.path)
+    if pack:
+        print("\n" + render_pack(pack), file=out)
+    if not report.ok or any(f.level == "error" for f in pack):
         return 1
     if args.strict and any(f.level != "error" for r in report.reports for f in r.findings):
         return 1

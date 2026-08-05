@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T08:10Z_
+_Last updated: 2026-08-05T08:06Z_
 
 ## Phase
 Phase I: 84 skills (>=5 per role across 16 roles), every one through
@@ -29,13 +29,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: I-005 (done) — delimiter hardened, ADR-010 truthful install; wave 0 running
+- Step ID: I-007 / wave 0 (done) — facets restored, pack-consistency checker added
 - Sub-state: Phase I underway; top-up cell design running. Content still not set-ready (below).
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 6bf3967
-- Message: wip: I-004 multi-page site
+- SHA: a41b488
+- Message: wip: I-005 delimiter + ADR-010
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)

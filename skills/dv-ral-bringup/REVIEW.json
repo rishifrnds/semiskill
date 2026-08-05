@@ -1,0 +1,56 @@
+{
+ "slug": "dv-ral-bringup",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "wave": 0,
+ "recorded_at": "2026-08-05T07:52:13Z",
+ "lint": {
+  "verdict": "approve",
+  "aggregate": 1.0,
+  "line": "skills\\dv-ral-bringup\\SKILL.md  [approve 1.000]  (stage 3 not evaluated — advisory only) / clean — 1/1 clean, 0 errors, 0 advisories, 1 predicted to publish"
+ },
+ "fix": {
+  "agent": "fix:dv-ral-bringup",
+  "fixed": [
+   "Facets restored in frontmatter: semiskill-role dv-engineer -> soc-dv-engineer, semiskill-level senior -> junior, semiskill-version 1.1.0 -> 1.2.0 (E:\\code\\VLSI\\semiskill\\skills\\dv-ral-bringup\\SKILL.md).",
+   "Unexecutable budget (finding: step 5 needs 6-7 Reads against a hard cap of 4): rewrote retrieval-budget rules 4-6. Rule 4 now defines four windows over our own files (declaration, map entry, one 80-line log window, one spare for steps 6-8); new rule 5 gives step 5 an explicit bounded allowance of at most three further 40-line windows in the UVM library source (register-field class, register-sequence source), each entered via a Grep for the exact policy string or resource name and counted in the coverage line; rule 6's stopping rule now counts both budgets. Step 5's composite-policy lookup, resource-name confirmation, and sequence-behaviour check all fit inside the stated budget now.",
+   "Step 4 volatile row: Evidence column changed 'log + wave' -> 'source + log + wave' since 'whether the field is declared volatile' is a source check; the front-door/back-door row had the identical defect (its check names a source part) and got the same correction; the Evidence legend now defines the composite value.",
+   "Regression (step 7 tell lost its direction): restored the directional content — 'the mismatch disappears when the check is moved later and returns when it is moved earlier' — instead of the direction-free 'moves with the check'.",
+   "Regression (write-once gotcha made vague instead of right): replaced 'read its handling of this policy in the version we compile against' with the actual mechanism — the built-in bit-bash sequence takes its expected read-back from the model's own prediction, so a field the model also declares W1 predicts the ignored writes and stays clean; it mismatches only where model and RTL disagree (e.g. a lock/enable the RTL enforces but the model's policy string does not carry), which routes to the model/waiver owner, not the RTL. Matching correction in step 5: 'skips some policies outright rather than bashing them' was wrong — it bashes every bit and masks the write-only family (WO, WOC, WOS, WO1) out of the comparison because their read-back is undefined.",
+   "Regression (volatile gotcha lost its sharpest line): restored 'excluded from the comparison, so real bugs pass silently. Both errors are invisible in a passing log.'",
+   "Restored-in-correct-form (deleted rather than fixed by the prior pass): step 3's log Grep is back, now pointed at the skill's own Mismatch markers slot (explicitly not the profile's Fatal markers) plus UVM_ERROR/UVM_FATAL, and at the Pass marker to distinguish a clean run from a truncated one — giving both slots their procedural consumer and directing the single 80-line log window at the first mismatch."
+  ],
+  "not_fixed": [
+   "Finding dv-ral-bringup:50 (wrong 'same three facts' cross-reference) — already corrected by the prior r2 commit 1c16c85: current text correctly states only Log location and Pass marker are pack-wide and that Mismatch markers is narrower than Fatal markers; I verified rather than re-edited (the deleted log-Grep fallout of that finding I did restore, see fixed).",
+   "Finding dv-ral-bringup:174 (NOACCESS 'not reachable through a map at all') — already corrected in r2 to 'present and mapped, it simply neither reads nor writes', consistent with the never-added-to-a-map gotcha; verified, no change needed.",
+   "The 'Cursor 2.4+' compatibility claim — the set verdict flags it only against dv-sim-log-first-error, it is not in this skill's findings list, and all six skills carry the identical line; removing it in this file alone would desynchronise the pack and I am forbidden to touch siblings.",
+   "Slot table still lists Log location and Pass marker rows with the note routing readers to _shared/team-profile.md rather than pure references — this is the exact convention the r2 pass established in dv-minimal-reproducer and dv-regression-triage-routing, so diverging here would break pack-wide consistency."
+  ],
+  "facets_set": "semiskill-role: soc-dv-engineer, semiskill-level: junior (exactly as the registry directs; semiskill-version bumped 1.1.0 -> 1.2.0)"
+ },
+ "review": {
+  "agent": "recheck:dv-ral-bringup",
+  "remaining_at_recheck": [
+   "Compatibility line asserts 'Cursor 2.4+' — a third-party version claim the author cannot verify from this repo; it matches the golden's house voice (dv-sim-log-first-error line 5 carries the identical string) so it is a pack-wide voice decision, not a defect unique to this skill, but a version-agnostic phrasing would be safer in both files.",
+   "The single spare 40-line window serves both step 7 (hdl-path region) and step 8 (adapter); a case that needs both in one sitting exhausts the budget and falls to the stopping rule — handled honestly via the coverage line, but worth knowing.",
+   "Step 4 row 'Every register mismatches, expected value zero -> the mirror was never initialised' is generator-dependent DV lore rather than a UVM invariant (some generators seed the mirror at configure time); it is correctly framed as 'check first / usual cause' rather than asserted, so acceptable as written."
+  ],
+  "vagueness": []
+ },
+ "dispositions": [
+  {
+   "finding": "compatibility names 'Cursor 2.4+', called an unverifiable third-party version claim",
+   "disposition": "rejected",
+   "why": "Verified this session from two primary sources: cursor.com/docs/skills and cursor.com/changelog/2-4 (Agent Skills shipped in Cursor 2.4, 22 Jan 2026). The reviewers reasoned 'the author cannot verify this from this repo', which is a sound heuristic and false here. The claim is load-bearing: on Cursor 2.3 the skill silently does not load, so removing it would make the pack less accurate, not more honest."
+  }
+ ],
+ "recheck": {
+  "ready": true,
+  "agent": "recheck:dv-ral-bringup + maintainer disposition",
+  "why": "All three remaining technical errors (marker conflation, NOACCESS row, status-field evidence column) are fixed with more specificity, not less; the budget now genuinely closes (four windows on own files plus an explicit, counted three-window UVM-library allowance covering every step-5 lookup, step 6 forced to reuse, steps 7-8 on the spare); all three regressions are repaired at or above original s || Maintainer: the sole blocker common to all six was the Cursor 2.4+ claim, rejected with a verified source. Every other finding was either accepted and fixed by hand or is a recorded nit.",
+  "reviewer_verdict_was": true,
+  "remaining_nits": [
+   "The single spare 40-line window serves both step 7 (hdl-path region) and step 8 (adapter); a case that needs both in one sitting exhausts the budget and falls to the stopping rule — handled honestly via the coverage line, but worth knowing.",
+   "Step 4 row 'Every register mismatches, expected value zero -> the mirror was never initialised' is generator-dependent DV lore rather than a UVM invariant (some generators seed the mirror at configure time); it is correctly framed as 'check first / usual cause' rather than asserted, so acceptable as written."
+  ]
+ }
+}

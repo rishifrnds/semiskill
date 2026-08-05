@@ -7,10 +7,10 @@ allowed-tools: Read, Grep, Glob
 metadata:
   semiskill-title: Orienting Yourself in an Unfamiliar DV Repository
   semiskill-function: design-verification
-  semiskill-role: dv-engineer
-  semiskill-level: junior
+  semiskill-role: dv-infra-engineer
+  semiskill-level: fresher
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.2.0
   semiskill-review-by: 2027-06-11
   semiskill-tags: onboarding, repo-map, filelists, build-flow, regression, coverage
 ---
@@ -51,9 +51,19 @@ chosen, built, run and scored, and never explains why one failed.
 target, tool option or log path is worse than no map, because the next joiner inherits it and spends
 a day proving it wrong.
 
-Two of these are the same facts `dv-build-filelist-hygiene` asks for under *Filelist entry point* and
-*Filelist directives*. Fill them once for the team and reuse the same answer in both skills; if they
-ever disagree, one of the two maps is stale.
+Parts of three rows are pack-wide facts that live in `_shared/team-profile.md` — fill them once
+there and reuse the same answer here rather than re-asking: the simulator named inside **Build entry
+point** is the profile's **Simulator** fact, the nesting directive and the relative-path rule inside
+**Filelist directives** are its **Filelist convention** fact, and the kept, combined coverage area
+inside **Coverage output** is its **Coverage output** fact. What remains in each row — the wrapper
+path, the elaborator command name, the filelist extensions and include-path directive, the flow's
+coverage option strings and output names — is asked only here.
+
+`dv-build-filelist-hygiene` asks for the same nesting and relative-path facts under its own
+*Filelist directives* slot; both come from that one **Filelist convention** entry, and if the two
+skills' answers ever disagree, one of them is stale. Its *Filelist entry point* — the filelist the
+top build consumes — is **not** the same fact as this table's **Build entry point**, which is the
+makefile or wrapper you invoke. They name different files; do not fill one from the other.
 
 ## Retrieval budget — read this before opening anything
 
@@ -70,9 +80,12 @@ thousands, with filelists thousands of lines long. Reading broadly is not an opt
 4. A Glob returning more than about 300 paths is too broad — narrow it to one directory first. **A
    result that hit your runtime's limit is not a count.** Record it as "at least N, truncated" and
    never put a truncated number into the map as if it were a measurement.
-5. **Pasted text is not a file.** You can read a short excerpt someone pastes back, but you cannot
+5. **If a Grep returns more than about 200 hits, the pattern is too broad.** Narrow it to one
+   directory, or anchor a longer string, before reading anything around the hits — and exactly as
+   with Glob, a hit count that hit your runtime's limit is "at least N, truncated", not a count.
+6. **Pasted text is not a file.** You can read a short excerpt someone pastes back, but you cannot
    Grep it. If you need to search build or run output, ask for its path on disk first.
-6. **Stopping rule.** Stop when you can name, each with a path, the build entry point, the test list,
+7. **Stopping rule.** Stop when you can name, each with a path, the build entry point, the test list,
    one test's own files, and where results and coverage land — or when the budget above is spent.
    Everything still unknown at that point becomes a numbered question, never an inference.
 
@@ -90,9 +103,18 @@ source-file sweep:
 - `**/*.{py,pl,csh,sh}` — flow wrappers
 - `**/*.{yaml,yml,json,cfg}` — regression and tool configuration
 
-If your runtime does not expand brace groups the pattern returns nothing; run the alternatives one at
-a time and count each against the budget. On a case-insensitive filesystem `Makefile` and `makefile`
-match the same file, so de-duplicate paths before counting anything.
+If your runtime does not expand brace groups these patterns return nothing — and running every
+alternative one at a time does not fit: the five groups above alone expand to sixteen patterns,
+twice this step's eight-pattern allowance. The allowance wins, not the list. Shrink the survey to
+fit: spend the eight patterns in priority order — `**/Makefile*` and `**/*.mk` first, then one
+pattern per filelist extension the **Filelist directives** slot records (the slot's real extensions,
+not all three guesses above), then `**/README*`, then the extension of the wrapper the **Build entry
+point** slot names, and any remainder on `**/*.md` or one configuration extension. Take the source
+probe below with a single extension per candidate tree — `<dir>/**/*.sv`, adding `<dir>/**/*.v` only
+in a tree where `.sv` missed — inside whatever the twelve-pattern cap still allows. Every
+alternative you did not run is a named gap: list it on the `map coverage` line in step 8, not
+nowhere. On a case-insensitive filesystem `Makefile` and `makefile` match the same file, so
+de-duplicate paths before counting anything.
 
 Only now go after source, and **one directory at a time**: from the directories those hits named,
 pick at most three candidate trees and Glob `<dir>/**/*.{sv,svh,v}` in each. A repo-wide `**/*.sv`
@@ -106,8 +128,12 @@ compare counts that were **not** truncated. Test and sequence file naming is a h
 
 ### 2. Read the documentation that does exist, however stale
 
-Use **Read** on any README at the repo root and one level below it, plus the most promising file
-under a `doc/` directory. Mark every claim as unverified. Stale documentation is still the cheapest
+Use **Read** on the README at the repo root, at most two more one level below it in the trees the
+survey suggested are live, and the most promising file from wherever step 1's documentation hits
+cluster — the `README*` and `*.md` paths you already recorded name any `doc/`-like directory in
+their directory components, so locating it costs no extra Glob. If no survey hit landed in a
+documentation directory, write "no docs found by the survey" into the map rather than silently
+skipping this step. Mark every claim as unverified. Stale documentation is still the cheapest
 source of *vocabulary* — block names, the team's word for a regression, the shape of a test name —
 and you need that vocabulary to make the next Greps specific rather than broad.
 
@@ -203,9 +229,10 @@ confirms it.
 
 ### 7. Derive house conventions from sibling code, not from questions
 
-Use **Read** on two files that do the same job for different blocks — two test classes, two
-filelists, two env files. **What is identical across both is the convention; what differs is the
-content.** Ten minutes of this yields naming rules, file layout, header format, macro usage and the
+Use **Read** on two files that do the same job for different blocks — two test classes, or two
+filelists, or two env files — one pair at a time, inside whatever remains of the ten-Read budget;
+one pair is enough when the budget is tight. **What is identical across both is the convention;
+what differs is the content.** Ten minutes of this yields naming rules, file layout, header format, macro usage and the
 standard registration idiom, at zero cost to anyone's afternoon.
 
 Where two siblings disagree, prefer the one the current test list points at, and record the

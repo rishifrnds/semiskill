@@ -7,10 +7,10 @@ allowed-tools: Read, Grep, Glob
 metadata:
   semiskill-title: Nightly Regression Bucketing and Owner Routing
   semiskill-function: design-verification
-  semiskill-role: dv-engineer
-  semiskill-level: intermediate
+  semiskill-role: ip-dv-engineer
+  semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.2.0
   semiskill-review-by: 2027-05-19
   semiskill-tags: regression, triage, bucketing, routing, known-issues, nightly
 ---
@@ -23,7 +23,7 @@ out which is which before anyone starts. The habit this replaces is pasting logs
 time and matching known issues from memory, which is exactly how the same bug gets filed twice.
 
 The output is a **ranked bucket table**, not a list of failing tests: one row per distinct failure,
-each with a signature, a class, a novelty verdict, a rank, and an owner.
+each with a signature, a class, a baseline and known-issue verdict, a rank, and an owner.
 
 ## When to use something else
 
@@ -48,11 +48,15 @@ three feels like repetition; they differ in how much of one log they are willing
 | Report destination | [[FILL: where the morning triage summary is posted and in what format]] | your mentor |
 
 Fatal markers, Pass marker, Infra markers and the known-issue list are pack-wide facts and live in
-`_shared/team-profile.md` — read them from there rather than filling them in again here. Note that
-`_shared/failure-signature-schema.md` separately asks for **our message prefixes**, which is the set
-used when *normalising* a signature; it overlaps with Fatal markers but is not the same list, so
-check both rather than copying one into the other. A signature normalised against one set of prefixes
-will not match a table built against another.
+`_shared/team-profile.md` — read them from there rather than filling them in again here. Two slots in
+`_shared/failure-signature-schema.md` sit close to these facts, and they relate to them in three
+different ways. Its **Our message prefixes** is the set used when *normalising* a signature; it
+overlaps with Fatal markers but is not the same list, so check both rather than copying one into the
+other — a signature normalised against one set of prefixes will not match a table built against
+another. Its **Where known signatures are recorded** asks where the known-issue list lives, which is
+the profile's Known-issue list fact under a second name, so the profile's answer fills it — do not
+maintain two answers. The Pass marker has no counterpart in the schema at all; it lives only in the
+profile.
 
 **If a slot is unfilled, stop and ask. Do not guess a convention.** A guessed owner sends a real bug
 to the wrong person for a day, and a guessed summary path sends this whole procedure down the wrong
@@ -177,14 +181,18 @@ Order the remaining design buckets on these keys, highest first:
 1. Blocks everything else — a build, elaboration, or shared-component failure that prevents other
    tests from producing a verdict.
 2. Hits a release-gating test, per the blocking-rule slot.
-3. Novel — the signature does not appear in the baseline regression.
+3. Novel — this failure did not appear in the baseline regression. Compare on what a summary
+   actually carries: the **test name and its status string**, not the signature. A summary is a
+   per-test status table; it holds no log text, so no signature can ever be read from it. "This test
+   also failed in the baseline" is the honest claim available here, and it is a weaker one than
+   "this bug is not new" — say which you mean.
 4. Blast radius — the number of **distinct areas** the bucket touches, not the number of tests.
 
 Test count is the weakest signal available. One bug found by two hundred randomised seeds is one bug,
 and the two hundred seeds mean it is easy to reproduce, not that it is important.
 
-Key 3 needs the baseline summary to be filled in *and* still on disk. If it is neither, drop the key
-and rank on the other three, and say the ranking had no novelty input.
+Key 3 needs the baseline summary to be both filled in *and* still on disk. If **either** is missing,
+drop the key, rank on the other three, and say the ranking had no novelty input.
 
 ### 8. Match against the known-issue list, not memory
 
@@ -197,9 +205,9 @@ What you can do depends on what the known-issue slot resolved to:
 - **A tracker query, a page, or anything else not on disk.** This procedure cannot reach it: Read,
   Grep and Glob open files, and this skill has no network. Matching becomes a handoff — put each
   bucket's signature in the report and ask the person who can query the list to compare them. Until
-  that answer comes back, every bucket is `novelty unknown`.
-- **Unfilled.** Mark every bucket `novelty unknown` and say so. Claiming "new" without a list to
-  check against is an invented fact.
+  that answer comes back, every bucket is `known: list-not-readable`.
+- **Unfilled.** Mark every bucket `known: list-not-readable` and say so. Claiming "new" without a
+  list to check against is an invented fact.
 
 ### 9. Route each bucket to an owner
 
@@ -227,7 +235,8 @@ bucket    : B1
 signature : <phase>|<kind>|<where>|<what>
 class     : design | infrastructure | unknown
 tests     : <count> across <n> areas — <up to five test names, then "+k more">
-novelty   : new | seen-in-baseline | known-issue <key> | unknown
+baseline  : also-failed-in-baseline | not-in-baseline | not-checked
+known     : known-issue <key> | not-matched | list-not-readable
 rank      : <n> because <blocking / gating / novel / breadth>
 owner     : <name from the area map, or blank plus candidates>
 run id    : <the representative run, from the summary's test and seed columns>
