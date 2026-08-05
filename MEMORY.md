@@ -145,6 +145,25 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   dist/semiskill-dv.zip (6 skills, 44 fill-in slots, 48K) — 320 tests green
   next: H-019..H-022 (truthful install string, SharePoint catalog generator, delimiter hardening)
 
+- [H-014b] 2026-08-05T06:05Z  status: done
+  what: content remediation after an adversarial review returned "NOT ready to publish as a set" on
+  the six wave-1 skills. Round 1 fixed real technical errors (bit-bash is bidirectional, not a walking
+  one; UVM map endianness orders bus words of a wide register and does NOT govern bit position; the
+  "unmapped register resolves to the block base" mechanism was fabricated; the determinism cause list
+  was wrong; build-filelist's flatten step was unexecutable under its own retrieval budget;
+  repo-orientation asserted a mixed-vendor tool-flag grab bag as universal). The re-review then found
+  round 1 had INTRODUCED a bug: consolidation was done as prose cross-references and 3 of 4 were
+  factually wrong about which facts were "the same" while telling the team to fill once and reuse —
+  propagating wrong marker strings. Fixed structurally with skills/_shared/team-profile.md (the facts
+  filled ONCE) + corrected pointers, NOACCESS row (a NOACCESS field IS mapped), build-filelist's
+  sequential-print claim re-qualified, and the golden brought up to the set standard (pasted-input
+  branch, coverage line, staggered review-by, consistent compatibility). All 6 re-published via the
+  gate at 1.000 and re-packed
+  honest status: 2 of 6 (dv-ral-bringup, dv-regression-triage-routing) the reviewer would hand over
+  today; the set needs one more focused pass — remaining issues listed in STATUS.md
+  artifacts: skills/_shared/team-profile.md, skills/*/SKILL.md (6, v1.1.0), dist/semiskill-dv.zip
+  next: H-019..H-022, and a third content pass before anything reaches a real DV team
+
 ## In-Flight Step
 _(none)_
 

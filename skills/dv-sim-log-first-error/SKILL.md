@@ -2,7 +2,7 @@
 name: dv-sim-log-first-error
 description: Find the true first error in a simulation log, normalise it into a stable failure signature, and produce the exact block needed to reproduce it. Use when a simulation or regression test has failed and the log is too large to read, when you are about to paste a log into a chat, or when you need to hand a failure to someone else.
 license: Proprietary - internal use only
-compatibility: Any Agent Skills runtime (Cursor 2.4+, Claude Code). Read-only; no shell, no network.
+compatibility: Any Agent Skills runtime with Read, Grep and Glob over files on disk (Cursor 2.4+, Claude Code). Read-only; no shell, no network.
 allowed-tools: Read Grep Glob
 metadata:
   semiskill-title: First-Error Extraction and Repro Block
@@ -10,8 +10,8 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
-  semiskill-review-by: 2027-02-05
+  semiskill-version: 1.1.0
+  semiskill-review-by: 2027-04-14
   semiskill-tags: logs, triage, debug, regression, reproducer
 ---
 
@@ -37,6 +37,9 @@ log.
 | Known issues | [[FILL: where our known-issue list lives]] | DV lead |
 | Bug tracker convention | [[FILL: what a bug title looks like here]] | DV lead |
 
+These are pack-wide facts and live in `_shared/team-profile.md` — fill that in once for the team and
+read the answers from there rather than re-interviewing anyone.
+
 **If a slot is unfilled, stop and ask. Do not guess a convention** — a confidently invented log path
 or rerun recipe wastes more time than it saves.
 
@@ -45,14 +48,20 @@ or rerun recipe wastes more time than it saves.
 Simulation logs routinely run to hundreds of megabytes. Reading one whole is impossible and pointless.
 Work in this order and stop as soon as the cause is identified:
 
-1. **Never open the log with Read first.** Use **Grep** to locate lines, then Read only a bounded
+1. **Grep and Read work on files, not on chat text.** If the log arrived pasted into the conversation
+   rather than as a path, ask for the path on disk, or ask for the text to be saved to a file and be
+   given that path. Until a path exists you may reason over the pasted lines by eye — but say that is
+   what you did. You have not searched the log, only the fragment you were shown.
+2. **Never open the log with Read first.** Use **Grep** to locate lines, then Read only a bounded
    window around a specific line number.
-2. Budget roughly: one Grep for markers, one Grep for the earliest marker's line number, then at most
+3. Budget roughly: one Grep for markers, one Grep for the earliest marker's line number, then at most
    three windowed Reads of about 80 lines each.
-3. If a Grep returns more than about 200 hits, the pattern is too broad — narrow it before reading
+4. If a Grep returns more than about 200 hits, the pattern is too broad — narrow it before reading
    anything.
-4. If after three windowed Reads the cause is still unclear, stop and report what is known. Guessing
+5. If after three windowed Reads the cause is still unclear, stop and report what is known. Guessing
    past this point produces confident, wrong answers.
+6. State what you actually covered — "signature derived from the log" or "reasoned from a pasted
+   fragment only, log not searched". An unstated shortcut is far worse than a stated one.
 
 ## Procedure
 
