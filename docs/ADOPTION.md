@@ -35,7 +35,9 @@ payloads; bundle source, not binaries.
   function / role / level, full-text search, every card leading with its **verification badge**.
 - Open a skill for its README, allowed tools, scan report, provenance (submitted → … → published),
   version history, comments, and rating.
-- Reuse with one click: `skills add <slug>`. Reuse events feed "trending / most-reused".
+- Reuse it by **placing the folder**: put the skill directory in `~/.cursor/skills/` (or your
+  project's `.cursor/skills/`), reload, and type `/<name>`. There is no install command —
+  Agent Skills runtimes discover skills by walking that directory (ADR-010).
 - You only ever see skills your clearance allows — a `need-to-know` skill is invisible to those
   without it.
 

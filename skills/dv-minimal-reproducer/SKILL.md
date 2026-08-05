@@ -8,9 +8,9 @@ metadata:
   semiskill-title: Shrinking a Failure to a Minimal, Fast Reproducer
   semiskill-function: design-verification
   semiskill-role: dv-engineer
-  semiskill-level: senior
+  semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.2.0
   semiskill-review-by: 2027-06-23
   semiskill-tags: reproducer, bisection, determinism, triage, handoff, debug
 ---
@@ -49,10 +49,13 @@ before anyone shrinks anything, use `dv-regression-triage-routing`.
 | Runtime budget | [[FILL: how fast and how small a reproducer must be before the recipient will accept it]] | verification lead |
 | Handoff template | [[FILL: what our bug ticket or handoff note requires as mandatory fields]] | DV lead |
 
-Several of these are pack-wide facts rather than facts about this procedure. They live in
-`_shared/team-profile.md` — fill that in once for the team and read the answers from there rather
-than re-interviewing anyone. Only fill in a slot above if this skill needs something narrower than
-what the profile records.
+Three of these are pack-wide facts rather than facts about this procedure: **Fatal markers**,
+**Pass marker** and **Run identity**. They live in `_shared/team-profile.md` — fill that in once for
+the team and read the answers from there rather than re-interviewing anyone. The same three are the
+slots this table shares with `dv-sim-log-first-error`; **Determinism controls** is not one of them —
+it has no counterpart in the profile or in that skill, and is answered here and nowhere else. Only
+fill in one of the shared three above if this skill needs something narrower than the profile
+records — Run identity here also asks where the string is printed, which the profile's entry does not.
 
 **If a slot is unfilled, stop and ask. Do not guess a convention.** An invented marker string, knob
 name or rerun recipe sends the recipient down a path that does not exist, and you will not hear about

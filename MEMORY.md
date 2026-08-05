@@ -232,6 +232,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   dist/site (14 pages) — 393 tests green
   next: wave 0 retrofit (the matrix currently shows 2 roles x 3 levels — the facet collapse, visible)
 
+- [I-005] 2026-08-05T08:10Z  status: done
+  what: closed the two Phase-H correctness debts. (1) context/untrusted.delimit could be FORGED: a
+  body containing the literal close marker terminated the fence early and everything after it read as
+  trusted text — json.dumps escapes quotes and backslashes but leaves `<` alone. Every `<` is now
+  escaped to its JSON unicode form, which makes the marker unrepresentable inside the payload while
+  round-tripping losslessly. (2) ADR-010 — `skills add <slug>` was a literal f-string asserted only by
+  string-equality tests, naming a command that exists nowhere; Cursor has no install command at all
+  and discovers skills by walking a directory. The API and detail payloads now return a structured
+  install object {method: file-placement, path, invoke, instruction}, and docs/ADOPTION.md says what
+  actually happens
+  correction: the I-004 entry above records "393 tests green"; the real count at that commit was 380.
+  No other figure in that entry is affected
+  artifacts: semiskill/context/untrusted.py, semiskill/api.py, semiskill/context/retrieve.py,
+  docs/ADOPTION.md, DECISIONS.md ADR-010, tests (+3)
+  next: wave 0 recheck results, then waves 1-13
+
 ## In-Flight Step
 _(none)_
 

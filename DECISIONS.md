@@ -201,6 +201,32 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   retired to `archive/`.
 - Related: ADR-002, ADR-003, ADR-008; semiskill/wave.py; semiskill/governance/rollback.py
 
+## [ADR-010] The catalog describes installation as file placement; `skills add <slug>` is retired
+- Date: 2026-08-05
+- Status: accepted
+- Context: Every catalog card, the detail payload, the demo UI and `docs/ADOPTION.md` told the reader
+  to run `skills add <slug>`. No such command exists anywhere in this repo, on this machine, or in any
+  registry that knows our slugs — it was a literal f-string asserted only by string-equality tests.
+  Meanwhile the actual runtime, Cursor 2.4+, has no install command at all: it discovers skills by
+  walking `.cursor/skills/`, `.agents/skills/` and their `~` equivalents for any `SKILL.md`
+  (ADR-008). Teaching an engineer a command that does not exist is worse than teaching them nothing,
+  because it burns the first thirty seconds of their first encounter with the catalog.
+- Decision: Replace the `install` string with a structured object describing what actually happens —
+  `{method: "file-placement", path: ".cursor/skills/<name>/SKILL.md", invoke: "/<name>", instruction}`
+  — and reword every consumer to match. Installation is placing a folder; the site additionally
+  offers a copy-the-prompt path so the engineer's own agent writes the file, which works over SSH
+  where a download folder is unreachable.
+- Alternatives considered:
+  - Implement a `semiskill add` CLI — rejected for now: it would have to reach a hosted service that
+    does not exist, and it duplicates what the runtime already does by reading a folder. The honest
+    artifact is the folder.
+  - Leave the string and document the gap — rejected: `docs/ADOPTION.md` already carried the claim,
+    and a documented lie is still the first thing a new user tries.
+- Consequences: `api.py` and `context/retrieve.py` change a public response field, so the API tests
+  assert the object rather than a string. `ui/catalog-demo.html` and `ui/README.md` retain the dead
+  string only until they are archived (they are superseded by `semiskill site`).
+- Related: ADR-002, ADR-008; semiskill/api.py; semiskill/context/retrieve.py; cursor.com/docs/skills
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

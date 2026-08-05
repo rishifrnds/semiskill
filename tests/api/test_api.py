@@ -69,7 +69,10 @@ def test_catalog_is_acl_filtered(server):
 def test_catalog_install_command_present(server):
     base, _ = server
     card = _get(base, "/catalog", labels="team")[1]["results"][0]
-    assert card["install"] == "skills add dv/pub-team"
+    # ADR-010: installation is file placement; there is no install command to name.
+    assert card["install"]["method"] == "file-placement"
+    assert card["install"]["path"] == ".cursor/skills/dv/pub-team/SKILL.md"
+    assert card["install"]["invoke"] == "/dv/pub-team"
 
 
 @pytest.mark.integration
@@ -79,7 +82,8 @@ def test_skill_detail_has_verification(server):
     code, d = _get(base, f"/skill/{sv_id}", labels="team")
     assert code == 200
     assert d["verification"]["verdict"] == "approve"
-    assert d["install"] == "skills add dv/pub-team"
+    assert d["install"]["method"] == "file-placement"
+    assert d["install"]["path"] == ".cursor/skills/dv/pub-team/SKILL.md"
 
 
 @pytest.mark.integration

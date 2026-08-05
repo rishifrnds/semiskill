@@ -25,10 +25,20 @@ def _principal(headers) -> list[str]:
     return [x.strip() for x in raw.split(",") if x.strip()] or list(_DEFAULT_PRINCIPAL)
 
 
+def _install(slug: str) -> dict:
+    """How a skill is actually installed (ADR-010): by placing a folder. There is no install command
+    — Cursor and the other Agent Skills runtimes discover skills by walking a skills directory."""
+    return {"method": "file-placement",
+            "path": f".cursor/skills/{slug}/SKILL.md",
+            "invoke": f"/{slug}",
+            "instruction": (f"Put the pack folder in ~/.cursor/skills/ (or your project's "
+                            f".cursor/skills/), reload, then type /{slug}.")}
+
+
 def _card(c) -> dict:
     return {"artifact_id": str(c.artifact_id), "slug": c.slug, "name": c.name,
             "description": c.description, "version": c.version, "function": c.function,
-            "role": c.role, "level": c.level, "install": f"skills add {c.slug}"}
+            "role": c.role, "level": c.level, "install": _install(c.slug)}
 
 
 def make_handler(dsn: str):
