@@ -91,6 +91,17 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   tests/authoring/{test_facets,test_lint,test_lint_drift}.py, tests/cli/test_cli.py — 295 tests green
   next: H-007
 
+- [H-007/H-008] 2026-08-05T04:22Z  status: done
+  what: first authored content — skills/_shared/failure-signature-schema.md (the normalisation rules
+  four wave-1 skills will reference instead of restating) and skills/dv-sim-log-first-error/SKILL.md
+  (ADR-008 frontmatter, 6 [[FILL:]] slots, an explicit retrieval budget for 100MB+ logs, verb-honest
+  steps that never claim to run a tool, a design-vs-infrastructure split, gotchas, and a
+  human-verification section naming what a wrong answer looks like) + docs/DV_INTAKE.md, the
+  10-question intake for the DV manager. Both lint at aggregate 1.000 with zero advisories
+  artifacts: skills/dv-sim-log-first-error/SKILL.md, skills/_shared/failure-signature-schema.md,
+  docs/DV_INTAKE.md
+  next: H-010 (wave driver)
+
 ## In-Flight Step
 _(none)_
 

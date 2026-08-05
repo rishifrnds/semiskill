@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T04:10Z_
+_Last updated: 2026-08-05T04:22Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-005/H-006 (done) — facets + full linter + `semiskill lint` + drift guard
-- Sub-state: next H-007 (shared references), then H-008 (first skill + intake)
+- Step ID: H-007/H-008 (done) — first skill + shared reference + intake questionnaire
+- Sub-state: next H-010..H-013 (wave driver), then skills 2-6
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 5699f2c
-- Message: wip: H-004 stdlib-only body linter
+- SHA: f83467c
+- Message: wip: H-005/H-006 linter + drift guard
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
