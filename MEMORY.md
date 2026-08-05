@@ -102,6 +102,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   docs/DV_INTAKE.md
   next: H-010 (wave driver)
 
+- [H-010..H-013] 2026-08-05T04:48Z  status: done
+  what: ADR-009 + semiskill/wave.py + `semiskill wave-plan|wave`. Content-addressed and idempotent:
+  identical slug+hash is skipped (the catalog is its own checkpoint, so a wave is resumable with no
+  side state), changed content publishes then supersedes the old via unpublish_skill in that order
+  (never leaving the catalog with a hole). Item errors are isolated and recorded; infrastructure
+  errors abort with the item they died on. `request-changes` is now a reported failure instead of a
+  silent published=False. seed_skill gained permissions_label/files; seed_catalog DELETED so no call
+  site can pick the unguarded path. CLI refuses to write to the test DSN without --yes because the
+  pytest fixture TRUNCATEs artifacts. 15 wave tests incl. the two failure modes this exists to fix
+  artifacts: DECISIONS.md ADR-009, semiskill/wave.py, semiskill/seed.py, semiskill/cli.py,
+  tests/wave/test_wave.py — 310 tests green
+  next: H-014 (author skills 2-6 — a Workflow fan-out is running), then H-016 run the wave
+
 ## In-Flight Step
 _(none)_
 

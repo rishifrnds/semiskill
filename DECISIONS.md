@@ -164,6 +164,43 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   verification badge means "this text passed our scans on this date", never a runtime guarantee.
 - Related: ADR-002, ADR-003, ADR-007; semiskill/capture/intake.py; cursor.com/docs/skills; agentskills.io
 
+## [ADR-009] Waves are content-addressed and idempotent; generic skills publish as `public`
+- Date: 2026-08-05
+- Status: accepted
+- Context: `seed_catalog` is a bare list comprehension with no error handling, no idempotency and no
+  report: one malformed skill raises out and abandons the rest of the wave, a `request-changes`
+  verdict returns `published=False` silently with no exception, and re-running a wave appends a
+  second `skill_version` for the same slug and publishes it too — the catalog has no unique
+  constraint on slug, so the duplicate is invisible. Separately, `seed_skill` never passes
+  `permissions_label`, so every seeded skill is labelled `team`, while `api.py` defaults an
+  unauthenticated caller to `public` — a successful wave therefore yields an empty-looking catalog.
+- Decision: A wave is driven by `semiskill.wave.run_wave`, which is **content-addressed**: each item's
+  canonical payload is hashed, and an already-published slug with an identical hash is skipped as a
+  no-op, while a different hash publishes the new version and then unpublishes the old one through
+  `governance.rollback.unpublish_skill` (publish-new-before-unpublish-old, so the catalog never has a
+  hole). The catalog is therefore its own checkpoint and a wave is resumable with no side state.
+  Item-level failures are isolated and recorded; infrastructure failures abort the whole wave.
+  `request-changes` is reported as a failure, never silently. Generic, slot-bearing skills publish with
+  `permissions_label="public"`; a personalized fork that contains team specifics publishes as `team`
+  or `need-to-know`.
+- Alternatives considered:
+  - Skip any slug that already exists — rejected: a corrected skill would never reach the catalog, and
+    the author would get no signal that their fix was ignored.
+  - Always publish a new version and leave the old one — rejected: ADR-003 requires supersession, and
+    two live cards with the same slug produce two different install instructions for one name.
+  - A separate wave state/checkpoint file — rejected: a second source of truth about what published is
+    a second thing to desynchronize from the artifact log.
+  - Keep `team` as the wave label — rejected: it is factually wrong for content that contains no
+    internal information, and it is the direct cause of the empty-catalog symptom. Making `public`
+    mean "contains nothing internal" gives the label boundary real meaning.
+- Consequences: `seed_catalog` is deleted rather than fixed, so no call site can pick the unguarded
+  path by accident; `seed_skill` gains `permissions_label` and `files` parameters. Supersession relies
+  on `unpublish_skill`, which requires the old published approval id, so the driver must resolve the
+  active approval for a slug — the same active-approval-wins rule `derive_state` uses. Waves must be
+  run against a catalog database, never the test DSN, and `scripts/demo.py` (which TRUNCATEs) is
+  retired to `archive/`.
+- Related: ADR-002, ADR-003, ADR-008; semiskill/wave.py; semiskill/governance/rollback.py
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

@@ -7,6 +7,7 @@ passes the Phase-C pipeline + human approval (ADR-002).
 from __future__ import annotations
 import argparse
 import sys
+from pathlib import Path
 from semiskill.config import Config
 from semiskill.artifacts.schema import ArtifactType, SourceSystem
 from semiskill.capture.intake import load_skill_dir, build_skill_version
@@ -54,6 +55,53 @@ def cmd_lint(args, store, out) -> int:
     return 0
 
 
+def cmd_wave(args, store, out) -> int:
+    """Publish a directory of authored skills through the real gate (ADR-009).
+
+    Refuses to touch a database whose name looks like the test DB unless --yes is given: the pytest
+    fixture TRUNCATEs `artifacts`, so pointing a wave at it silently destroys a real catalog.
+    """
+    from semiskill.authoring.lint import lint_wave_dir, render as render_lint
+    from semiskill.wave import load_wave, render_report, run_wave, write_wave_report
+
+    dsn = args.dsn or Config.from_env().database_url
+    writes = args.command == "wave" and not args.dry_run
+    if writes and not args.yes and "semiskill" in dsn.rsplit("/", 1)[-1]:
+        print("refusing to write to the default/test database without --yes\n"
+              f"  dsn: {dsn}\n"
+              "  the test fixture TRUNCATEs `artifacts`; point --dsn at a catalog DB, or pass --yes.",
+              file=out)
+        return 2
+
+    if args.lint_first:
+        lint = lint_wave_dir(args.path)
+        if not lint.ok:
+            print(render_lint(lint, style="text"), file=out)
+            print("\nwave aborted before any artifact was written — fix the lint errors first.",
+                  file=out)
+            return 1
+
+    items = load_wave(args.path)
+    if not items:
+        print(f"no SKILL.md found under {args.path}", file=out)
+        return 1
+
+    if args.command == "wave-plan" or args.dry_run:
+        for i in items:
+            print(f"{i.slug}\t{i.payload_sha256[:12]}\t{i.path}", file=out)
+        print(f"\n{len(items)} skill(s) would run against {dsn}", file=out)
+        return 0
+
+    report = run_wave(store=store, dsn=dsn, items=items, permissions_label=args.label,
+                      on_duplicate=args.on_duplicate,
+                      journal_path=Path(args.reports) / "journal.jsonl" if args.reports else None)
+    print(render_report(report, style="markdown"), file=out)
+    if args.reports:
+        md, js = write_wave_report(report, args.reports)
+        print(f"\nreport: {md}", file=out)
+    return 0 if report.ok else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="semiskill", description="SemiSkill CLI (L1 capture)")
     sub = p.add_subparsers(dest="command", required=True)
@@ -74,6 +122,24 @@ def build_parser() -> argparse.ArgumentParser:
     lt.add_argument("--probe-dsn", default=None,
                     help="consult the real held-out injection corpus (returns class names only)")
     lt.set_defaults(func=cmd_lint, needs_store=False)
+
+    for name, helptext, needs_store in (
+        ("wave-plan", "show what a wave would do, without writing anything", False),
+        ("wave", "publish a directory of skills through the pipeline + gate", True),
+    ):
+        w = sub.add_parser(name, help=helptext)
+        w.add_argument("path", help="directory containing skill folders")
+        w.add_argument("--dsn", default=None, help="catalog database (defaults to DATABASE_URL)")
+        w.add_argument("--label", default="public", choices=_LABELS,
+                       help="permissions label for the wave (ADR-009: generic skills are public)")
+        w.add_argument("--on-duplicate", default="supersede",
+                       choices=["supersede", "skip", "fail"], dest="on_duplicate")
+        w.add_argument("--reports", default="reports", help="where to write the wave report")
+        w.add_argument("--dry-run", action="store_true")
+        w.add_argument("--no-lint-first", dest="lint_first", action="store_false", default=True,
+                       help="skip the pre-flight lint (not recommended)")
+        w.add_argument("--yes", action="store_true", help="confirm writing to this database")
+        w.set_defaults(func=cmd_wave, needs_store=needs_store)
     return p
 
 

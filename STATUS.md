@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T04:22Z_
+_Last updated: 2026-08-05T04:48Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-007/H-008 (done) — first skill + shared reference + intake questionnaire
-- Sub-state: next H-010..H-013 (wave driver), then skills 2-6
+- Step ID: H-010..H-013 (done) — wave driver, idempotent + gated
+- Sub-state: authoring fan-out running for skills 2-6; then run the wave
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: f83467c
-- Message: wip: H-005/H-006 linter + drift guard
+- SHA: 676536b
+- Message: wip: H-007/H-008 first DV skill + intake
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
@@ -46,4 +46,4 @@ tenant. Plus: no auth, nothing deployed, no CI, no backups.
 
 ## If resumed
 Read MEMORY.md (Phase H) and the approved plan above. DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest` (295, Docker PG running). Nothing pushed to remote.
+Tests: `pytest` (310, Docker PG running). Nothing pushed to remote.

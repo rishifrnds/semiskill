@@ -23,11 +23,19 @@ class SeedResult:
 
 
 def seed_skill(*, store: ArtifactStore, dsn: str, skill_md: str, actor: str = "seed-generator",
-               approver_actor: str = "seed-approver", auto_approve: bool = True) -> SeedResult:
+               approver_actor: str = "seed-approver", auto_approve: bool = True,
+               permissions_label: str = "team",
+               files: dict[str, str] | None = None) -> SeedResult:
     """Push one generated seed through the pipeline. Publishes only if the aggregate verdict is
     'approve' AND a human approves (auto_approve simulates that human here). Blocked seeds never
-    publish. Returns the outcome for verification."""
-    sv = store.append(build_skill_version(skill_md=skill_md, actor=actor))
+    publish. Returns the outcome for verification.
+
+    `permissions_label` decides who can ever see the result: a wave of generic, slot-bearing skills
+    publishes as `public` (ADR-009), because labelling content that holds nothing internal as `team`
+    is both wrong and the direct cause of the empty-catalog symptom — `api.py` defaults an
+    unauthenticated caller to `public`."""
+    sv = store.append(build_skill_version(skill_md=skill_md, actor=actor,
+                                          permissions_label=permissions_label, files=files))
     res = run_pipeline(store=store, dsn=dsn, skill_version_id=sv.artifact_id)
     published = False
     if auto_approve and res.review is not None and res.verdict == "approve":
@@ -42,5 +50,8 @@ def seed_skill(*, store: ArtifactStore, dsn: str, skill_md: str, actor: str = "s
                       verdict=res.verdict, blocked_at=res.blocked_at, published=published)
 
 
-def seed_catalog(*, store: ArtifactStore, dsn: str, skills: list[str], **kw) -> list[SeedResult]:
-    return [seed_skill(store=store, dsn=dsn, skill_md=md, **kw) for md in skills]
+# `seed_catalog` was deleted in favour of `semiskill.wave.run_wave` (ADR-009). It was a bare list
+# comprehension: one malformed skill raised out and abandoned the rest of the wave, a
+# `request-changes` verdict returned published=False with no exception, and a re-run double-published
+# every slug. Leaving a working-looking one-liner beside a guarded driver only invites the wrong call
+# site at 40x scale.
