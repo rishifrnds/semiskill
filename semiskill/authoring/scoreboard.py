@@ -50,6 +50,7 @@ class CellStatus:
     declined_why: str | None = None
     lint_verdict: str | None = None
     findings: int = 0
+    drift: str | None = None        # published facets disagree with the registry
 
 
 @dataclass(frozen=True)
@@ -58,9 +59,23 @@ class RoleCoverage:
     target: int
     published: int
     declined: int
-    planned: int
+    planned: int            # active (non-declined) cells in the registry
     ok: bool
     weakest_gap: int
+
+    @staticmethod
+    def decide(*, published: int, planned: int, declined: int, target: int) -> bool:
+        """A role passes if it published the target, OR it published everything it planned and the
+        plan plus its recorded declines reach the target.
+
+        The second branch is what lets a role honestly stop at 4/5 — but only once those four are
+        actually published. Crediting declines to a role that simply has not done the work yet would
+        turn "we decided not to write a fifth" into "we are finished", which is the exact optimism
+        this scoreboard exists to refuse.
+        """
+        if published >= target:
+            return True
+        return published >= planned and (planned + declined) >= target
 
 
 @dataclass(frozen=True)
@@ -141,9 +156,17 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
 
         verdict, errs = lint_by_slug.get(slug, (None, 0))
         if slug in published:
+            # Facet drift is real and has happened: a remediation pass re-levelled skills
+            # individually and collectively collapsed the role x level grid onto one role.
+            pub_payload = published[slug][0].payload
+            drift = None
+            got = (pub_payload.get("role"), pub_payload.get("level"))
+            want = (c["role"], c["level"])
+            if got != want:
+                drift = f"published as {got[0]}/{got[1]}, registry says {want[0]}/{want[1]}"
             cells.append(CellStatus(status=PUBLISHED,
                                     gate=_gate_status(read_review(root, slug)),
-                                    lint_verdict=verdict, findings=errs, **common))
+                                    lint_verdict=verdict, findings=errs, drift=drift, **common))
         elif not (root / slug / "SKILL.md").exists():
             cells.append(CellStatus(status=MISSING, **common))
         elif verdict == "approve" and errs == 0:
@@ -157,8 +180,10 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
         mine = [c for c in cells if c.role == role]
         pub = sum(1 for c in mine if c.status == PUBLISHED)
         dec = sum(1 for c in mine if c.status == DECLINED and c.declined_why)
+        active = sum(1 for c in mine if c.status != DECLINED)
+        ok = RoleCoverage.decide(published=pub, planned=active, declined=dec, target=target)
         roles.append(RoleCoverage(role=role, target=target, published=pub, declined=dec,
-                                  planned=len(mine), ok=(pub + dec) >= target,
+                                  planned=active, ok=ok,
                                   weakest_gap=max(0, target - (pub + dec))))
 
     levels: dict[str, int] = {}
@@ -180,14 +205,18 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
         UNREVIEWED: sum(1 for c in cells if c.status == PUBLISHED and c.gate == UNREVIEWED),
         "roles_ok": sum(1 for r in roles if r.ok),
         "roles": len(roles),
+        "drift": sum(1 for c in cells if c.drift),
     }
 
     failures: list[str] = []
     for r in roles:
         if not r.ok:
-            failures.append(f"{r.role}: {r.published}/{r.target} published"
-                            + (f" (+{r.declined} declined)" if r.declined else "")
-                            + f" — {r.weakest_gap} short")
+            failures.append(f"{r.role}: {r.published} published of {r.planned} planned "
+                            f"(target {r.target}"
+                            + (f", {r.declined} declined" if r.declined else "") + ")")
+    for c in cells:
+        if c.drift:
+            failures.append(f"{c.slug}: facet drift — {c.drift}")
     for c in cells:
         if c.status == FAILING_LINT:
             failures.append(f"{c.slug}: authored but fails lint ({c.findings} errors)")

@@ -79,7 +79,7 @@ def test_a_skill_on_disk_that_never_published_is_not_covered(pg_store, tmp_path)
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1)
     assert sb.cells[0].status == UNPUBLISHED
     assert sb.totals[PUBLISHED] == 0
-    assert not sb.ok and "1 short" in sb.failures[0]
+    assert not sb.ok and "0 published of 1 planned" in sb.failures[0]
 
 
 @pytest.mark.integration
@@ -110,13 +110,43 @@ def test_published_counts_and_role_target(pg_store, pg_dsn, tmp_path):
     run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
     reg = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
-        {"slug": "dv-b", "role": "dv-engineer", "level": "junior"},
+        {"slug": "dv-b", "role": "dv-engineer", "level": "senior"},
     ])
 
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=2)
     assert sb.totals[PUBLISHED] == 2
     assert sb.roles[0].ok and sb.ok
-    assert sb.levels == {"senior": 1, "junior": 1}
+    assert sb.levels == {"senior": 2}
+
+
+@pytest.mark.integration
+def test_facet_drift_between_the_registry_and_what_published_is_a_failure(pg_store, pg_dsn, tmp_path):
+    """This actually happened: a remediation pass re-levelled skills one at a time and collectively
+    collapsed the role x level grid onto a single role. Nothing caught it."""
+    root = tmp_path / "skills"
+    write_skill(root, "dv-a", role="dv-engineer", level="senior")
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    reg = write_registry(tmp_path, [
+        {"slug": "dv-a", "role": "soc-dv-engineer", "level": "junior"}])
+
+    sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1)
+    assert sb.cells[0].drift and "registry says soc-dv-engineer/junior" in sb.cells[0].drift
+    assert not sb.ok and any("facet drift" in f for f in sb.failures)
+
+
+@pytest.mark.integration
+def test_declines_do_not_credit_a_role_that_has_not_published_yet(pg_store, tmp_path):
+    """A decline explains why a role stops at 4; it must not turn 'not started' into 'finished'."""
+    root = tmp_path / "skills"
+    write_skill(root, "dv-a")
+    reg = write_registry(tmp_path, [
+        {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
+        {"slug": "dv-x", "role": "dv-engineer", "level": "staff",
+         "declined": {"why": "no distinct task at this level"}},
+    ])
+    sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=2)
+    assert sb.roles[0].declined == 1
+    assert not sb.roles[0].ok, "nothing is published, so the role cannot be complete"
 
 
 @pytest.mark.integration

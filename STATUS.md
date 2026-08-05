@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T07:25Z_
+_Last updated: 2026-08-05T07:32Z_
 
 ## Phase
 Phase I: 84 skills (>=5 per role across 16 roles), every one through
@@ -29,13 +29,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: I-002/I-003 (done) — markdown renderer + coverage scoreboard
+- Step ID: I-001 (done) — 84-cell registry; scoreboard live (6/83, 0/16 roles at target)
 - Sub-state: Phase I underway; top-up cell design running. Content still not set-ready (below).
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 95477c9
-- Message: wip: H-020 catalog page
+- SHA: cb6b011
+- Message: wip: I-002/I-003 markdown + scoreboard
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)

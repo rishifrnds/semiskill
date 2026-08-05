@@ -1,0 +1,1096 @@
+{
+ "target_per_role": 5,
+ "note": "The plan of record. Coverage is measured by semiskill scoreboard against the PUBLISHED catalog, never this file.",
+ "cells": [
+  {
+   "slug": "dv-minimal-reproducer",
+   "role": "dv-engineer",
+   "level": "intermediate",
+   "title": "Shrinking a Failure to a Minimal, Fast Reproducer",
+   "one_line": "Use before handing any failure to a developer, RTL owner or R&D: bisect test, configuration and time window down to the smallest thing that still shows the same signature.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 0
+  },
+  {
+   "slug": "dv-sim-log-first-error",
+   "role": "dv-engineer",
+   "level": "fresher",
+   "title": "First-Error Extraction, Failure Signature and Repro Block",
+   "one_line": "Use when a simulation failed and the log is far too large to read: pull the true first error rather than the cascade, normalise it into a stable signature, and emit the exact command to reproduce it.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 0
+  },
+  {
+   "slug": "dv-build-filelist-hygiene",
+   "role": "dv-infra-engineer",
+   "level": "junior",
+   "title": "Compile and Elaboration Error Decode with Filelist Hygiene",
+   "one_line": "Use whenever a build fails to compile or elaborate, or when block-level and top-level builds mysteriously disagree.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 0
+  },
+  {
+   "slug": "dv-repo-orientation",
+   "role": "dv-infra-engineer",
+   "level": "fresher",
+   "title": "Orienting Yourself in an Unfamiliar DV Repository",
+   "one_line": "Use on day one in a new environment: map the filelists, build targets, test lists, regression scripts and coverage outputs, then reconstruct the command to run one test end to end.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 0
+  },
+  {
+   "slug": "dv-regression-triage-routing",
+   "role": "ip-dv-engineer",
+   "level": "junior",
+   "title": "Nightly Regression Bucketing, Infra Split and Owner Routing",
+   "one_line": "Use each morning to turn a night's regression results into ranked failure buckets with an infrastructure-versus-design split, known-issue matches, and a routed owner per bucket.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 0
+  },
+  {
+   "slug": "dv-ral-bringup",
+   "role": "soc-dv-engineer",
+   "level": "junior",
+   "title": "Register Model Bring-Up and the Register-Failure Decision Tree",
+   "one_line": "Use when generating or integrating a uvm_reg model, or when hw_reset, bit-bash and access sequences fail.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 0
+  },
+  {
+   "slug": "dv-config-space-coverage",
+   "role": "ip-dv-engineer",
+   "level": "principal",
+   "title": "Configuration-Space Selection and the Coverage Argument for Configurable IP",
+   "one_line": "Use when the IP has more legal parameter combinations than you can ever regress and you must defend the subset you chose to a release reviewer.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 1
+  },
+  {
+   "slug": "dv-coverage-hole-closure",
+   "role": "ip-dv-engineer",
+   "level": "senior",
+   "title": "Coverage Hole Classification and Closure Planning",
+   "one_line": "Use after a merged coverage run when a URG text report has to become a ranked, owned closure plan rather than another round of random seeds.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 1
+  },
+  {
+   "slug": "dv-error-injection-ras",
+   "role": "ip-dv-engineer",
+   "level": "senior-staff",
+   "title": "Error-Injection, ECC and RAS Scenario Matrix for Interface IP",
+   "one_line": "Use when verifying ECC, parity, CRC, link-level retry, poison propagation and error reporting: build the standard injection matrix and the checks each cell demands.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 1
+  },
+  {
+   "slug": "dv-gls-bringup",
+   "role": "ip-dv-engineer",
+   "level": "staff",
+   "title": "Gate-Level Simulation Bring-Up and Timing-Violation Triage",
+   "one_line": "Use once or twice a project when GLS must come up on a synthesised or post-layout netlist, or when GLS fails in ways RTL simulation never did.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 1
+  },
+  {
+   "slug": "dv-uvm-agent-checker",
+   "role": "ip-dv-engineer",
+   "level": "intermediate",
+   "title": "Building a UVM Agent and Its End-to-End Checker to House Conventions",
+   "one_line": "Use when adding a new interface agent and its scoreboard to an existing environment and the output must match the team's existing style, not generic UVM.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 1
+  },
+  {
+   "slug": "dv-compute-license-efficiency",
+   "role": "dv-infra-engineer",
+   "level": "principal",
+   "title": "Compute and Licence Efficiency: Cost per Verified Feature",
+   "one_line": "Use when regression cost is growing faster than coverage and you need a defensible trimming proposal with a projected saving.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 2
+  },
+  {
+   "slug": "dv-coverage-merge-report",
+   "role": "dv-infra-engineer",
+   "level": "intermediate",
+   "title": "Coverage Merge Across Seeds, Configs and Engines, and the Weekly Report",
+   "one_line": "Use every week when coverage from many tests, configurations and engines has to become one legitimately merged, annotated, trend-tracked picture.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 2
+  },
+  {
+   "slug": "dv-regression-tiering-farm",
+   "role": "dv-infra-engineer",
+   "level": "senior",
+   "title": "Regression Tiering, Seed Policy and Farm Job-Script Authoring",
+   "one_line": "Use when defining or repairing a regression: what runs pre-merge versus nightly versus sign-off, how many seeds, and the coverage-directory naming that actually merges afterwards.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 2
+  },
+  {
+   "slug": "dv-tool-version-migration",
+   "role": "dv-infra-engineer",
+   "level": "staff",
+   "title": "Simulator, UVM and VIP Version Migration with Re-Baselining",
+   "one_line": "Use when moving to a new simulator release, UVM version or VIP drop and you must re-baseline pass rates, coverage and performance.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 2
+  },
+  {
+   "slug": "dv-coverage-hole-disposition",
+   "role": "dv-engineer",
+   "level": "junior",
+   "title": "Functional Coverage Hole Disposition and Closure",
+   "one_line": "Use when a coverage text report shows unhit bins you must close: classify each hole as stimulus gap, constraint blockage, bin-definition error, out-of-scope config, or genuinely unreachable, then emit the test change, covergroup fix, or exclusion draft with a justification that survives lead review.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 3
+  },
+  {
+   "slug": "dv-signal-trace-localisation",
+   "role": "dv-engineer",
+   "level": "senior",
+   "title": "Waveform-Free Failure Localisation from an Exported Signal Report",
+   "one_line": "Use when you must localise an RTL failure but the agent cannot open FSDB/VPD — decide what to export, reason over the text report, then name the exact next signals to export.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 3
+  },
+  {
+   "slug": "dv-tb-architecture-record",
+   "role": "dv-engineer",
+   "level": "principal",
+   "title": "Testbench Architecture Decision Record and Reuse Boundary",
+   "one_line": "Use before any code on a new environment: fix agent topology, the VIP-versus-native boundary, the config-object hierarchy and the block-to-SoC reuse contract in a reviewable record.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 3
+  },
+  {
+   "slug": "dv-connectivity-table-checks",
+   "role": "soc-dv-engineer",
+   "level": "fresher",
+   "title": "Table-Driven Connectivity, Tie-Off and Address-Map Check Generation",
+   "one_line": "Use at integration when you have a connectivity spreadsheet or IP-XACT and need generated, name-reconciled checks rather than hundreds of hand-written tests.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 4
+  },
+  {
+   "slug": "dv-reset-clock-scenario-matrix",
+   "role": "soc-dv-engineer",
+   "level": "senior",
+   "title": "Reset, Clock-Gating and Clock-Mux Scenario Matrix",
+   "one_line": "Use when defining what reset, clock-gating, frequency-change and mux-switching scenarios a block or subsystem must survive.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 4
+  },
+  {
+   "slug": "dv-soc-scenario-boot",
+   "role": "soc-dv-engineer",
+   "level": "staff",
+   "title": "Multi-Interface Scenario Orchestration and Bare-Metal Boot Correlation",
+   "one_line": "Use when a scenario must coordinate several agents plus an embedded core's boot or init sequence, and a failing software register write has to be traced back to RTL.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 4
+  },
+  {
+   "slug": "dv-vip-integration",
+   "role": "soc-dv-engineer",
+   "level": "intermediate",
+   "title": "Integrating and Configuring a Protocol VIP into an Environment",
+   "one_line": "Use the first time you drop a commercial VIP (PCIe/CXL, USB, DDR/LPDDR, Ethernet, AMBA, MIPI, UCIe) into a testbench and need link-up plus checkers and coverage actually switched on.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 4
+  },
+  {
+   "slug": "dv-compliance-test-authoring",
+   "role": "vip-engineer",
+   "level": "fresher",
+   "title": "Directed Compliance Tests from Spec Normative Items",
+   "one_line": "Use when adding tests to a shipped protocol test suite: turn one spec 'shall' statement into one directed test plus its traceability row, in the suite's exact template.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 5
+  },
+  {
+   "slug": "dv-protocol-checker-rule",
+   "role": "vip-engineer",
+   "level": "junior",
+   "title": "Passive Protocol Checker Rules with Stable Rule IDs",
+   "one_line": "Use when implementing or extending a VIP's passive checker: convert a normative statement into a numbered rule with message, spec back-reference, and a negative test that proves it actually fires.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 5
+  },
+  {
+   "slug": "dv-spec-ecn-delta",
+   "role": "vip-engineer",
+   "level": "staff",
+   "title": "ECN and Spec-Revision Delta Impact Analysis",
+   "one_line": "Use when a standards body issues an ECN or errata and you must size the work across vplan, testbench, checker rules, coverage, test suites and docs.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 5
+  },
+  {
+   "slug": "dv-spec-feature-extract",
+   "role": "vip-engineer",
+   "level": "senior",
+   "title": "Turning a Protocol Spec Chapter into a Feature and Ambiguity Table",
+   "one_line": "Use when ingesting a new or revised protocol chapter or IP databook and you need a normalised feature list plus the questions that must go to architects.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 5
+  },
+  {
+   "slug": "dv-spec-interpretation-ledger",
+   "role": "vip-engineer",
+   "level": "principal",
+   "title": "Spec-Ambiguity Ledger: Raise, Resolve, Propagate",
+   "one_line": "Use when implementation, review or interop hits a genuine protocol ambiguity: write the question in workgroup-ready form, record the resolution with its authority, and propagate it into every artifact.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 5
+  },
+  {
+   "slug": "dv-vip-coverage-model",
+   "role": "vip-engineer",
+   "level": "intermediate",
+   "title": "Shipped Functional Coverage Model: Bins, Crosses and What Not to Cover",
+   "one_line": "Use when defining the coverage model customers rely on for protocol sign-off, before you burn a regression cycle discovering a cross that can never close.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 5
+  },
+  {
+   "slug": "dv-vip-release-compat",
+   "role": "vip-engineer",
+   "level": "senior-staff",
+   "title": "VIP Release Compatibility and API-Stability Review",
+   "one_line": "Use before cutting a VIP release, to decide whether a change is safe for the installed base of customer configurations.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 5
+  },
+  {
+   "slug": "dv-escalation-ownership",
+   "role": "verification-lead",
+   "level": "director",
+   "title": "Owning a Customer Escalation to Closure",
+   "one_line": "Use when an escalation lands on your product line: establish severity and blast radius, the commitment set and the comms cadence, then close the loop back into pre-silicon artifacts.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 6
+  },
+  {
+   "slug": "dv-escape-analysis",
+   "role": "verification-lead",
+   "level": "senior-manager",
+   "title": "Verification Escape Analysis and Corrective Action",
+   "one_line": "Use after any field, interop or silicon escape: reproduce it pre-silicon and answer the three-question audit — stimulus, checking, coverage — with mandatory artifact updates before closure.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 6
+  },
+  {
+   "slug": "dv-release-gate",
+   "role": "verification-lead",
+   "level": "manager",
+   "title": "IP/VIP Release Sign-Off Gate with Evidence and Rollback",
+   "one_line": "Use at every IP or VIP release gate: run the exit criteria as an evidence-linked checklist, approve or reject waivers, and record the go/no-go together with its rollback path.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 6
+  },
+  {
+   "slug": "dv-status-rollup",
+   "role": "verification-lead",
+   "level": "lead",
+   "title": "Weekly Verification Status Roll-Up Across Blocks",
+   "one_line": "Use each week to assemble regression, coverage and bug data across several blocks into one status at a consistent altitude, with the decisions you need named.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 6
+  },
+  {
+   "slug": "dv-testplan-traceability-review",
+   "role": "verification-lead",
+   "level": "lead",
+   "title": "Verification Plan Review and Feature-to-Coverage Traceability Audit",
+   "one_line": "Use before approving a block's verification plan or accepting a milestone coverage claim: audit the spec-feature -> test -> coverage -> checker chain across the on-disk plan export, test sources and coverage text report, and produce a findings list of orphan features, orphan tests, and features that are stimulated but never checked.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 6
+  },
+  {
+   "slug": "dv-artifact-redaction-egress",
+   "role": "applications-engineer",
+   "level": "fresher",
+   "title": "Pre-Share Redaction and Egress Check for Design and Customer Artifacts",
+   "one_line": "Use before any log, script, report, RTL fragment or customer package crosses a boundary — into a session, a ticket, a partner, or another customer.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 7
+  },
+  {
+   "slug": "dv-customer-defect-handoff",
+   "role": "applications-engineer",
+   "level": "junior",
+   "title": "Translating a Customer Report into an R&D-Ready Internal Defect",
+   "one_line": "Use after a customer failure has been isolated to our tool or VIP and must become an internal defect: search known-issues and release-notes text for a duplicate first, then assemble the version matrix, expected-vs-actual with a documentation citation, the reproducer contract, and a severity-justified impact statement into a report R&D accepts without a bounce.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 7
+  },
+  {
+   "slug": "dv-customer-escalation-isolation",
+   "role": "applications-engineer",
+   "level": "intermediate",
+   "title": "Customer Escalation Reproduction and Fault Isolation",
+   "one_line": "Use when a customer reports a failure and you must decide whether it is their configuration, their integration, their DUT, our VIP, or our tool.",
+   "priority": 1,
+   "source": "research-matrix",
+   "wave": 7
+  },
+  {
+   "slug": "dv-customer-flow-deployment",
+   "role": "applications-engineer",
+   "level": "senior",
+   "title": "Time-Boxed Deployment of a Verification Flow at a Customer",
+   "one_line": "Use when standing up a flow, VIP or methodology inside a customer's environment, including time-boxed POC and CoStart-style engagements.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 7
+  },
+  {
+   "slug": "dv-regression-runtime-tuning",
+   "role": "applications-engineer",
+   "level": "staff",
+   "title": "Simulation Runtime and Memory Bottleneck Diagnosis",
+   "one_line": "Use when the complaint is turnaround rather than correctness: find where time and memory actually go, change one thing at a time, and report a measured speedup.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 7
+  },
+  {
+   "slug": "dv-cdc-rdc-triage",
+   "role": "static-signoff-engineer",
+   "level": "intermediate",
+   "title": "CDC and RDC Triage, Setup-Noise Separation and Object-Based Waivers",
+   "one_line": "Use on a CDC or RDC report: verify the setup first, separate constraint noise from real crossings, cluster by domain pair, and draft waivers a signoff reviewer will accept.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 8
+  },
+  {
+   "slug": "dv-lint-triage",
+   "role": "static-signoff-engineer",
+   "level": "fresher",
+   "title": "Lint Violation Triage and Waiver Justification",
+   "one_line": "Use when a lint goal returns hundreds or thousands of violations: disposition them by rule class — fix, waive, or escalate — and write justifications that survive review.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 8
+  },
+  {
+   "slug": "dv-power-aware-sim-debug",
+   "role": "static-signoff-engineer",
+   "level": "staff",
+   "title": "Power-Aware Simulation Failure Debug",
+   "one_line": "Use when power-aware simulation fails — corruption, retention loss, isolation or level-shifter errors — and you must tell a power-intent bug from a UPF description error.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 8
+  },
+  {
+   "slug": "dv-waiver-corpus-audit",
+   "role": "static-signoff-engineer",
+   "level": "senior-staff",
+   "title": "Waiver Corpus Audit Across RTL Drops: Staleness, Over-Breadth and Policy Compliance",
+   "one_line": "Audit the accumulated lint/CDC/RDC waiver files as a first-class signoff artifact — flag stale entries that no longer match anything, wildcard waivers silently swallowing new violations, duplicate or shadowed entries, and waivers missing mandated justification fields — and emit the waiver-delta evidence a release review expects. Use when a new RTL drop lands, before a release-gate waiver review, or when violation counts stay suspiciously flat while the design churns.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 8
+  },
+  {
+   "slug": "dv-xprop-triage",
+   "role": "static-signoff-engineer",
+   "level": "senior",
+   "title": "X-Propagation Classification: Real X versus Tool Pessimism",
+   "one_line": "Use when X-prop-enabled simulation lights up: classify each X source and apply the standard fix or waiver instead of chasing pessimism through the design.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 8
+  },
+  {
+   "slug": "declined-formal-verification-0",
+   "role": "formal-verification",
+   "level": "n/a",
+   "title": "dv-formal-cex-triage — counterexample trace disposition from an exported text trace: real design bug vs missing/over-strong constraint vs checker bug",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Collides with the existing staff cell dv/formal-overconstraint-credit-staff, whose one-line already owns exactly this decision ('decide whether a counterexample is a real bug' plus the assumption-set audit). A separate cell would split one decision across two skills and make routing ambiguous, failing the distinctness test."
+   },
+   "wave": 9
+  },
+  {
+   "slug": "declined-formal-verification-1",
+   "role": "formal-verification",
+   "level": "n/a",
+   "title": "dv-formal-proof-status-diff — nightly formal regression health: diff consecutive property-status exports for proven-to-inconclusive flips, bound drops, new firings and new vacuity, and route each",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Real weekly work on mature formal flows, but it failed the distinctness test as the third-best candidate for a need of two: its routing texture substantially duplicates the published dv-regression-triage-routing, and its main payload (what to do about a property that went inconclusive) lands inside the existing dv/formal-convergence-senior playbook. The lifecycle gap at the front (scoping and authoring) was larger."
+   },
+   "wave": 9
+  },
+  {
+   "slug": "dv-formal-apps",
+   "role": "formal-verification",
+   "level": "junior",
+   "title": "Packaged Formal Apps: Connectivity, Register, Unreachability, SEC and X-Prop",
+   "one_line": "Use when you are not a formal specialist but need automatic connectivity or register checking, coverage-unreachability results, or post-ECO sequential equivalence.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 9
+  },
+  {
+   "slug": "dv-formal-convergence",
+   "role": "formal-verification",
+   "level": "senior",
+   "title": "Convergence Playbook for Inconclusive Proofs",
+   "one_line": "Use when properties come back inconclusive and you need a technique-selection playbook rather than another overnight run.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 9
+  },
+  {
+   "slug": "dv-formal-overconstraint-credit",
+   "role": "formal-verification",
+   "level": "staff",
+   "title": "Over-Constraint Audit and Formal Sign-Off Credit",
+   "one_line": "Use before believing or claiming any proof: decide whether a counterexample is a real bug, prove the assumption set has not made the proof vacuous, then merge defensible credit into the coverage picture.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 9
+  },
+  {
+   "slug": "dv-formal-property-authoring",
+   "role": "formal-verification",
+   "level": "intermediate",
+   "title": "Spec-to-Property Decomposition and SVA Authoring Discipline",
+   "one_line": "Drafts a reviewable formal property set from a spec extract and the RTL interface — asserts, assumes and covers decomposed with end-to-end-versus-local checker choices, every assume justified against the spec and paired with a cover, in the team's house SVA style. Use when starting properties for a new block or feature, when a spec section must become checkable SVA, or when reviewing a property set for assume discipline before first proof runs.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 9
+  },
+  {
+   "slug": "dv-formal-target-scoping",
+   "role": "formal-verification",
+   "level": "senior-staff",
+   "title": "Formal Target Selection, Claim Type and Effort Scoping",
+   "one_line": "Ranks candidate blocks by formal amenability directly from the RTL and spec — structure greps for memories, wide datapath ops, FIFO depths, FSM density, sequential depth, standard interfaces — then assigns each target a claim type (full-proof sign-off, bounded bug hunt, assume-guarantee decomposition, packaged app, or decline-to-simulation) with effort and exit criteria. Use at project planning, at each major RTL drop, or whenever someone asks 'should formal own this block?'",
+   "priority": 2,
+   "source": "topup",
+   "wave": 9
+  },
+  {
+   "slug": "declined-emulation-engineer-5",
+   "role": "emulation-engineer",
+   "level": "n/a",
+   "title": "dv-emulation-transactor-conversion — converting a UVM agent into a dual-domain timed/untimed transactor architecture",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 5: the existing dv-emulation-bringup cell already owns synthesisable-testbench conversion and transactors by name; a second cell would split one workflow across two skills and force the router to guess."
+   },
+   "wave": 10
+  },
+  {
+   "slug": "declined-emulation-engineer-6",
+   "role": "emulation-engineer",
+   "level": "n/a",
+   "title": "dv-emulation-checkpoint-restore-planning — placing checkpoints and restore points to shorten debug re-runs",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 5: restore/checkpoint strategy is explicitly inside the existing dv-emulation-dump-strategy (staff) cell's scope of trigger, window and restore."
+   },
+   "wave": 10
+  },
+  {
+   "slug": "declined-emulation-engineer-7",
+   "role": "emulation-engineer",
+   "level": "n/a",
+   "title": "dv-prototyping-timing-closure-triage — HAPS-style inter-FPGA partition, TDM ratio and timing-closure report triage",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails tests 3 and 4 in combination: the load-bearing inputs are vendor-proprietary partition/timing report formats the author cannot know (nearly the whole body would be FILL slots), and the fix loop is re-running the partitioner and touching hardware — tool and lab work, not text reasoning."
+   },
+   "wave": 10
+  },
+  {
+   "slug": "declined-emulation-engineer-8",
+   "role": "emulation-engineer",
+   "level": "n/a",
+   "title": "dv-emulator-capacity-planning — scheduling and sharing emulator time across teams",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 3: the value lives in negotiation and a booking system, not in text artifacts on disk an agent could read; nothing for Read/Grep/Glob to act on."
+   },
+   "wave": 10
+  },
+  {
+   "slug": "dv-emulation-bringup",
+   "role": "emulation-engineer",
+   "level": "senior",
+   "title": "Emulation Bring-Up: Synthesisable Testbench, Transactors and Compile Triage",
+   "one_line": "Use when porting a simulation environment onto an emulator and fighting compile, partitioning and memory-model errors.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 10
+  },
+  {
+   "slug": "dv-emulation-dump-strategy",
+   "role": "emulation-engineer",
+   "level": "staff",
+   "title": "Debugging with Limited Visibility: Trigger, Window and Restore Strategy",
+   "one_line": "Use when each emulation run costs hours: choose signals, triggers and checkpoints so the export-analyse loop converges in two rounds rather than ten.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 10
+  },
+  {
+   "slug": "dv-emulation-sim-mismatch-triage",
+   "role": "emulation-engineer",
+   "level": "senior",
+   "title": "Simulation-versus-Emulation Divergence Triage",
+   "one_line": "Use when a test passes in simulation but fails in emulation, or the reverse: classify the divergence — uninitialised state, zero-delay race, two-state semantics, silently transformed construct, or model substitution — and route it to the right owner with evidence, before anyone blames the RTL.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 10
+  },
+  {
+   "slug": "dv-emulation-test-porting-audit",
+   "role": "emulation-engineer",
+   "level": "intermediate",
+   "title": "Emulation Suitability Audit of a Simulation Test List",
+   "one_line": "Use when deciding which simulation tests earn scarce emulator time: score each candidate on sim runtime, timed-testbench dependence, checker acceleratability and expected payoff, and emit a ranked porting plan with per-test blockers cited to file and line.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 10
+  },
+  {
+   "slug": "dv-emulation-throughput-triage",
+   "role": "emulation-engineer",
+   "level": "senior-staff",
+   "title": "Emulation Wall-Clock Throughput Triage",
+   "one_line": "Use when runs are correct but slow and emulator time is the bottleneck: apportion wall-clock between design step rate, HVL-HDL transactor round-trips, waveform/trace overhead and host-side testbench compute from the run's text profile, then change the one thing the ledger indicts and verify the measured gain.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 10
+  },
+  {
+   "slug": "declined-memory-ip-dv-engineer-2",
+   "role": "memory-ip-dv-engineer",
+   "level": "n/a",
+   "title": "dv-mem-mode-register-audit — auditing mode-register programming against the datasheet/JEDEC MR tables",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 5 (distinctness): the existing dv/memory-model-training-inter cell already owns mode registers and timing-parameter sourcing as part of bring-up; a standalone MR audit would re-cover its ground rather than add a new week-one task."
+   },
+   "wave": 10
+  },
+  {
+   "slug": "declined-memory-ip-dv-engineer-3",
+   "role": "memory-ip-dv-engineer",
+   "level": "n/a",
+   "title": "dv-mem-ecc-ras-injection-matrix — building the injected-error vs detected/corrected/reported outcome matrix for inline/link ECC and scrubbing",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "It passes the five tests for DDR5/LPDDR5 programs, but the need was 3 and it is less frequent than the three chosen (a per-feature campaign, not a daily/weekly loop) and structurally close to the safety role's fault-campaign skill; better added later than at the expense of timing triage, refresh/low-power, or DFI."
+   },
+   "wave": 10
+  },
+  {
+   "slug": "declined-memory-ip-dv-engineer-4",
+   "role": "memory-ip-dv-engineer",
+   "level": "n/a",
+   "title": "dv-mem-jedec-clause-testplan — decomposing a JEDEC chapter into a testplan with traceability",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Its mechanics duplicate the clause-to-test decomposition pattern already planned for the EDA product-validation role, and within this role its highest-value chapters (init/training, refresh/low-power, timing) are already embedded as spec-extract steps inside the three chosen cells."
+   },
+   "wave": 10
+  },
+  {
+   "slug": "dv-dfi-boundary-blame",
+   "role": "memory-ip-dv-engineer",
+   "level": "staff",
+   "title": "DFI Controller-PHY Boundary Debug and Blame Assignment",
+   "one_line": "Reconciles both sides of the DFI (DDR PHY Interface) boundary from text evidence — init/training handshake stalls (dfi_init_complete), read/write enable timing (trddata_en, tphy_wrlat), frequency-ratio mismatches, and update/low-power handshake deadlocks — and produces an evidence block naming which side violates the DFI contract. Use when the memory controller and the PHY (often different teams or vendors) each claim the other is wrong at their shared interface.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 10
+  },
+  {
+   "slug": "dv-mem-refresh-lowpower-audit",
+   "role": "memory-ip-dv-engineer",
+   "level": "intermediate",
+   "title": "Refresh, Self-Refresh and Power-Down Entry/Exit Sequence Audit",
+   "one_line": "Audits a text command trace against the JEDEC low-power state machine: refresh interval budget and postponement (tREFI/tRFC), per-bank vs all-bank refresh, self-refresh and power-down entry/exit ordering and exit timings (tXP, tXSR, tCKE class), plus review of the assertions and coverage that guard these transitions. Use when verifying or debugging refresh scheduling, DDR5/LPDDR5 refresh management, or any self-refresh/power-down entry-exit failure.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 10
+  },
+  {
+   "slug": "dv-mem-timing-check-triage",
+   "role": "memory-ip-dv-engineer",
+   "level": "junior",
+   "title": "JEDEC Timing-Check Violation Triage from Memory Model Logs",
+   "one_line": "Turns a memory-model timing-check firing into a classified root cause: parse the violation (tRCD, tRP, tRFC, tFAW, tCCD, tWTR, tXP class), trace the offending value back to the mode-register writes and timing config actually loaded, and label it model/speed-bin misconfiguration vs controller scheduling bug vs testbench init error. Use when a DDR/LPDDR/HBM JEDEC memory model or protocol monitor reports a timing violation mid-traffic and the log is thousands of lines deep.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 10
+  },
+  {
+   "slug": "dv-memory-model-training",
+   "role": "memory-ip-dv-engineer",
+   "level": "intermediate",
+   "title": "Memory Model Configuration and Training Bring-Up",
+   "one_line": "Use when standing up a DDR/LPDDR/HBM controller and PHY against a JEDEC memory model: mode registers, timing parameters, and the initialisation and training ladder.",
+   "priority": 2,
+   "source": "research-matrix",
+   "wave": 10
+  },
+  {
+   "slug": "dv-memory-perf-bandwidth",
+   "role": "memory-ip-dv-engineer",
+   "level": "senior",
+   "title": "Bandwidth, Latency and Efficiency Measurement Against the Databook",
+   "one_line": "Use when the product claim is performance — for memory or any bandwidth-claiming interface IP — and you must measure it reproducibly and catch regressions release over release.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 10
+  },
+  {
+   "slug": "declined-eda-product-validation-engineer-10",
+   "role": "eda-product-validation-engineer",
+   "level": "n/a",
+   "title": "dv-tool-doc-behaviour-audit — auditing that user-guide and message documentation matches actual tool behaviour",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 1 (frequency): documentation audits happen per major release at best, not weekly, and fails test 3 in spirit — the valuable half of the loop is running the tool to observe actual behaviour, which the agent cannot do; the text-only remainder is thin."
+   },
+   "wave": 11
+  },
+  {
+   "slug": "declined-eda-product-validation-engineer-11",
+   "role": "eda-product-validation-engineer",
+   "level": "n/a",
+   "title": "dv-tool-option-pairwise-matrix — decomposing a tool's option space into a pairwise/combinatorial validation matrix",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 5 (distinctness): it is a special case of the existing dv/tool-feature-testplan-inter cell (decompose a feature into tests with traceability); publishing both would split one workflow across two skills and dilute routing."
+   },
+   "wave": 11
+  },
+  {
+   "slug": "dv-cross-tool-mismatch-adjudication",
+   "role": "eda-product-validation-engineer",
+   "level": "staff",
+   "title": "Cross-Tool Result Mismatch Adjudication Against the LRM",
+   "one_line": "Use when two simulators — or two modes of our own tool — disagree on the same testcase: reduce to the divergence point, find the governing LRM clause, and rule the mismatch tool bug, implementation-defined divergence, genuine standard ambiguity, or a test relying on undefined behaviour — then record the verdict as searchable precedent.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 11
+  },
+  {
+   "slug": "dv-lrm-conformance-matrix",
+   "role": "eda-product-validation-engineer",
+   "level": "senior",
+   "title": "Conformance Matrix over a Standard (SystemVerilog, UPF, SVA)",
+   "one_line": "Use when you must be able to state how much of a standard the product's test suite actually covers, and where the untested clauses are.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 11
+  },
+  {
+   "slug": "dv-tool-bug-testcase-extraction",
+   "role": "eda-product-validation-engineer",
+   "level": "intermediate",
+   "title": "Customer Tool-Bug Reproduction: Self-Contained Testcase Extraction and Defect Confirmation",
+   "one_line": "Use when a customer-filed tool bug arrives wrapped in their environment: confirm it is a defect rather than user error against the docs and LRM extracts, carve a self-contained, IP-clean testcase out of the customer tree that still shows the same failure signature, and package it to regression-suite conventions for R&D.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 11
+  },
+  {
+   "slug": "dv-tool-feature-testplan",
+   "role": "eda-product-validation-engineer",
+   "level": "intermediate",
+   "title": "Decomposing a Tool Feature or LRM Clause into Validation Tests",
+   "one_line": "Use when the DUT is the EDA tool itself: turn a clause or feature spec into a minimal design, an expected result, and a golden comparison with traceability.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 11
+  },
+  {
+   "slug": "dv-tool-release-behaviour-diff",
+   "role": "eda-product-validation-engineer",
+   "level": "junior",
+   "title": "Cross-Release Tool Behaviour Diff: Noise, Intentional Change, or Regression",
+   "one_line": "Use when a new tool build changes results against the previous one — nightly cross-version runs, release-branch qualification, or a golden-file diff storm: normalise away path/date/seed noise, cluster the surviving deltas, and classify each as documented change, undocumented change, or regression, citing the release-notes line that justifies it.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 11
+  },
+  {
+   "slug": "declined-processor-ip-dv-engineer-16",
+   "role": "processor-ip-dv-engineer",
+   "level": "n/a",
+   "title": "dv-instruction-stream-generator-targeting — configuring a riscv-dv-style random instruction generator to hit a specific test-plan item and auditing the generated stream",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 3 in spirit and test 4 outright: the value lives in the generate → simulate → coverage loop the agent cannot close with Read/Grep/Glob, and for in-house generators the knob catalogue is exactly the proprietary lookup the rules forbid — the cell would be almost entirely [[FILL]] slots around a thin grep-the-generated-assembly remainder."
+   },
+   "wave": 11
+  },
+  {
+   "slug": "declined-processor-ip-dv-engineer-17",
+   "role": "processor-ip-dv-engineer",
+   "level": "n/a",
+   "title": "dv-debug-trace-interface-verification — verifying debug-module and instruction-trace interfaces (RISC-V Debug/E-Trace, CoreSight) by decoding trace packets against the program image",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 1 (phase-bound: roughly once per project during debug-IP bring-up, not weekly) and half of test 4 (licensed trace formats such as CoreSight ETM are proprietary lookup). The text-decode method it would carry is already served by dv-trap-exception-triage and the existing isa-step-compare trace-reading."
+   },
+   "wave": 11
+  },
+  {
+   "slug": "declined-processor-ip-dv-engineer-18",
+   "role": "processor-ip-dv-engineer",
+   "level": "n/a",
+   "title": "dv-arch-coverage-model-audit — building and auditing instruction × privilege × trap architectural-coverage crosses",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 5: generic coverage-hole closure already exists in the catalog family, and the CPU-specific matrices this would contribute fall out as by-products of dv-csr-warl-access-audit and dv-trap-exception-triage; a standalone cell would mostly restate them."
+   },
+   "wave": 11
+  },
+  {
+   "slug": "dv-csr-warl-access-audit",
+   "role": "processor-ip-dv-engineer",
+   "level": "intermediate",
+   "title": "CSR Field-Behaviour Audit and Negative-Access Test Matrix",
+   "one_line": "Cross-checks the core's machine-readable CSR description against the ISA rules and the RTL — reset values, WARL/WLRL legalisation, privilege- and config-gated access, read/write side effects — then emits the negative-access test matrix and triages CSR-test failures. Use when a core configuration changes, a CSR test fails, or CSR behaviour must be justified at sign-off.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 11
+  },
+  {
+   "slug": "dv-custom-instruction-verification-plan",
+   "role": "processor-ip-dv-engineer",
+   "level": "senior",
+   "title": "Custom-Instruction Extension Encoding Audit and Verification Plan",
+   "one_line": "Takes a user-defined instruction (APEX/TIE/RISC-V custom-N style), audits its encoding against the base opcode map for collisions and reserved-space violations, enumerates the semantic corner cases — hazards, mid-instruction exceptions, illegal operands, privilege, added state — and emits the reference-model delta list plus a directed-test list. Use when a customer or internal team adds or modifies an extension instruction.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 11
+  },
+  {
+   "slug": "dv-isa-step-compare",
+   "role": "processor-ip-dv-engineer",
+   "level": "senior",
+   "title": "ISA Reference-Model Step-and-Compare Verification",
+   "one_line": "Use when the golden checker is an instruction-set model: align comparison points and architectural state, then triage a mismatch to RTL, model, or test.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 11
+  },
+  {
+   "slug": "dv-memory-ordering-litmus",
+   "role": "processor-ip-dv-engineer",
+   "level": "staff",
+   "title": "Litmus-Test Outcome Adjudication Against the Memory Model",
+   "one_line": "Decides whether an observed multi-hart outcome is allowed or forbidden by the core's memory model by reading the litmus source, the golden allowed-outcome file and the per-hart traces — then names either the ordering bug (with the broken happens-before chain and candidate microarchitectural culprits) or the over-strong expectation, and picks the next litmus family. Use when an MP/SB/atomicity-style test flags a surprising outcome or when writing checks for a multicore ordering feature.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 11
+  },
+  {
+   "slug": "dv-trap-exception-triage",
+   "role": "processor-ip-dv-engineer",
+   "level": "junior",
+   "title": "Unexpected Trap and Interrupt Triage from Architectural State",
+   "one_line": "Decodes the trap a failing CPU test died in — cause, faulting PC, tval/syndrome, mode at the time — checks delegation, vectoring and priority against the ISA rules, and classifies the failure as RTL bug, test/handler bug, or environment setup. Use when a processor test ends in an unexpected exception, a spurious or missing interrupt, or a trap-handler loop.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 11
+  },
+  {
+   "slug": "declined-ams-verification-engineer-9",
+   "role": "ams-verification-engineer",
+   "level": "n/a",
+   "title": "dv-analog-digital-boundary-pin-audit (junior) — diffing the analog macro's port list across the SPICE netlist header, Verilog wrapper, RNM and integration RTL for name/width/direction/supply mismatches at every analog release drop.",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Need of 4 was already met by stronger, hint-aligned candidates. Its strongest content partially overlaps two other cells: the boundary-consistency angle is covered where it bites hardest by dv-connect-module-discipline-debug (a wrong port/discipline surfaces in the insertion report) and the release-drop audit angle by dv-ams-view-binding-audit; the residual pin-diff mechanics also sit close to the published dv-build-filelist-hygiene territory of integration hygiene. It would be the first candidate if this role is ever extended to six cells."
+   },
+   "wave": 12
+  },
+  {
+   "slug": "dv-ams-convergence-triage",
+   "role": "ams-verification-engineer",
+   "level": "senior",
+   "title": "Analog Solver Convergence and Timestep-Collapse Triage in Mixed-Signal Runs",
+   "one_line": "Use when a mixed-signal run aborts with convergence errors or crawls because the analog timestep collapsed: pull the solver's diagnostics — worst-converging nodes, rejected timepoints, minimum-step hits — identify the node and time where it struggled, classify the cause (model discontinuity, floating node, stiff crossing, unrealistic parameter, tolerance mis-set), and apply the standard remedy for that class.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "dv-ams-view-binding-audit",
+   "role": "ams-verification-engineer",
+   "level": "staff",
+   "title": "Per-Test Analog Representation Matrix and View-Binding Audit",
+   "one_line": "Use when a regression mixes transistor, fast-SPICE, RNM and digital-stub views of the same analog blocks: keep the intended per-test representation matrix explicit in the repo, then audit elaboration bind reports to prove each test actually bound the views the plan claims — before anyone takes verification credit for 'covered at SPICE level'.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "dv-connect-module-discipline-debug",
+   "role": "ams-verification-engineer",
+   "level": "intermediate",
+   "title": "Connect-Module Insertion and Discipline-Resolution Debug at the AMS Boundary",
+   "one_line": "Use when mixed-signal elaboration fails or misbehaves at the analog-digital boundary — no connect rule matched, ambiguous discipline, wrong supply reference on an inserted connect module, or an exploding inserted-module count on buses: read the elaboration/insertion report to find where each boundary net got its discipline and which rule fired, then fix the rule, the discipline declaration, or the netlist.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "dv-real-signal-behavioural-checks",
+   "role": "ams-verification-engineer",
+   "level": "junior",
+   "title": "Behavioural Checks over Real-Valued Signals: Tolerance, Settling, Monotonicity",
+   "one_line": "Use when a mixed-signal test passes only because nobody is checking the analog behaviour: add self-checks over real-valued nets — threshold crossings with hysteresis, settling-time and overshoot windows, ramp monotonicity, tolerance-band comparison against a limits table — using patterns that survive the classic real-signal traps.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "dv-rnm-authoring-correlation",
+   "role": "ams-verification-engineer",
+   "level": "senior",
+   "title": "Real-Number Model Authoring and Correlation Evidence",
+   "one_line": "Use when writing or releasing a real-number model of an analog block and you must show it is trustworthy against SPICE and silicon.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 12
+  },
+  {
+   "slug": "declined-safety-verification-engineer-14",
+   "role": "safety-verification-engineer",
+   "level": "n/a",
+   "title": "dv-tool-confidence-classification — ISO 26262-8 clause 11 tool impact / tool error detection worksheet and TCL argument, seeded from a flow-script inventory of the tool chain",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails the frequency and proprietary-lookup tests relative to the four chosen: it recurs only per project or per tool-version bump, the decisive evidence is licensed vendor tool-qualification kits and tool safety manuals (the cell's core value would BE that lookup), and ownership typically sits with the functional-safety manager rather than the safety verification engineer. With need already met by four stronger cells, adding it would be padding."
+   },
+   "wave": 12
+  },
+  {
+   "slug": "declined-safety-verification-engineer-15",
+   "role": "safety-verification-engineer",
+   "level": "n/a",
+   "title": "dv-dependent-failure-analysis — dependent-failure / freedom-from-interference analysis: common-cause initiators shared between a safety mechanism and the logic it monitors",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "The analytical core (shared clock trees post-CTS, power delivery, physical proximity, coupling) lives in netlist and layout data that is not reviewable text in a DV workspace, so a Read/Grep/Glob agent would be pushed to assert physical claims it cannot see. The RTL-visible fragment — shared clock/reset/power-intent between monitor and monitored logic — is already folded into dv-safety-mechanism-verification-map's cross-check sections."
+   },
+   "wave": 12
+  },
+  {
+   "slug": "dv-fault-campaign-iso26262",
+   "role": "safety-verification-engineer",
+   "level": "staff",
+   "title": "Fault-Injection Campaign and Diagnostic-Coverage Evidence",
+   "one_line": "Use for ASIL-targeted IP: derive the fault list, run the campaign, classify safe/detected/residual/latent, and produce the numbers that go in the safety case.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 12
+  },
+  {
+   "slug": "dv-safety-manual-aou",
+   "role": "safety-verification-engineer",
+   "level": "principal",
+   "title": "Safety-Manual Assumptions of Use: Authoring Cross-Check and Integration Compliance Matrix",
+   "one_line": "Cross-checks a safety manual's Assumptions of Use against what was actually verified — every AoU must either be enforced by the verified configuration or explicitly tested as violated-and-detected — and, in the integration direction, converts an incoming safety-IP manual's AoU list into an evidence-linked compliance matrix with the unmet assumptions named. Use before releasing the safety package of an ASIL-ready IP, or when integrating third-party safety IP delivered as SEooC.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "dv-safety-mechanism-verification-map",
+   "role": "safety-verification-engineer",
+   "level": "senior-staff",
+   "title": "Safety Mechanism Verification Map: Function, Detection, Reporting within FTTI",
+   "one_line": "Decomposes every safety mechanism in the safety concept (ECC, parity, lockstep, watchdog, CRC, BIST, voter) into its three verification obligations — the mechanism itself works, it detects the fault classes it claims in the FMEDA, and the error indication reaches the fault-reporting interface within the FTTI budget — then audits the test plan and strobe list against each obligation and emits the gap list. Use when planning safety verification for a new IP or SoC, and again whenever a mechanism, its DC claim, or the FTTI budget changes.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "dv-safety-req-trace-audit",
+   "role": "safety-verification-engineer",
+   "level": "intermediate",
+   "title": "Hardware Safety Requirement to Test Traceability Audit",
+   "one_line": "Audits the bidirectional chain from hardware safety requirements through test plan to test source and regression results: greps requirement tags across the tree, lists untraced requirements, orphan tests and stale or failing evidence, and emits the fix list in the house matrix format. Use before any safety review, assessment drop or safety-case update, or weekly during an active safety program when requirements or tests have churned.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "dv-undetected-fault-closure",
+   "role": "safety-verification-engineer",
+   "level": "senior",
+   "title": "Undetected-Fault Debug and Safe-Fault Justification",
+   "one_line": "Root-causes each undetected or unclassified fault left over from a fault campaign — not activated, activated-but-not-propagated, or propagated-but-not-detected — by reading the fault report and the RTL around the fault node, then picks the cheapest closure: stimulus improvement, strobe/checker fix, safety-mechanism gap escalation, or a written safe-fault argument. Use when the campaign report misses its DC/SPFM/LFM target and a residue of unclassified faults is blocking metric closure.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 12
+  },
+  {
+   "slug": "declined-security-verification-engineer-12",
+   "role": "security-verification-engineer",
+   "level": "n/a",
+   "title": "dv-secure-boot-ladder-triage — triaging secure-boot simulation failures by chain-of-trust stage (ROM load, signature verify, anti-rollback, key derivation, jump)",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails tests 4 and 5. The generic part — read the log, find the failing stage — is already covered by the published dv-sim-log-first-error plus the role's existing staff cell, whose scope explicitly includes lifecycle and debug-lock behaviour. The residual distinct value is the team's proprietary ROM stage map and log markers, which would make the skill almost entirely [[FILL:]] slots with no transferable method left."
+   },
+   "wave": 13
+  },
+  {
+   "slug": "declined-security-verification-engineer-13",
+   "role": "security-verification-engineer",
+   "level": "n/a",
+   "title": "dv-sidechannel-rtl-review — a grep-based review for key-dependent control flow and non-constant-time paths in RTL",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "Fails test 3. Credible pre-silicon side-channel assessment is measurement- or tool-driven (TVLA on traces, information-flow engines); a text-only pattern hunt over RTL yields mostly false positives because per-cycle timing in hardware is structural, so the cell's honest value would be running a tool the agent cannot run. Side-channel SCOPE (what is in/out of scope and why) is instead captured as a requirement class inside dv-security-requirement-traceability."
+   },
+   "wave": 13
+  },
+  {
+   "slug": "dv-asset-flow-property-authoring",
+   "role": "security-verification-engineer",
+   "level": "senior",
+   "title": "Asset Flow Specification: Sources, Sinks, Blockers and the Property List",
+   "one_line": "Turns the asset inventory and threat model into a checkable flow specification — for each asset (keys, seeds, entropy, debug-unlock tokens) the legal sources, forbidden sinks and expected blockers — by tracing asset fanout through the RTL text, then drafts SVA where expressible and a tool-ready source/sink/blocker spec where it is not. Use at security block kickoff and whenever RTL touching an asset path changes.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 13
+  },
+  {
+   "slug": "dv-crypto-kat-coverage-audit",
+   "role": "security-verification-engineer",
+   "level": "junior",
+   "title": "Known-Answer-Test Coverage Audit Against the Claimed Algorithm Matrix",
+   "one_line": "Builds the matrix of claimed algorithm/mode/key-size combinations from the datasheet and checks each one against the known-answer vector files (NIST CAVP .rsp / ACVP .json) actually wired into the regression, flagging claimed-but-untested combinations, stale vector versions and orphan vectors. Use at every crypto IP release, when an algorithm or mode is added, or when preparing a FIPS/ACVP submission.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 13
+  },
+  {
+   "slug": "dv-secure-register-policy-audit",
+   "role": "security-verification-engineer",
+   "level": "intermediate",
+   "title": "Secure Register Access-Policy Audit: Spec vs RAL vs Tests",
+   "one_line": "Cross-checks the register map's declared security attributes — secure/privileged access, lock bits, write-once, sticky-until-reset — against the RAL model and the negative tests that exercise them, and lists every register whose declared policy is unimplemented, mismatched or untested. Use when the register spec revs, before a regs-freeze review, or after any protected-register bug escape.",
+   "priority": 2,
+   "source": "topup",
+   "wave": 13
+  },
+  {
+   "slug": "dv-security-negative-tests",
+   "role": "security-verification-engineer",
+   "level": "staff",
+   "title": "Threat-Model-Driven Negative Testing for Security Features",
+   "one_line": "Use when verifying access control, key management, lifecycle and debug-lock behaviour — proving that illegal things cannot happen.",
+   "priority": 3,
+   "source": "research-matrix",
+   "wave": 13
+  },
+  {
+   "slug": "dv-security-requirement-traceability",
+   "role": "security-verification-engineer",
+   "level": "n/a",
+   "title": "(rejected by audit)",
+   "one_line": "",
+   "priority": 9,
+   "source": "topup",
+   "declined": {
+    "why": "audit: dv-safety-req-trace-audit (proposed, safety-verification-engineer): same method — grep requirement-ID tags across a requirements list, plan export, test/assertion sources and results/coverage reports; same three gap classes (untraced requirement, orphan evidence, stale evidence); same deliverable (t"
+   },
+   "wave": 13
+  }
+ ]
+}

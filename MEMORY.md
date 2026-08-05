@@ -198,6 +198,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   tests/authoring/test_{markdown,scoreboard}.py — 363 tests green
   next: I-001 registry (top-up design workflow running), then I-004 site
 
+- [I-001] 2026-08-05T07:32Z  status: done
+  what: specs/skill_registry.json — the 84-cell plan of record. 53 cells from the research matrix
+  (slugs normalised per ADR-008: no dv/ prefix, no level suffix, level is a facet) + 30 top-up cells
+  designed by a 12-agent fan-out, one per under-served role, each agent explicitly permitted to
+  DECLINE rather than pad. An adversarial audit rejected 1 of 31 as a cross-role duplicate
+  (dv-security-requirement-traceability vs dv-safety-req-trace-audit — same method, same gap classes,
+  only certification nouns differing, and those were already FILL slots), keeping the safety cell as
+  canonical and leaving security honestly at 4/5. 83 active cells + 20 recorded declines.
+  Two scoreboard rules this exposed: (1) a decline may only credit a role that has already published
+  everything it planned, otherwise "we decided not to write a fifth" silently becomes "we are
+  finished"; (2) facet drift — a published skill whose role/level disagrees with the registry — is a
+  failure. On its first real run the drift check caught all 6 published skills, which is the exact
+  regression the Phase-H remediation introduced and nothing had detected mechanically
+  artifacts: specs/skill_registry.json, semiskill/authoring/scoreboard.py, tests (13)
+  next: I-004 site, then wave 0 retrofit
+
 ## In-Flight Step
 _(none)_
 
