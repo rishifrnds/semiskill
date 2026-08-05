@@ -164,6 +164,23 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: skills/_shared/team-profile.md, skills/*/SKILL.md (6, v1.1.0), dist/semiskill-dv.zip
   next: H-019..H-022, and a third content pass before anything reaches a real DV team
 
+- [H-020] 2026-08-05T06:40Z  status: done
+  what: semiskill/authoring/catalog_page.py + `semiskill catalog` — the browsable page, generated
+  from the published catalog so nothing on it can be fabricated. Three artifacts because the places
+  people look have different constraints: catalog.md (SharePoint renders Markdown natively, so this
+  is the entry point — an uploaded .html downloads instead), catalog.html (rich, self-contained, zero
+  network, shadcn/tweakcn dark: search, role/level facets, role×level coverage matrix where an empty
+  cell is an explicit invitation to contribute, detail view with the REAL per-stage scan report, and
+  a copy-install-prompt button that writes the skill into .cursor/skills/ via the agent), and
+  catalog.csv (paste into a SharePoint list for grouped browse with no code). Skill bodies are
+  untrusted: the embedded JSON escapes `</` so a body cannot terminate its own data block, and a test
+  asserts a hostile body cannot break out. A second test asserts the page fabricates nothing —
+  ui/catalog-demo.html invented install counts, star ratings and an approver name
+  artifacts: semiskill/authoring/catalog_page.py, semiskill/cli.py,
+  tests/authoring/test_catalog_page.py (9), dist/site/{catalog.md,catalog.html,catalog.csv}
+  verified: rendered in Chrome — 6 real skills, real scan scores, matrix, detail dialog. 329 green
+  next: H-019 truthful install string, H-021 delimiter hardening, H-022 backlog, content pass 3
+
 ## In-Flight Step
 _(none)_
 

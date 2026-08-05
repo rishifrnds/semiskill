@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T06:05Z_
+_Last updated: 2026-08-05T06:40Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-014b (done) — content remediation round 2 after an adversarial review
+- Step ID: H-020 (done) — browsable catalog page generated from the published catalog
 - Sub-state: CONTENT IS NOT SET-READY. 2 of 6 shippable; see "Content status" below
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 16562f6
-- Message: wip: H-017/H-018 pack builder
+- SHA: 1c16c85
+- Message: wip: H-014b content remediation r2
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
@@ -59,4 +59,4 @@ tenant. Plus: no auth, nothing deployed, no CI, no backups.
 
 ## If resumed
 Read MEMORY.md (Phase H) and the approved plan above. DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest` (320, Docker PG running). Nothing pushed to remote.
+Tests: `pytest` (329, Docker PG running). Nothing pushed to remote.

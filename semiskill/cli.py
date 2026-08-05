@@ -135,6 +135,31 @@ def cmd_pack(args, store, out) -> int:
     return 0
 
 
+def cmd_catalog(args, store, out) -> int:
+    """Generate the browsable catalog from what published: catalog.md (SharePoint renders it
+    natively), catalog.html (rich, self-contained, download-and-open) and catalog.csv (paste into a
+    SharePoint list for grouped browse)."""
+    from datetime import datetime, timezone
+    from semiskill.artifacts.store import PostgresArtifactStore
+    from semiskill.authoring.catalog_page import build_catalog
+
+    dsn = args.dsn or Config.from_env().database_url
+    store = store or PostgresArtifactStore(dsn)
+    d, entries = build_catalog(store=store, out_dir=args.out,
+                               generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    if not entries:
+        print("nothing is published yet — run `semiskill wave` first", file=out)
+        return 1
+    print(f"{len(entries)} skill(s) -> {d}", file=out)
+    for f in ("catalog.md", "catalog.html", "catalog.csv"):
+        print(f"  {d / f}", file=out)
+    print("\nSharePoint: upload catalog.md to a document library (it renders in the browser);",
+          file=out)
+    print("paste catalog.csv into a list for grouped browse; catalog.html is download-and-open.",
+          file=out)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="semiskill", description="SemiSkill CLI (L1 capture)")
     sub = p.add_subparsers(dest="command", required=True)
@@ -181,6 +206,11 @@ def build_parser() -> argparse.ArgumentParser:
     pk.add_argument("--name", default="semiskill-dv", help="pack folder name")
     pk.add_argument("--no-zip", action="store_true")
     pk.set_defaults(func=cmd_pack, needs_store=False)
+
+    cat = sub.add_parser("catalog", help="generate the browsable catalog page from the published catalog")
+    cat.add_argument("--dsn", default=None, help="catalog database (defaults to DATABASE_URL)")
+    cat.add_argument("--out", default="dist/site", help="output directory")
+    cat.set_defaults(func=cmd_catalog, needs_store=False)
     return p
 
 
