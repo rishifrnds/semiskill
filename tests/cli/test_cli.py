@@ -66,3 +66,37 @@ def test_list_empty():
 def test_invalid_label_rejected(skill_dir):
     with pytest.raises(SystemExit):  # argparse rejects bad choice
         main(["submit", str(skill_dir), "--label", "top-secret"], store=FakeStore(), out=io.StringIO())
+
+
+def test_lint_needs_no_store_and_exits_nonzero_on_error(tmp_path, capsys):
+    """`semiskill lint` must work with no database — authoring feedback has to be instant, and a
+    wave must be provably clean before the first artifact is written."""
+    import io
+    from semiskill.cli import main
+    d = tmp_path / "dv-bad-skill"
+    d.mkdir()
+    (d / "SKILL.md").write_text(
+        "---\nname: dv-bad-skill\ndescription: Does a thing. Use when needed.\n"
+        "allowed-tools: Read Bash\n---\nbody text that is long enough to not be thin " * 12,
+        encoding="utf-8")
+    out = io.StringIO()
+    # store=None and needs_store=False => no Postgres connection is attempted
+    assert main(["lint", str(tmp_path)], store=None, out=out) == 1
+    assert "L017" in out.getvalue()
+
+
+def test_lint_clean_tree_exits_zero(tmp_path):
+    import io
+    from semiskill.cli import main
+    d = tmp_path / "dv-good-skill"
+    d.mkdir()
+    body = ("# Good\n\nA real procedure.\n\n" + "Read the summary and classify each failure. " * 20)
+    (d / "SKILL.md").write_text(
+        "---\nname: dv-good-skill\n"
+        "description: Classify regression failures. Use when a nightly run has failures.\n"
+        "allowed-tools: Read Grep Glob\nmetadata:\n"
+        "  semiskill-function: design-verification\n  semiskill-role: dv-engineer\n"
+        "  semiskill-level: intermediate\n---\n" + body, encoding="utf-8")
+    out = io.StringIO()
+    assert main(["lint", str(tmp_path)], store=None, out=out) == 0
+    assert "approve" in out.getvalue()

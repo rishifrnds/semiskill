@@ -78,6 +78,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: semiskill/authoring/lint_body.py, tests/authoring/test_lint_body.py
   next: H-005
 
+- [H-005/H-006] 2026-08-05T04:10Z  status: done
+  what: semiskill/authoring/facets.py (enumerated function/role/level vocabulary + typo suggester;
+  a facet typo is silently unreachable because catalog_search matches exact and case-sensitive) and
+  semiskill/authoring/lint.py (frontmatter contract L005-L022 incl. kebab name == folder name,
+  description trigger, tool allowlist, facet validity; scores taken FROM the real
+  StaticStructureScanner/SecretPiiScanner and thresholds imported from pipeline, never copied;
+  yaml.YAMLError surfaced as a finding instead of aborting a wave; duplicate-slug detection across a
+  tree) + `semiskill lint` (needs no DB — cli.main only builds a store for commands that declare it)
+  + the drift guard asserting linter and scanner fire on the same codes
+  artifacts: semiskill/authoring/{facets,lint}.py, semiskill/cli.py,
+  tests/authoring/{test_facets,test_lint,test_lint_drift}.py, tests/cli/test_cli.py — 295 tests green
+  next: H-007
+
 ## In-Flight Step
 _(none)_
 
