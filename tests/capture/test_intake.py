@@ -76,6 +76,90 @@ def test_nul_bytes_sanitized():
     assert "\x00" not in art.payload["body"]      # jsonb-safe (would otherwise crash the store)
 
 
+# ── ADR-008: Agent Skills open-standard frontmatter ────────────────────────────
+# One SKILL.md must be simultaneously spec-valid (six standard keys only), Cursor-loadable
+# (kebab `name` == folder name) and SemiSkill-ingestible (function/role/level facets).
+
+SPEC_MD = """---
+name: dv-sim-log-first-error
+description: Extract the true first error from a simulation log. Use when a run failed.
+license: Proprietary - internal use only
+allowed-tools: Read Grep Glob
+metadata:
+  semiskill-title: First-Error Extraction and Repro Block
+  semiskill-function: design-verification
+  semiskill-role: dv-engineer
+  semiskill-level: intermediate
+  semiskill-owner: dv-guild
+  semiskill-version: 1.0.0
+  semiskill-tags: logs, triage, debug
+---
+
+# First-Error Extraction
+
+Body.
+"""
+
+
+def test_allowed_tools_space_separated_string():
+    """The open standard writes `allowed-tools` as a space-separated string. Iterating it as a
+    sequence yields one 'tool' per CHARACTER — ~10 unlisted tools at 0.4 each, clamping stage-1
+    safety to 0.000. Every spec-compliant submission would score zero."""
+    art = build_skill_version(skill_md=SPEC_MD, actor="a")
+    assert art.payload["allowed_tools"] == ["Read", "Grep", "Glob"]
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Read Grep Glob", ["Read", "Grep", "Glob"]),
+    ("Read, Grep, Glob", ["Read", "Grep", "Glob"]),
+    ("Read,Grep", ["Read", "Grep"]),
+    ("  Read   Grep  ", ["Read", "Grep"]),
+    ("Read", ["Read"]),
+    ("", []),
+])
+def test_allowed_tools_string_forms(raw, expected):
+    md = f"---\nname: x\nallowed-tools: {raw!r}\n---\nbody"
+    assert build_skill_version(skill_md=md, actor="a").payload["allowed_tools"] == expected
+
+
+def test_facets_read_from_metadata():
+    p = build_skill_version(skill_md=SPEC_MD, actor="a").payload
+    assert p["function"] == "design-verification"
+    assert p["role"] == "dv-engineer"
+    assert p["level"] == "intermediate"
+    assert p["owner"] == "dv-guild"
+    assert p["version"] == "1.0.0"
+    assert p["tags"] == ["logs", "triage", "debug"]
+
+
+def test_slug_is_the_spec_name_and_title_is_the_display_name():
+    """`name` is the kebab identifier (== the Cursor folder name); the human title rides in
+    metadata so the catalog card stays readable with no schema migration."""
+    p = build_skill_version(skill_md=SPEC_MD, actor="a").payload
+    assert p["slug"] == "dv-sim-log-first-error"
+    assert p["name"] == "First-Error Extraction and Repro Block"
+
+
+def test_metadata_unprefixed_keys_also_resolve():
+    md = ("---\nname: x\nmetadata:\n  function: design-verification\n  role: dv-engineer\n"
+          "---\nbody")
+    p = build_skill_version(skill_md=md, actor="a").payload
+    assert p["function"] == "design-verification" and p["role"] == "dv-engineer"
+
+
+def test_top_level_keys_still_win_for_legacy_seeds():
+    """Backward compatibility: the eight published seeds use flat keys and must keep working."""
+    p = build_skill_version(skill_md=SKILL_MD, actor="a").payload
+    assert p["function"] == "design-verification" and p["level"] == "intermediate"
+    assert p["slug"] == "dv/uvm-testbench" and p["name"] == "UVM Testbench Starter"
+
+
+def test_metadata_not_a_mapping_is_ignored_not_fatal():
+    md = "---\nname: x\nmetadata: just-a-string\n---\nbody"
+    p = build_skill_version(skill_md=md, actor="a").payload
+    assert p["function"] is None and p["slug"] == "x"
+
+
 def test_load_skill_dir(tmp_path):
     (tmp_path / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
     (tmp_path / "scripts").mkdir()

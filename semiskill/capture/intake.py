@@ -25,6 +25,36 @@ def _slugify(name: str) -> str:
     return s or "skill"
 
 
+def _meta(fm: dict) -> dict:
+    """The `metadata` block, or {} when absent or not a mapping (never fatal — the pipeline, not
+    the parser, is what rejects a bad submission)."""
+    m = fm.get("metadata")
+    return m if isinstance(m, dict) else {}
+
+
+def _field(fm: dict, key: str):
+    """Resolve one taxonomy field per ADR-008: `metadata['semiskill-<k>']` → `metadata['<k>']` →
+    top-level `'<k>'`. The last hop keeps the pre-ADR-008 seeds working unchanged."""
+    m = _meta(fm)
+    for candidate in (m.get(f"semiskill-{key}"), m.get(key), fm.get(key)):
+        if candidate is not None:
+            return candidate
+    return None
+
+
+def _str_list(value) -> list[str]:
+    """A YAML list, or a delimited string. The Agent Skills standard writes `allowed-tools` as a
+    space-separated string, and `metadata` values are strings by spec — iterating either as a
+    sequence would yield one entry per CHARACTER, which scores every skill 0.0 at stage 1."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [t for t in re.split(r"[,\s]+", value.strip()) if t]
+    if isinstance(value, (list, tuple)):
+        return [str(t) for t in value]
+    return []
+
+
 def _sanitize(s: str) -> str:
     """Strip NUL bytes from untrusted content. Postgres jsonb rejects \\u0000, so an unsanitized NUL
     in a body/file would crash the store — sanitize at the L1 boundary (fail-safe, not fail-crash)."""
@@ -58,17 +88,19 @@ def build_skill_version(*, skill_md: str, actor: str,
     name = fm.get("name")
     if not name:
         raise ValueError("SKILL.md frontmatter must include a 'name'")
+    version = _field(fm, "version")
+    title = _field(fm, "title")                  # ADR-008: human title rides in metadata…
     payload = {
-        "slug": fm.get("slug") or _slugify(str(name)),
-        "name": str(name),
+        "slug": _field(fm, "slug") or _slugify(str(name)),   # …`name` is the kebab identifier
+        "name": str(title if title is not None else name),
         "description": str(fm.get("description", "")),
-        "version": str(fm.get("version", "0.1.0")),
-        "function": fm.get("function"),
-        "role": fm.get("role"),
-        "level": fm.get("level"),
-        "owner": fm.get("owner") or actor,
-        "tags": [str(t) for t in (fm.get("tags") or [])],
-        "allowed_tools": [str(t) for t in (fm.get("allowed-tools") or fm.get("allowed_tools") or [])],
+        "version": str(version if version is not None else "0.1.0"),
+        "function": _field(fm, "function"),
+        "role": _field(fm, "role"),
+        "level": _field(fm, "level"),
+        "owner": _field(fm, "owner") or actor,
+        "tags": _str_list(_field(fm, "tags")),
+        "allowed_tools": _str_list(fm.get("allowed-tools") or fm.get("allowed_tools")),
         "body": _sanitize(parsed.body),                          # UNTRUSTED submitter content
         "files": {k: _sanitize(v) for k, v in (files or {}).items()},  # UNTRUSTED submitter content
     }

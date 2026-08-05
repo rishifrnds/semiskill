@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T03:26Z_
+_Last updated: 2026-08-05T03:40Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-001 (done) — ADR-008 written
-- Sub-state: next H-002 (intake allowed-tools str-or-list)
+- Step ID: H-002/H-003 (done) — intake implements ADR-008
+- Sub-state: next H-004 (stdlib-only body linter)
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 812e381
-- Message: rotate: archived Phase G, started Phase H
+- SHA: 2ccffbd
+- Message: wip: H-001 ADR-008
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
@@ -46,4 +46,4 @@ tenant. Plus: no auth, nothing deployed, no CI, no backups.
 
 ## If resumed
 Read MEMORY.md (Phase H) and the approved plan above. DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest` (183). Nothing pushed to remote.
+Tests: `pytest` (195, Docker PG running). Nothing pushed to remote.

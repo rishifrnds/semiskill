@@ -59,6 +59,15 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: DECISIONS.md ADR-008
   next: H-002
 
+- [H-002/H-003] 2026-08-05T03:40Z  status: done
+  what: intake.py implements the ADR-008 contract — `_str_list` parses `allowed-tools` from a YAML list
+  OR the standard's space/comma-separated string (was iterated per CHARACTER: ~10 unlisted tools ->
+  stage-1 safety 0.000, so every spec-compliant skill scored zero); `_field` resolves each taxonomy
+  field metadata[semiskill-k] -> metadata[k] -> top-level k; payload name comes from semiskill-title
+  while slug is the kebab spec `name`. 12 new tests; the 8 legacy seeds' tests pass UNMODIFIED
+  artifacts: semiskill/capture/intake.py, tests/capture/test_intake.py, 195 tests green vs live PG
+  next: H-004
+
 ## In-Flight Step
 _(none)_
 
