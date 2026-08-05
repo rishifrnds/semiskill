@@ -10,8 +10,8 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
-  semiskill-review-by: 2027-06-23
+  semiskill-version: 1.3.0
+  semiskill-review-by: 2027-08-05
   semiskill-tags: reproducer, bisection, determinism, triage, handoff, debug
 ---
 
@@ -58,6 +58,9 @@ it has no counterpart in the profile or in that skill, and is answered here and 
 fill in one of the shared three above if this skill needs something narrower than the profile
 records — Run identity here also asks where the string is printed, which the profile's entry does not.
 
+A fourth pack-wide fact has no row above because this skill never narrows it: the profile's **Rerun
+convention**. Step 8 reads it straight from `_shared/team-profile.md` for the handoff's repeat line.
+
 **If a slot is unfilled, stop and ask. Do not guess a convention.** An invented marker string, knob
 name or rerun recipe sends the recipient down a path that does not exist, and you will not hear about
 it for a day.
@@ -74,7 +77,12 @@ Every shrink iteration produces another log. Hold to this:
    that path. Until a path exists you may reason over the pasted lines by eye — but say that is what
    you did. You have not searched the log, only the fragment you were shown.
 3. Per iteration the budget is one **Grep** for the fatal markers from the slots table, one **Grep**
-   for the pass marker, and at most two **Read** windows of about 80 lines each.
+   for the pass marker, and at most two **Read** windows of about 80 lines each. Three named **Grep**
+   groups sit outside that per-iteration budget, and nothing else does: one marker **Grep** per
+   repeat log in step 2 — three logs, so three **Grep** calls; in step 3, one **Grep** of the
+   original log for the simulated time of failure and — only when the End-of-run summary slot is
+   filled — one **Grep** of that same log for that line; and in step 7 those same one or two
+   **Grep** calls once more, against the final accepted log.
 4. To locate a config knob or a tier directory, **Grep** for the knob name or **Glob** the tier path
    rather than reading the file — then **Read** at most 40 lines either side of the hit.
 5. If a **Grep** returns more than about 200 hits, the pattern is too broad. Narrow it before reading
@@ -89,7 +97,9 @@ Every shrink iteration produces another log. Hold to this:
 Derive the baseline signature from the original failing log using
 `_shared/failure-signature-schema.md`. **Grep** the log for the fatal markers from the slots table,
 take the **lowest** line number, then **Read** a window starting about 60 lines before it. Write the
-four fields down explicitly before anything is changed.
+four fields down explicitly before anything is changed. From that same window, record the **cause
+line** verbatim with its line number — the handoff block asks for it, and step 6 checks every later
+log against it.
 
 Everything below is measured against this string. If you cannot produce a signature from the original
 log, shrinking has nothing to preserve — stop here and say so.
@@ -157,8 +167,9 @@ Work the axes in this order. Each is cheaper to try and more likely to pay than 
    that failed, then replace the random sequence with a directed replay of the observed transactions.
    Do this before touching anything else that would disturb the random stream.
 4. **Hierarchy.** Move down a tier — full chip to subsystem to block — only if a lower tier can
-   actually drive the same stimulus. Use **Glob** on the tier paths from the slots table and **Grep**
-   for the failing component name to check it even exists at that tier. This axis often does not pay,
+   actually drive the same stimulus. Use **Glob** on the paths named in the **Testbench tiers** slot
+   and **Grep** for the failing component name to check it even exists at that tier — the slot also
+   says what stimulus each tier can reach, which is what decides this. This axis often does not pay,
    and a reproducer that stays at its original tier is still a success if it meets the runtime budget.
 5. **Test length.** Trim warm-up, preceding phases, training or calibration sequences. Last, because
    these are the parts most likely to be carrying the real precondition.
@@ -185,11 +196,22 @@ Shrinking that changes the bug is worse than not shrinking, because it looks lik
 of these as a stop-and-revert:
 
 - the signature's `where` moved, even though `what` normalises identically
-- the failure now occurs earlier than the **simulated time** of the cause line in the original log
+- the ordering **inside the new run** changed: the cause line you recorded in step 1 no longer
+  appears before the failure in the new log, or no longer appears at all. Decide this within the one
+  window step 5 already read — the cause still precedes the failure there, or it does not. If that
+  window does not settle it, call the iteration inconclusive under budget rule 6 rather than opening
+  another file. Never decide it by comparing the two runs' simulated timestamps to each other:
+  axis 3 and axis 5 compress simulated time by construction, so a perfectly good shrink routinely
+  fails at an earlier absolute time than the original did, and the schema normalises times to `T` so
+  the signature cannot move on timing alone. The two runs' clocks are only comparable on axis 1, and
+  then only when a checkpoint restore has preserved the original time base — if it has, an earlier
+  absolute failure time is worth investigating; otherwise it means nothing. The Gotcha on switching
+  off checkers elsewhere is this same rule from the other side.
 - an intermittent stopped being intermittent — it now fails every run, or it stopped failing across
   every repeat you could afford. Record the number of repeats; do not claim the rate moved by any
-  particular factor. At 1 in N you would need several hundred runs to measure that, which the Gotchas
-  say you cannot afford, so treat the rate as unmeasured and judge the step on the signature alone.
+  particular factor. The repeats needed to measure a rate change grow with N, and the Gotchas say
+  that is what you cannot afford — so treat the rate as unmeasured and judge the step on the
+  signature alone.
 - the failure still appears with the block under test stubbed out or held in reset
 - the run now ends on a different marker — a timeout where there was a miscompare, or the reverse
 
@@ -204,6 +226,12 @@ Stop at the first of these, and say which one:
 - three consecutive proposals in a row were reverted
 - every remaining element is load-bearing — each removal you have tried changed the signature
 - the time box for shrinking is spent
+
+Before claiming the first of those, measure the reproducer the same way step 3 measured the baseline,
+against the last accepted log: **Grep** it for the simulated time of failure, and — only if the
+End-of-run summary slot is filled — **Grep** it for that line. Wall clock, tier and build status can
+only come from the engineer; leave empty whatever they do not report. A measured baseline against an
+unmeasured reproducer is not the comparison the handoff block promises.
 
 A good-enough reproducer handed over today beats a minimal one handed over on Thursday.
 
@@ -221,17 +249,22 @@ first err   : <verbatim first fatal line, with line number>
 phase       : compile | elab | run | finalise | post
 class       : design | infrastructure | unknown
 run id      : <whatever identifies this run for us, from the run-identity slot>
-to repeat   : <invocation taken from our conventions, or empty>
+to repeat   : <invocation from the profile's Rerun convention, or empty>
 log         : <path, and the line range worth reading>
 notes       : <anything the recipient would otherwise have to rediscover>
 ```
+
+Take the repeat line from the team profile's **Rerun convention**, exactly as `dv-sim-log-first-error`
+does; if that entry is unfilled, leave the field empty rather than inventing an invocation. This skill
+has no rerun slot of its own, so there is nowhere else that answer can come from.
 
 The second block is this skill's local extension:
 
 ```
 determinism : deterministic | signature-stable | seed-dependent | intermittent 1 in N
-baseline    : <tier; wall clock; simulated time to failure — empty if not reported>
-reproducer  : <tier; wall clock; simulated time to failure — empty if not reported>
+baseline    : <tier; wall clock; simulated time to failure; and the resource figures from the
+               end-of-run summary line if that slot is filled — each part empty if not reported>
+reproducer  : <the same four parts for the final accepted run, measured the same way in step 7>
 config diff : <every change from the standard test, including the cosmetic ones>
 sensitivity : <changes that made it vanish or moved the signature>
 not tried   : <axes deliberately left alone, and why>
@@ -288,7 +321,7 @@ Before sending the handoff, check:
 - all four signature fields match the baseline character for character
 - the config diff lists every change, including the ones that felt too small to mention
 - the determinism class of the reproducer is the same as the baseline's, or the change is called out
-- `to repeat` is taken from the team's real convention, or left empty
+- `to repeat` is taken from the profile's **Rerun convention**, or left empty
 - `coverage` names every number that was reported rather than measured, and the repeat counts behind
   each verdict
 

@@ -271,6 +271,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   skills/*/REVIEW.json (6), tests (+14) — 395+ green
   next: close recheck-2 findings, then waves 1-13
 
+- [I-006 launch] 2026-08-05T08:30Z  status: in-progress
+  what: all 13 authoring waves launched — 77 skills, each through the full gate (author -> lint 1.000
+  AND pack-consistency clean -> adversarial review by a code-reviewer agent -> fix -> INDEPENDENT
+  recheck that never saw the fixer's reasoning). The wave engine is one reusable script
+  (tools/dv-wave.js) invoked per role-wave with args, carrying the standing content rules distilled
+  from every review round so far: verb honesty, no proprietary lookup, a retrieval budget the
+  procedure actually obeys, markers must be slots, every slot must be spent, logs are files not chat
+  text, state your own coverage, pack-wide facts referenced not re-asked. tools/collect_wave.py turns
+  a wave journal into REVIEW.json per skill so the gate record is a file the scoreboard can read.
+  fix: the first two launches returned instantly with zero agents — args arrived as a JSON STRING, so
+  args.cells was undefined and the wave reported success having done nothing. The script now parses
+  both forms and THROWS on an empty cell list; silently reporting an empty wave as a success is the
+  worst failure mode available to a batch driver
+  artifacts: tools/dv-wave.js, tools/collect_wave.py
+  next: collect each wave, publish what is recheck-ready, scoreboard, site
+
 ## In-Flight Step
 _(none)_
 

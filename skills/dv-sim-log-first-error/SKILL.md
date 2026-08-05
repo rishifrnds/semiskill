@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: fresher
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.3.0
   semiskill-review-by: 2027-08-05
   semiskill-tags: logs, triage, debug, regression, reproducer
 ---
@@ -41,11 +41,16 @@ signature from here and want the smallest, fastest run that still shows it, use
 | Fatal markers | [[FILL: the strings our flow prints on a real failure, beyond UVM_ERROR and UVM_FATAL]] | DV lead |
 | Pass marker | [[FILL: the string a clean run prints at the end]] | DV lead |
 | Run identity | [[FILL: what identifies one run for us — seed, test name, config, build tag]] | your mentor |
+| Rerun convention | [[FILL: how someone repeats one specific run — describe it; leave blank rather than guessing]] | your mentor |
 | Known-issue list | [[FILL: where our known-issue list lives, how each entry is keyed, and whether it is a file that can be read or a tracker that must be searched by a person]] | DV lead |
-| Bug convention | [[FILL: what a bug title and a bug's required fields look like here]] | DV lead |
 
 These are pack-wide facts and live in `_shared/team-profile.md` — fill that in once for the team and
-read the answers from there rather than re-interviewing anyone.
+read the answers from there rather than re-interviewing anyone. Every row above is spent by a step:
+Log location, Fatal markers and Pass marker in step 1; Known-issue list in step 5; Run identity and
+Rerun convention in the repro block in step 6. The profile's **Bug convention** row is
+deliberately *not* repeated here — this skill files nothing. Its output is a repro block handed to a
+person, and step 3 stops rather than writing a bug report, so that fact would be collected and never
+used.
 
 **If a slot is unfilled, stop and ask. Do not guess a convention** — a confidently invented log path
 or rerun recipe wastes more time than it saves.
@@ -76,11 +81,31 @@ Work in this order and stop as soon as the cause is identified:
 ### 1. Establish that the run actually failed, and how far it got
 
 If the log arrived pasted into the chat rather than as a path on disk, resolve that before anything
-else — budget rule 1.
+else — budget rule 1. The **Log location** slot says where ours land, so ask for the path under it
+rather than for the log again.
 
-Use **Grep** for the pass marker and for the fatal markers. A log with no pass marker and no fatal
-marker usually means the run died before the testbench started — a build, licence, or environment
-problem, not a design bug. Note which phase the log reaches: compile, elaboration, run, final report.
+Use **one Grep** whose pattern alternates the pass marker with the fatal markers — one call, and it
+is the single marker Grep budget rule 3 allows. A log with no pass marker and no fatal marker usually
+means the run died before the testbench started — a build, licence, or environment problem, not a
+design bug.
+
+Note how far the log got, using the same five tokens the repro block in step 6 and
+`_shared/failure-signature-schema.md` accept — `compile`, `elab`, `run`, `finalise`, `post` — and no
+others. Those two lists are compared exactly, so a phase written in any other words matches nothing.
+
+`finalise` and `post` are the pair that get confused, and the test between them is whether the
+simulator was still running when the failure happened:
+
+- **`finalise`** — the simulator was still running: its end-of-run report, final-phase checks, and
+  the summary counts. These lines are in this same log, after the last design activity.
+- **`post`** — the simulator had already exited and a later step failed: coverage merge, log
+  post-processing, results checking, artifact copying. If the failing step could not have run until
+  the simulation finished, it is `post`, not `finalise`.
+
+If the log simply stops with no end-of-run report at all, the phase is `run` — the run did not reach
+`finalise`. If the failing step is one you cannot see in this log, say so rather than assuming
+`finalise`; `post` diagnostics usually live in whatever file that step writes, and you have not
+searched it.
 
 ### 2. Find the earliest failure, not the loudest
 
@@ -108,7 +133,8 @@ Before going further, classify. These are infrastructure and belong to a differe
 
 If it is infrastructure, stop the analysis here and say so plainly — do not produce a design bug
 report for a build break. For a compile or elaboration break, hand it to `dv-build-filelist-hygiene`
-with the phase and the first diagnostic line; that skill expects breaks routed from here.
+with the phase — `compile` or `elab`, the only two its own block accepts — and the first diagnostic
+line; that skill expects breaks routed from here.
 
 ### 4. Normalise into a failure signature
 
@@ -165,7 +191,9 @@ handoff blocks.
 - **`UVM_FATAL` stops the run immediately**, so anything after it is noise from teardown.
 - **A miscompare of all zeroes or all Xs** usually means nothing was driven, not that the wrong value
   was computed. Check whether the interface was connected and out of reset.
-- **Errors during the final report phase** are counted from the whole run and are not new failures.
+- **Error *counts* in the end-of-run report (`finalise`)** are totals for the whole run, not new
+  failures — they repeat errors already printed earlier. A check that genuinely fires in the report
+  phase, such as an end-of-test emptiness check, is a real failure and its phase is `finalise`.
 - **Two failures with the same message but different `where`** are two bugs. Do not merge them.
 - **Interleaved output from parallel runs** in one file will produce nonsense signatures — confirm the
   log belongs to a single run before trusting the ordering.
@@ -178,6 +206,8 @@ Before acting on the output, check:
 
 - the cause line is quoted **verbatim** and its line number really is lower than the first fatal line
 - the signature contains no run-specific values — no times, seeds, indices, or data
+- the phase is one of the block's five tokens spelled exactly, and is `post` only if the failing step
+  ran after the simulator exited — the end-of-run report is `finalise`, not `post`
 - `class` is design only if there is actual testbench or design activity near the failure
 - `to repeat` is either taken from the team's real rerun convention or left empty
 - the coverage line is present under the block, and if it says the log was never searched, nothing

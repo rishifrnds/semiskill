@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T08:06Z_
+_Last updated: 2026-08-05T08:30Z_
 
 ## Phase
 Phase I: 84 skills (>=5 per role across 16 roles), every one through
@@ -29,7 +29,7 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: I-007 / wave 0 (done) — facets restored, pack-consistency checker added
+- Step ID: I-006 (in progress) — all 13 authoring waves in flight, 77 skills
 - Sub-state: Phase I underway; top-up cell design running. Content still not set-ready (below).
 - Started: 2026-08-05T03:19Z
 
