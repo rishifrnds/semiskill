@@ -18,14 +18,13 @@ metadata:
 # Orienting Yourself in an Unfamiliar DV Repository
 
 On day one the map of a verification repo exists only in the heads of the three people who built it,
-and every question you ask costs one of them fifteen minutes and their place in a debug session. The
-usual mistake is to open a testbench file at random, read a thousand lines of class hierarchy, and
-still not know how a test is selected, compiled, run, or scored. Structure is cheaper than code:
-filelists, build entry points and test lists tell you most of it before you read a single class.
+and every question costs one of them fifteen minutes and their place in a debug session. The usual
+mistake is to open a testbench file at random, read a thousand lines of class hierarchy, and still
+not know how a test is selected, compiled, run or scored. Structure is cheaper than code: filelists,
+build entry points and test lists tell you most of it before you read a single class.
 
-The output of this procedure is **a repo map plus a numbered list of questions for your mentor**. It
-is explicitly *not* a claim to have understood the design, the verification plan, or whether the
-tests are any good.
+The output is **a repo map plus a numbered list of questions for your mentor** — explicitly *not* a
+claim to have understood the design, the verification plan, or whether the tests are any good.
 
 ## Fill this in for our team
 
@@ -39,9 +38,8 @@ tests are any good.
 | House conventions | [[FILL: our naming rules for tests, sequences, files and directories]] | DV lead |
 | Escalation path | [[FILL: the person or channel that takes the questions this procedure cannot answer]] | your manager |
 
-**If a slot is unfilled, stop and ask. Do not guess.** A repo map that names an invented build target
-or an invented log path is worse than no map at all, because the next joiner will inherit it and
-spend a day proving it wrong.
+**If a slot is unfilled, stop and ask. Do not guess.** A map naming an invented build target or log
+path is worse than no map, because the next joiner inherits it and spends a day proving it wrong.
 
 ## Retrieval budget — read this before opening anything
 
@@ -54,8 +52,7 @@ thousands, with filelists thousands of lines long. Reading broadly is not an opt
    line number, then Read a window of about 60 lines around it.
 3. Cap the orientation at roughly **12 Glob patterns, 15 Greps, and 10 windowed Reads of about 80
    lines** — enough for a first map, and already a full session's attention.
-4. If a Glob returns more than about 300 paths, the pattern is too broad — narrow it to one directory
-   before looking at the result.
+4. A Glob returning more than about 300 paths is too broad — narrow it to one directory first.
 5. **Stopping rule.** Stop when you can name, each with a path, the build entry point, the test list,
    one test's own files, and where results and coverage land — or when the budget above is spent.
    Everything still unknown at that point becomes a numbered question, never an inference.
@@ -132,8 +129,7 @@ Any link you cannot back with a file and a line number is a question, not a conc
 ### 6. Locate where results and coverage land
 
 Use **Grep** on the build scripts and configuration for `-cm`, `coverage`, `covdb`, `urg`, `vdb`,
-`ucdb`, `logdir`, `report`. Use **Glob** for `**/cov*/**` and `**/*.vdb` to see whether output lands
-inside the repo or somewhere else entirely.
+`ucdb`, `logdir`, `report`, then **Glob** `**/cov*/**` and `**/*.vdb` to see where output lands.
 
 Two distinct places matter and are constantly conflated: the **per-run scratch directory**, usually
 deleted on a schedule, and the **kept, combined coverage area** that sign-off reads. Record both,
@@ -208,8 +204,7 @@ Before you hand the map to anyone, check:
 
 - every path in the map appeared in an actual Glob or Grep result, and you can say which
 - each link in the traced test chain carries a file **and a line number**, not a plausible name
-- the build entry point has been confirmed by a real build the engineer ran, not derived from a
-  makefile alone
+- the build entry point was confirmed by a real build the engineer ran, not read off a makefile
 - the unknowns list is **not empty**
 
 A wrong map reads fluently and names a build target that does not exist, or a `results/` directory
@@ -219,5 +214,5 @@ that is exactly the failure it exists to prevent.
 
 ## Done when
 
-A new joiner can reach the build entry point, the test list, and one test's files from your map
+The next new joiner reaches the build entry point, the test list and one test's files from your map
 alone, and every remaining unknown is written down as a question instead of a guess.

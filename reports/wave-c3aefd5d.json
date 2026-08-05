@@ -1,0 +1,94 @@
+{
+  "counts": {
+    "ok": 6,
+    "skipped-identical": 3,
+    "superseded": 3,
+    "total": 6
+  },
+  "finished_at": "2026-08-05T03:45:14Z",
+  "items": [
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.337,
+      "error": null,
+      "path": "skills\\dv-build-filelist-hygiene",
+      "payload_sha256": "d4451376d8c4305c49cffd99e241456c59c51bd1fd8a98886687fdedc010b7e7",
+      "skill_version_id": "c98b09a3-7da3-408c-9280-4364883f6370",
+      "slug": "dv-build-filelist-hygiene",
+      "status": "superseded",
+      "superseded_approval_id": "721fcc35-cf89-4556-a3f6-0bf60166c72c",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": null,
+      "blocked_at": null,
+      "elapsed_s": 0.0,
+      "error": null,
+      "path": "skills\\dv-minimal-reproducer",
+      "payload_sha256": "092ce8b951e639a3a8c9610648046ed02feba060a2771daa78e18da0bd15e9bf",
+      "skill_version_id": "53a130b2-435c-4438-b4ac-d8fb652c4288",
+      "slug": "dv-minimal-reproducer",
+      "status": "skipped-identical",
+      "superseded_approval_id": null,
+      "verdict": null
+    },
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.288,
+      "error": null,
+      "path": "skills\\dv-ral-bringup",
+      "payload_sha256": "dded2fdee18361c881e9ab2225b6ad800ff18d61b251e63d132d73a34ed6375b",
+      "skill_version_id": "404e2a36-d53c-4860-a2d4-ccca051030d9",
+      "slug": "dv-ral-bringup",
+      "status": "superseded",
+      "superseded_approval_id": "36ca1943-f2a9-4e7a-b6dc-73a61e1a77ae",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": null,
+      "blocked_at": null,
+      "elapsed_s": 0.0,
+      "error": null,
+      "path": "skills\\dv-regression-triage-routing",
+      "payload_sha256": "6f55e72dee7102dfb8cb3162263141bed12c770cd636838e53cf553b77ed9c77",
+      "skill_version_id": "37dfaf4c-d117-455f-a1a9-d07ef536d62d",
+      "slug": "dv-regression-triage-routing",
+      "status": "skipped-identical",
+      "superseded_approval_id": null,
+      "verdict": null
+    },
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.285,
+      "error": null,
+      "path": "skills\\dv-repo-orientation",
+      "payload_sha256": "3f7a72aeffe0aaf6dbf3283ea2b7328ae28853522657752ebe1bd6ced0fca7c2",
+      "skill_version_id": "abf24586-2968-45af-8231-06e05554ec8d",
+      "slug": "dv-repo-orientation",
+      "status": "superseded",
+      "superseded_approval_id": "f255af90-7e1e-4221-a530-31310fb35aac",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": null,
+      "blocked_at": null,
+      "elapsed_s": 0.0,
+      "error": null,
+      "path": "skills\\dv-sim-log-first-error",
+      "payload_sha256": "accaf557649273f6b9bfc8ca138d63c50fb885c97c1fa0d868f03c747e7b61c9",
+      "skill_version_id": "24cdc7b9-f5af-46c8-ae47-6082ebf50221",
+      "slug": "dv-sim-log-first-error",
+      "status": "skipped-identical",
+      "superseded_approval_id": null,
+      "verdict": null
+    }
+  ],
+  "ok": true,
+  "on_duplicate": "supersede",
+  "permissions_label": "public",
+  "started_at": "2026-08-05T03:45:13Z",
+  "wave_id": "wave-c3aefd5d"
+}

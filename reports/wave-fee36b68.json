@@ -1,0 +1,93 @@
+{
+  "counts": {
+    "ok": 6,
+    "published": 6,
+    "total": 6
+  },
+  "finished_at": "2026-08-05T03:46:13Z",
+  "items": [
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.31,
+      "error": null,
+      "path": "skills\\dv-build-filelist-hygiene",
+      "payload_sha256": "28386857d6e5c06448b78538dacbc9c189310897d11fce469eeaf7a1bf0b4668",
+      "skill_version_id": "90de78d4-3349-4d75-a625-e5887057b165",
+      "slug": "dv-build-filelist-hygiene",
+      "status": "published",
+      "superseded_approval_id": null,
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.372,
+      "error": null,
+      "path": "skills\\dv-minimal-reproducer",
+      "payload_sha256": "092ce8b951e639a3a8c9610648046ed02feba060a2771daa78e18da0bd15e9bf",
+      "skill_version_id": "bea2a72e-3f68-45c9-b9d2-03d4f5c409af",
+      "slug": "dv-minimal-reproducer",
+      "status": "published",
+      "superseded_approval_id": null,
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.32,
+      "error": null,
+      "path": "skills\\dv-ral-bringup",
+      "payload_sha256": "aa5295f5917ee7144944241383ec0b06d7b1a36abd6cfa3952e0252aa3f86813",
+      "skill_version_id": "fce5af5a-7fc6-49a8-89ed-6a446042eb4c",
+      "slug": "dv-ral-bringup",
+      "status": "published",
+      "superseded_approval_id": null,
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.339,
+      "error": null,
+      "path": "skills\\dv-regression-triage-routing",
+      "payload_sha256": "6f55e72dee7102dfb8cb3162263141bed12c770cd636838e53cf553b77ed9c77",
+      "skill_version_id": "648ef128-09b5-4923-b91b-691f25cc8170",
+      "slug": "dv-regression-triage-routing",
+      "status": "published",
+      "superseded_approval_id": null,
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.308,
+      "error": null,
+      "path": "skills\\dv-repo-orientation",
+      "payload_sha256": "ce30d2029180e8ccf676b0e763fefeb8cb441f90fe50b438a34d5d810c393c5d",
+      "skill_version_id": "f3b7bb29-adc8-4e34-9060-2cd8d42e7ec3",
+      "slug": "dv-repo-orientation",
+      "status": "published",
+      "superseded_approval_id": null,
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "blocked_at": null,
+      "elapsed_s": 0.312,
+      "error": null,
+      "path": "skills\\dv-sim-log-first-error",
+      "payload_sha256": "accaf557649273f6b9bfc8ca138d63c50fb885c97c1fa0d868f03c747e7b61c9",
+      "skill_version_id": "ca172c4c-6949-41b6-888a-1c0bb16c950e",
+      "slug": "dv-sim-log-first-error",
+      "status": "published",
+      "superseded_approval_id": null,
+      "verdict": "approve"
+    }
+  ],
+  "ok": true,
+  "on_duplicate": "supersede",
+  "permissions_label": "public",
+  "started_at": "2026-08-05T03:46:11Z",
+  "wave_id": "wave-fee36b68"
+}

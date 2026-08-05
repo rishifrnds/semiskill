@@ -66,7 +66,8 @@ def cmd_wave(args, store, out) -> int:
 
     dsn = args.dsn or Config.from_env().database_url
     writes = args.command == "wave" and not args.dry_run
-    if writes and not args.yes and "semiskill" in dsn.rsplit("/", 1)[-1]:
+    dbname = dsn.rsplit("/", 1)[-1].split("?")[0]
+    if writes and not args.yes and dbname == "semiskill":
         print("refusing to write to the default/test database without --yes\n"
               f"  dsn: {dsn}\n"
               "  the test fixture TRUNCATEs `artifacts`; point --dsn at a catalog DB, or pass --yes.",
@@ -85,6 +86,12 @@ def cmd_wave(args, store, out) -> int:
     if not items:
         print(f"no SKILL.md found under {args.path}", file=out)
         return 1
+
+    # Build the store from the RESOLVED dsn, not the environment default — otherwise --dsn would
+    # steer the pipeline's corpus probe while artifacts silently landed in a different database.
+    if store is None and writes:
+        from semiskill.artifacts.store import PostgresArtifactStore
+        store = PostgresArtifactStore(dsn)
 
     if args.command == "wave-plan" or args.dry_run:
         for i in items:
@@ -125,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for name, helptext, needs_store in (
         ("wave-plan", "show what a wave would do, without writing anything", False),
-        ("wave", "publish a directory of skills through the pipeline + gate", True),
+        ("wave", "publish a directory of skills through the pipeline + gate", False),
     ):
         w = sub.add_parser(name, help=helptext)
         w.add_argument("path", help="directory containing skill folders")

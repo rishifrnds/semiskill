@@ -1,0 +1,16 @@
+# Wave wave-fee36b68
+
+- started: 2026-08-05T03:46:11Z · finished: 2026-08-05T03:46:13Z
+- label: `public` · on duplicate: `supersede`
+- result: **all items succeeded**
+
+| skill | status | verdict | safety |
+|---|---|---|---|
+| `dv-build-filelist-hygiene` | published | approve | 1.000 |
+| `dv-minimal-reproducer` | published | approve | 1.000 |
+| `dv-ral-bringup` | published | approve | 1.000 |
+| `dv-regression-triage-routing` | published | approve | 1.000 |
+| `dv-repo-orientation` | published | approve | 1.000 |
+| `dv-sim-log-first-error` | published | approve | 1.000 |
+
+ok: 6 · published: 6 · total: 6

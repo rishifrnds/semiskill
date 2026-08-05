@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T04:48Z_
+_Last updated: 2026-08-05T05:05Z_
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +23,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-010..H-013 (done) — wave driver, idempotent + gated
-- Sub-state: authoring fan-out running for skills 2-6; then run the wave
+- Step ID: H-014..H-016 (done) — 6 skills authored and published through the gate
+- Sub-state: next H-017 (Cursor pack builder), then the SharePoint catalog
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 676536b
-- Message: wip: H-007/H-008 first DV skill + intake
+- SHA: 4e9b6e4
+- Message: wip: H-010..H-013 wave driver
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
