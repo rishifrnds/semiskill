@@ -181,6 +181,23 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   verified: rendered in Chrome — 6 real skills, real scan scores, matrix, detail dialog. 329 green
   next: H-019 truthful install string, H-021 delimiter hardening, H-022 backlog, content pass 3
 
+- [I-002/I-003] 2026-08-05T07:25Z  status: done
+  what: Phase I infrastructure. semiskill/authoring/markdown.py — a deliberately RESTRICTED renderer
+  for untrusted skill bodies: html.escape runs over the whole document before any parsing, so no tag
+  a body contains can reach the output as markup; the parser then emits its own tags around
+  already-safe text. Links and images render as inert text, never anchors. 23 tests, the security
+  ones asserting a TAG ALLOWLIST (the right invariant — checking for the substring "onerror=" was
+  wrong, since it is harmless once escaped). Escaping-first cost us the raw blockquote marker, so
+  the quote regex matches the escaped form as well. semiskill/authoring/scoreboard.py +
+  `semiskill scoreboard` — deterministic coverage of specs/skill_registry.json against the PUBLISHED
+  catalog, never the filesystem and never an agent's claim: a skill on disk that never published
+  counts as missing, a published skill with no independent recheck is `unreviewed` and fails
+  --strict-gate, a published skill absent from the registry is a failure, and a declined cell counts
+  toward a role's target only when it carries a reason. 11 tests
+  artifacts: semiskill/authoring/{markdown,scoreboard}.py, semiskill/cli.py,
+  tests/authoring/test_{markdown,scoreboard}.py — 363 tests green
+  next: I-001 registry (top-up design workflow running), then I-004 site
+
 ## In-Flight Step
 _(none)_
 

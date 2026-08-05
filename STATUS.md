@@ -4,7 +4,13 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T06:40Z_
+_Last updated: 2026-08-05T07:25Z_
+
+## Phase
+Phase I: 84 skills (>=5 per role across 16 roles), every one through
+author -> lint 1.000 -> adversarial review -> fix -> INDEPENDENT recheck ready:true,
+tracked by a deterministic scoreboard, published to a skills.sh-shaped multi-page site.
+Plan: plans/the-problem-statement-is-generic-llama.md (approved 2026-08-05)
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
@@ -23,13 +29,13 @@ Cursor user can install, plus a SharePoint-native catalog page.
 Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
 
 ## Active step
-- Step ID: H-020 (done) — browsable catalog page generated from the published catalog
-- Sub-state: CONTENT IS NOT SET-READY. 2 of 6 shippable; see "Content status" below
+- Step ID: I-002/I-003 (done) — markdown renderer + coverage scoreboard
+- Sub-state: Phase I underway; top-up cell design running. Content still not set-ready (below).
 - Started: 2026-08-05T03:19Z
 
 ## Last commit
-- SHA: 1c16c85
-- Message: wip: H-014b content remediation r2
+- SHA: 95477c9
+- Message: wip: H-020 catalog page
 - Time: 2026-08-05
 
 ## Two findings that reshape the work (verified 2026-08-05)
@@ -59,4 +65,4 @@ tenant. Plus: no auth, nothing deployed, no CI, no backups.
 
 ## If resumed
 Read MEMORY.md (Phase H) and the approved plan above. DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest` (329, Docker PG running). Nothing pushed to remote.
+Tests: `pytest` (363, Docker PG running). Nothing pushed to remote.

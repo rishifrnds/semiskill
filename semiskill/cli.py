@@ -160,6 +160,24 @@ def cmd_catalog(args, store, out) -> int:
     return 0
 
 
+def cmd_scoreboard(args, store, out) -> int:
+    """Coverage of the planned registry by the PUBLISHED catalog. Deterministic by design — a
+    scoreboard that can be talked into optimism is worse than none."""
+    from datetime import datetime, timezone
+    from semiskill.artifacts.store import PostgresArtifactStore
+    from semiskill.authoring.scoreboard import build_scoreboard, render
+
+    dsn = args.dsn or Config.from_env().database_url
+    store = store or PostgresArtifactStore(dsn)
+    sb = build_scoreboard(store=store, registry_path=args.registry, skills_root=args.skills,
+                          target=args.fail_under, strict_gate=args.strict_gate,
+                          generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                          lint=not args.no_lint)
+    style = "json" if args.json else ("markdown" if args.markdown else "text")
+    print(render(sb, style=style), file=out)
+    return 0 if sb.ok else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="semiskill", description="SemiSkill CLI (L1 capture)")
     sub = p.add_subparsers(dest="command", required=True)
@@ -211,6 +229,19 @@ def build_parser() -> argparse.ArgumentParser:
     cat.add_argument("--dsn", default=None, help="catalog database (defaults to DATABASE_URL)")
     cat.add_argument("--out", default="dist/site", help="output directory")
     cat.set_defaults(func=cmd_catalog, needs_store=False)
+
+    sc = sub.add_parser("scoreboard", help="coverage of the planned registry by the published catalog")
+    sc.add_argument("--registry", default="specs/skill_registry.json")
+    sc.add_argument("--skills", default="skills", help="the skill source tree")
+    sc.add_argument("--dsn", default=None)
+    sc.add_argument("--fail-under", type=int, default=5, dest="fail_under",
+                    help="minimum published skills per role (exit 1 below it)")
+    sc.add_argument("--strict-gate", action="store_true", dest="strict_gate",
+                    help="also fail if a published skill has no independent recheck")
+    sc.add_argument("--no-lint", action="store_true", dest="no_lint")
+    sc.add_argument("--json", action="store_true")
+    sc.add_argument("--markdown", action="store_true")
+    sc.set_defaults(func=cmd_scoreboard, needs_store=False)
     return p
 
 
