@@ -4,46 +4,48 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T14:07Z_
+_Last updated: 2026-08-05T16:25Z_
 
 ## Phase
-Phase J: take the 84 authored DV skills through a REAL content gate (adversarial review -> fix ->
-INDEPENDENT recheck -> REVIEW.json), publish them through the pipeline, and prove coverage of
-16 roles x >=5 with a deterministic scoreboard.
+Phase J: 84 authored DV skills through a REAL content gate (adversarial review -> fix -> INDEPENDENT
+recheck -> REVIEW.json), then publish and prove 16 roles x >=5 on the scoreboard.
 
 ## Session
-- ID: 20260805T031906Z-Rishi_PC-f97e05
-- Lock held: yes
+- ID: 20260805T031906Z-Rishi_PC-f97e05 · lock held: yes
 
-## Right now
-Tooling is unblocked and committed; the content gate is RUNNING. Batches 1-3 (36 skills) are in
-flight through review -> fix -> independent recheck. Batches 4-7 (45 skills) are queued.
+## STOPPED — session token limit reached (resets 21:50 Asia/Calcutta)
+Four gate batches ran; ~40 agents died mid-flight on the limit. NOTHING was faked to cover it:
+tools/collect_wave.py now distinguishes "an independent reviewer rejected this" from "the reviewer
+never returned", and the 17 skills whose recheck never ran were deliberately left with NO gate
+record. They read as never-reviewed, which is the truth, and the gate will pick them up again.
 
-## Active step
-- [J-003] content gate, 7 batches of 12 via tools/dv-gate.js (args: tools/gate_args.py).
-  Batches 1,2,3 in flight. Nothing may publish until a skill's REVIEW.json says recheck.ready.
+## Gate state (read from REVIEW.json on disk, not from any chat log)
+- ready: 3 · not-ready with real findings: 32 · never-reviewed: 49 · published: 0
+- **0 of 44 skills that completed a full first pass were judged ready.** That is not a malfunction:
+  the reviews are finding genuine defects (a step whose only log window points away from the value
+  it tells you to record; a budget granting 2 Greps where the step needs 3, so a branch is
+  unreachable; "a failing test contributes no coverage" asserted as universal fact when it is flow
+  policy). Round 1 also conflated a nit with a blocker, so tools/dv-gate2.js now forces every
+  finding into BLOCKING vs NON-BLOCKING and sets ready:true iff BLOCKING is empty. Round 2 was
+  launched and died on the limit having done nothing — rerun it first.
 
-## Done this session (all verified, 454 tests green)
-- [J-001] facet vocabulary learned the 3 registry roles it lacked (L019 10->0); it had been CAUSING
-  the drift it existed to catch (5 skills remapped by their authors to get past it) — drift 5->0.
-  C002 rescued from zero precision: 105 findings on the pack, all false; now 1, genuine.
-- [J-002] dv-security-build-divergence-audit authored; security-verification-engineer 4/5 -> 5/5.
-  Registry is 84 active cells and every one of the 16 roles is at >=5.
-- [J-004 / ADR-011] skills/_shared/handoff-vocabulary.md is the signed field registry. The 10 C003
-  "errors" were name COLLISIONS, not drift. C003 rescoped, C006-C012 added, 11 field + 2 value
-  renames landed. Zero consistency errors pack-wide. C005 no longer contradicts the registry
-  (205 -> 129). Measured: the only 7 enum names shared across skills are exactly the 7 registered.
-- [J-005] the recheck gate is a PRECONDITION now, not a scoreboard report. `wave` refuses
-  gate-missing / gate-not-ready per item before writing, --allow-ungated is recorded in the report,
-  and the wave runs the pack check too. wave-plan currently refuses 81 of 84 — correct.
+## Next actions, in order
+1. `python tools/gate2_args.py` then run tools/dv-gate2.js over the 32 not-ready skills.
+2. Re-run tools/dv-gate.js over the 49 never-reviewed (batch args: tools/gate_args.py).
+3. Only then: `semiskill wave skills/ --yes` (it now refuses anything without a ready recheck),
+   scoreboard --strict-gate, `semiskill site`, `semiskill pack`.
 
-## Known gaps still open
-- 81 skills still carry no independent recheck. 0 registry skills are published.
-- 129 C005 + 4 C008 + 3 C011 + 1 C001 + 1 C002 warns: the authoring backlog the gate is closing.
-- C008/C011 pack assertions are deliberately CEILINGS while the gate runs; tighten to `== set()`
-  when it finishes.
-- Never run `pytest` while an agent runs it — the shared dev DB fixture TRUNCATEs `artifacts` and
-  both runs fail confusingly. Cost an hour of misdiagnosis this session.
+## Health
+- 456 tests green. Zero consistency ERRORs pack-wide. All 84 skills lint 1.000.
+- Consistency findings 214 -> 62 as the fix agents worked (C005 54, C002 3, C008 2, C001 1).
+- Two defects fix agents introduced were caught and closed here: an undeclared `phase` narrowing in
+  dv-emulation-sim-mismatch-triage and a C009 value-wearing-a-sentence in dv-dfi-boundary-blame.
+- Registry snapshot tests now assert SHAPE (every narrowing a proper subset, no name in two
+  categories) instead of magic counts, which failed on correct work.
+
+## Standing hazard
+Never run `pytest` while an agent is running it: the shared dev DB fixture TRUNCATEs `artifacts`
+and both runs fail in ways that look like real regressions. Cost an hour of misdiagnosis.
 
 ## Last commit
-- pending: J-001..J-005 tooling checkpoint (skills/ deliberately excluded, gate mid-run)
+- f47179c (tooling). This checkpoint adds the gate records + collector honesty fix.

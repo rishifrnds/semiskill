@@ -1,67 +1,76 @@
 {
  "slug": "dv-regression-triage-routing",
+ "wave": "b3",
  "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
- "wave": 0,
- "recorded_at": "2026-08-05T07:52:13Z",
- "lint": {
-  "verdict": "approve",
-  "aggregate": 1.0,
-  "line": "skills\\dv-regression-triage-routing\\SKILL.md  [approve 1.000]  clean — 1/1 clean · 0 errors · 0 advisories · 1 predicted to publish"
+ "recorded_at": "2026-08-05T19:53:59Z",
+ "author": {
+  "agent": "author:dv-regression-triage-routing",
+  "lint_line": "",
+  "uncertainties": []
+ },
+ "review": {
+  "agent": "review:dv-regression-triage-routing",
+  "must_fix": [
+   "C005 (confirmed): handoff field `verdict` (line 250) offers `mixed`, but no step ever instructs the reader to assign it — in fact none of the three verdict values (environmental/mixed/design) is explicitly tied to a rule anywhere in the procedure; the field is defined only in the report template.",
+   "C005 (confirmed): handoff field `vs-baseline` (line 262) offers `also-failed-in-baseline`, but no step explicitly instructs assigning it — step 7 key 3 (lines 206-211) only says to 'use the value that matches the claim you can actually support' without naming which condition maps to which token.",
+   "File is 360 lines against the pack's required 180-260 line budget (roughly 38% over cap) — this is a hard structural requirement ('Length 180-260 lines. Substantial, not padded.') and should be trimmed or split.",
+   "The `known` field's `not-matched` value (line 263) is the same class of defect as the two confirmed C005 items: offered in the enum, never assigned by any step (see technical_errors).",
+   "Step 4's instruction to record signature 'neighbours' (line 172) and step 1's instruction to record an 'unaccounted (derived)' totals line (lines 130-133) both direct the reader to capture data the step-10 report template has no field for — either add fields or drop the instructions."
+  ],
+  "technical_errors": [
+   "(Confidence 85) Step 4 (line 172) instructs 'If two signatures differ only in where, they stay separate — record each as the other's neighbour so the owner can decide,' but the report template (step 10, lines 257-268) has no field to record a 'neighbour' relationship — no `notes` field either (unlike the golden reference dv-sim-log-first-error, which has one). A reader who follows step 4 literally has nowhere to write the fact down; it will be silently dropped by the time step 10 is reached.",
+   "(Confidence 82) Step 1 (lines 130-133) instructs writing an 'unaccounted (derived)' line when the summary's stated total exceeds pass+fail, but the report template's `totals` field (line 249) only has room for `<pass> pass / <fail> fail / <unrun, or \"unrun not reported\"> of <total>` — no slot exists for the unaccounted-derived count. Same class of bug as the neighbour-field gap: an instruction to capture data with nowhere in the sanctioned output shape to put it.",
+   "(Confidence 85) The `known` field's enum at line 263 offers `not-matched` as a value, but no step ever tells the reader when to assign it. Step 8 (lines 225-228) only spells out the positive case ('Compare exactly. Mark the bucket known-issue <key>...'); the negative case (compared, no match found) is never named. This is the same defect pattern as the two confirmed C005 findings on `verdict: mixed` and `vs-baseline: also-failed-in-baseline`, just not caught by the checker for this field.",
+   "(Confidence 80) Step 9 (lines 238-239) states categorically 'Route on the signature's where field via the profile's Area to owner map — never on the test name,' but `_shared/team-profile.md` line 56 explicitly anticipates that a team's real Area-to-owner map might itself be 'keyed on — design hierarchy, test name, or directory.' If a team's actual map is organized by test name, Grepping it for `where` values (the only lookup method step 9 describes) will systematically return nothing, and the skill gives no fallback for that case — it simply forbids the one key that might work for that team's convention."
+  ],
+  "verb_honesty": [
+   "No violations found (confidence in this clearance: 90). Full-text scan for run/merge/compute/submit/execute/launch/compile/open turned up nothing where the agent is made to perform a tool action: 'open(ing)' always means Read opening a file on disk (lines 75, 86, 90, 106-107, 177-179, 277, 315), 'merge' at line 163 and 183 means grouping buckets/text (an authoring act), 'run' always refers to the night's already-completed regression run or a rerun the *engineer* is asked to do in step 11 ('ask the engineer to rerun bucket B1's representative test', line 294), never something the agent executes. Step 9's title verb 'Route' is a lookup against a file-based map (classify), not an actual notification action. This skill is noticeably more disciplined about verb honesty than the average batch output."
+  ],
+  "hallucination_risks": [
+   "No high-confidence hallucinations found. Every marker, path, and convention-specific fact is correctly deferred to `_shared/team-profile.md` or a `[[FILL:]]` slot rather than invented (verified: Regression summary, Fatal markers, Pass marker, Infra markers, Known-issue list, Area to owner map all genuinely exist in team-profile.md with matching names). No proprietary tool name, flag, or message string is hardcoded anywhere in the body."
+  ],
+  "budget_violations": [
+   "(Confidence 80) Retrieval budget rule 4 (lines 91-94) states the per-log cost is 'two Greps and one windowed Read' — 'one Grep for the markers (fatal and pass together), one to fix the earliest fatal hit's line number, then the window before it' — and rule 5's total of 'near seventy calls' (lines 95-99) is built on 15 logs x 3 calls = 45. But Procedure step 3 (lines 150-152) describes only a single bolded **Grep** call per log ('use Grep on its log for the profile's Fatal markers and Pass marker, take the lowest fatal line number, then one windowed Read...') — the 'lowest fatal line number' is read off the first Grep's own line-numbered output, not a second tool call. The stated per-log and total-session arithmetic (45 log calls, ~70 overall) does not match what the procedure actually spends (~30 log calls, ~54 overall); the budget section and the procedure disagree on how many Greps step 3 costs."
+  ],
+  "open_twice": "\"Likely yes, on balance. The decision logic (build-break-is-one-bucket, sign-before-group, infra-vs-design split, baseline-key-drop rule, exact-match bucketing) is unusually rigorous and the Gotchas section is genuinely dense with hard-won specifics — a real DV engineer would probably keep using it. But the length (360 vs. a 260-line cap) makes it a noticeably heavier read than its siblings, and the two report-template gaps (no field for 'neighbour' signatures, no field for the 'unaccounted (derived)' total) will surface as small but real friction the first time someone hits either edge case and has to improvise where to put the information — exactly the kind of ad-hoc field invention the pack's handoff-vocabulary discipline exists to prevent.\""
  },
  "fix": {
   "agent": "fix:dv-regression-triage-routing",
   "fixed": [
-   "Outstanding finding (old line 50, wrong cross-reference): the r1 text falsely claimed Fatal markers, Pass marker and the known-issue list were 'the same three facts' as the two slots in _shared/failure-signature-schema.md and said 'keep both places identical' — unfulfillable for the pass marker. The r2 pass had merely deleted the cross-references; I restored them in correct form. The paragraph after the slot table now maps each fact to its true relationship: (1) the schema's 'Our message prefixes' is the normalisation-time set — it overlaps Fatal markers but is not the same list, so check both and never copy one into the other (a signature normalised against one prefix set will not match a table built against another); (2) the schema's 'Where known signatures are recorded' is genuinely the profile's Known-issue list fact under a second name, so the profile's answer fills it and no second answer is kept; (3) the Pass marker has no counterpart in the schema at all — it lives only in _shared/team-profile.md. Every claim is specific and falsifiable, not vague.",
-   "Bumped semiskill-version 1.1.0 -> 1.2.0 as instructed.",
-   "Verified (no change needed) that the rest of the file is internally consistent: the 15-log / 45-tool-call budget arithmetic holds against step 3's one-Grep-plus-one-Read flow; every marker the procedure Greps for (fatal, pass, infra, fail-row pattern) has a slot; the pasted-input branch, the coverage line, the unsigned-remainder handling and the human-verification section are all present and mutually consistent."
+   "C005 (verdict/mixed): new step 4 assigns all three verdict values by a first-match rule — all buckets infrastructure -> environmental; no bucket infrastructure -> design; at least one infrastructure and at least one that is not -> mixed; unknown buckets counted design-side",
+   "C005 (vs-baseline/also-failed-in-baseline): step 5 key 3 maps each condition to one token — baseline row present and failing -> also-failed-in-baseline; present and passing -> test-not-failing-in-baseline; test name absent from the baseline summary -> not-checked",
+   "must_fix: 'known: not-matched' is now explicitly assigned in step 6 (both Greps return nothing, or entries that do not compare exactly), and separated from a blank 'known' for buckets past the 20-Grep cap and from list-not-readable for an unreachable list",
+   "must_fix: step 3's neighbour instruction now has a destination — the bucket block gains a 'notes' field (registered shape, last in block) named by the step",
+   "must_fix: step 1's 'unaccounted (derived)' instruction now has a destination — the report header gains an 'unaccounted' line, and step 1 forbids putting it in the totals line's unrun position",
+   "must_fix: length 360 -> 260 lines (steps 1+2 merged as summary-only work, steps 9+11 merged as report+handoffs, prose tightened; Gotchas kept at 8 bullets and gained the not-matched vs list-not-readable distinction)",
+   "technical_error: routing no longer forbids the only key some teams have — step 6 branches on what the profile says the Area-to-owner map is keyed on (design hierarchy / directory / test name), with the test-name case recorded in notes because such a map names the test's owner, not necessarily the fixer",
+   "budget_violation: rule 4 is now one Grep plus one windowed Read per log (earliest fatal line read off the Grep's own line-numbered output), so 15 logs = 30 calls, matching the procedure; the rule 5 ledger is itemised as 6 summary + 2 baseline + 30 logs + 20 known-issue + 1 owner-map Read = 59 calls",
+   "budget_violation (found while fixing): two previously unbudgeted costs are now in the ledger and named in the procedure — the baseline-summary lookup (step 5 key 3 now names Glob and Grep) and the single Read of the area-to-owner map (step 6)"
   ],
   "not_fixed": [
-   "The 'Cursor 2.4+' compatibility claim, called unverifiable in the set-level re-review verdict: left in place because the outstanding findings for this skill do not list it, all six skills in the pack carry the identical compatibility line, and the already-remediated wave0 sibling dv-build-filelist-hygiene (v1.2.0) also kept it — removing it from one file alone would fork a pack-wide convention that must be changed set-wide, and I was forbidden from touching sibling skills.",
-   "The slot table still carries [[FILL]] rows for Fatal markers, Pass marker, Infra markers and Known-issue list beneath the read-them-from-team-profile paragraph: deliberately kept, because this table-plus-redirect structure is the established pack convention (dv-ral-bringup and dv-sim-log-first-error use exactly the same pattern) and it satisfies the 'markers must be slots' rule; converting the rows to bare references would deviate from every sibling.",
-   "Set-level items in the verdict paragraph (dv-sim-log-first-error's five deficiencies, and the duplicate known-issue-location slot existing in both _shared/team-profile.md and _shared/failure-signature-schema.md): out of scope — editing sibling skills and _shared/ is explicitly forbidden for this task; my skill now references the duplication correctly rather than propagating it."
+   "Nothing from must_fix / technical_errors / verb_honesty / budget_violations was left unfixed. One deliberate deviation to flag: the task said to bump semiskill-version to 1.1.0, but the file was at 1.3.0, so 1.1.0 is a version regression. I followed the explicit instruction and set 1.1.0; say the word if 1.4.0 was intended."
   ],
-  "facets_set": "semiskill-role: ip-dv-engineer, semiskill-level: junior (semiskill-version: 1.2.0)"
+  "lint_line": "skills\\dv-regression-triage-routing\\SKILL.md  [approve 1.000]  clean — 1/1 clean, 0 errors, 0 advisories, 1 predicted to publish"
  },
- "review": {
-  "agent": "recheck:dv-regression-triage-routing",
-  "remaining_at_recheck": [
-   "Step 7 key 3 / report field 'novelty: seen-in-baseline' (SKILL.md ~lines 186-192, 234): baseline novelty is checked against the baseline *summary*, but signatures cannot appear in a per-test status table by the skill's own definitions (slot row 1; budget rule 6). Fix: name the prior triage report (which contains step-10 signature lines) as the baseline artifact, or demote baseline novelty to a handoff/unknown like step 8's tracker branch.",
-   "Line ~190: 'Key 3 needs the baseline summary to be filled in *and* still on disk. If it is neither, drop the key' — 'neither' literally means drop only when both conditions fail; the Gotcha bullet ('If the baseline slot is unfilled, or the baseline summary is no longer on disk') states the intended either/or. One-word fix ('If either is not').",
-   "Pack-wide residual, not skill-specific: line 5 'compatibility: Any Agent Skills runtime with Read, Grep and Glob over files on disk (Cursor 2.4+, Claude Code)' — the 'Cursor 2.4+' version claim is unverifiable (wave0's own characterization) and is asserted, not slotted, in all six skills including this one.",
-   "Minor: the report's single novelty enum (new | seen-in-baseline | known-issue <key> | unknown) conflates two independent axes — baseline presence (step 7) and known-issue membership (step 8). A bucket can be both seen-in-baseline and known-issue <key>; neither step states which value wins the one field.",
-   "Minor: Human-verification check 'signed plus unsigned equals the failure total' does not say how step 6's voided victims (tests killed by an infra bucket, reclassified unrun) are removed from the failure total before the identity is checked."
-  ],
-  "vagueness": []
- },
- "dispositions": [
-  {
-   "finding": "compatibility names 'Cursor 2.4+', called an unverifiable third-party version claim",
-   "disposition": "rejected",
-   "why": "Verified this session from two primary sources: cursor.com/docs/skills and cursor.com/changelog/2-4 (Agent Skills shipped in Cursor 2.4, 22 Jan 2026). The reviewers reasoned 'the author cannot verify this from this repo', which is a sound heuristic and false here. The claim is load-bearing: on Cursor 2.3 the skill silently does not load, so removing it would make the pack less accurate, not more honest."
-  },
-  {
-   "finding": "step 7 key 3 claimed baseline novelty by signature, but a summary is a per-test status table and carries no log text — reworded to compare test name and status, and to say which claim is being made",
-   "disposition": "accepted-and-fixed"
-  },
-  {
-   "finding": "'If it is neither, drop the key' read as requiring both conditions to fail — changed to 'if either is missing'",
-   "disposition": "accepted-and-fixed"
-  },
-  {
-   "finding": "the single novelty enum conflated baseline presence with known-issue membership — split into two report fields, and the dangling references in step 8 updated",
-   "disposition": "accepted-and-fixed"
-  }
- ],
  "recheck": {
+  "agent": "recheck:dv-regression-triage-routing",
   "ready": false,
-  "agent": "pending recheck-2",
-  "why": "PENDING a second independent recheck: the maintainer edited this file after the first recheck ran, and the fixer may not certify their own fix. Awaiting recheck-2.",
-  "reviewer_verdict_was": false,
-  "remaining_nits": [
-   "Step 7 key 3 / report field 'novelty: seen-in-baseline' (SKILL.md ~lines 186-192, 234): baseline novelty is checked against the baseline *summary*, but signatures cannot appear in a per-test status table by the skill's own definitions (slot row 1; budget rule 6). Fix: name the prior triage report (which contains step-10 signature lines) as the baseline artifact, or demote baseline novelty to a handoff/unknown like step 8's tracker branch.",
-   "Line ~190: 'Key 3 needs the baseline summary to be filled in *and* still on disk. If it is neither, drop the key' — 'neither' literally means drop only when both conditions fail; the Gotcha bullet ('If the baseline slot is unfilled, or the baseline summary is no longer on disk') states the intended either/or. One-word fix ('If either is not').",
-   "Minor: the report's single novelty enum (new | seen-in-baseline | known-issue <key> | unknown) conflates two independent axes — baseline presence (step 7) and known-issue membership (step 8). A bucket can be both seen-in-baseline and known-issue <key>; neither step states which value wins the one field.",
-   "Minor: Human-verification check 'signed plus unsigned equals the failure total' does not say how step 6's voided victims (tests killed by an infra bucket, reclassified unrun) are removed from the failure total before the identity is checked."
+  "why": "Lint is genuinely 1.000/clean and check_pack('skills') returns zero findings for this slug; metadata is ip-dv-engineer/junior; the budget ledger reconciles exactly (6+2+30+20+1=59) and names every Grep the steps spend; all three local slots and all six declared profile facts are spent. But four defects survive. (1) The block's `run id : <the representative run, from the summary's test and seed columns>` violates the registered SHAPE in _shared/handoff-vocabulary.md line 108 (\"Whatever identifies one run for this team, per the profile's Run identity fact\"), which both sibling emitters obey verbatim (dv-sim-log-first-error:205, dv-minimal-reproducer:325). It invents a summary column layout, contradicts step 1's own correct hedge \"seed or run identifier\", and spends the profile's Run identity fact without declaring it — corrupting the pack's cross-skill join key. (2) `unaccounted : <count>, derived as total minus pass minus fail` is unconditional in the block, so on a summary that does report not-started/skipped (which step 1 instructs you to extract) it prints a phantom count equal to the unrun count already shown in `totals`; the verification checklist only checks the label, not the branch. (3) `vs-baseline` has no value for a test present in the baseline but killed/skipped/not-started there — step 5's own rationale for `not-checked` (\"a baseline that never ran the test says nothing\") covers it while the assignment rule does not, so the fallback reading `test-not-failing-in-baseline` over-ranks the bucket on key 3, and line 250 forces a value to be picked. (4) Step 2 anchors solely on the lowest fatal line and on pass-marker-present, so a truncated wallclock-kill/hang log (neither marker) falls silently into the unsigned remainder — the exact case the Gotchas call \"the most deceptive bucket\" — and the prescribed discriminator (\"progress right up to its final line\", \"trust the log's last lines\") is never made a step and is unreachable inside the 1-Grep-1-Read per-log cap, since the Grep yields no anchor and an unanchored Read of a 100MB log returns the header, not the tail. That also makes `kind: timeout` signatures unreachable. Handed to a DV engineer tonight, this produces a table with a wrong-shaped run id, a phantom unaccounted line, an inflated rank on any bucket whose baseline run was killed, and every timeout invisible.",
+  "remaining": [
+   "Line 199: change `run id : <the representative run, from the summary's test and seed columns>` to the registered shape used by both siblings — `<whatever identifies this run for us, per the profile's Run identity fact>` — and add Run identity to the Fill table's list of profile facts this skill spends.",
+   "Lines 98-99 and 185: make the `unaccounted` derivation explicitly conditional. It must be `none` whenever the summary reports its own unrun/not-started count; the subtraction total-minus-pass-minus-fail is only valid in the `unrun not reported` branch. Put the branch in the block line, not only in step 1 prose.",
+   "Line 150: give `vs-baseline` a defined value for a test present in the baseline but not run there (killed / skipped / not started). Step 5's own rationale says that case says nothing, so it should map to `not-checked`, not to `test-not-failing-in-baseline`.",
+   "Lines 109-112: add the neither-marker branch to step 2. A log with no fatal marker and no pass marker is the truncated wallclock-kill / hang case; the step needs a budgeted way to read the log's final lines (the Grep must return something that anchors a tail Read, or the per-log budget must state a tail-read call), otherwise the Gotchas' own discriminator at lines 218-219 and 225 is unexecutable and every timeout lands unsigned.",
+   "Line 110-111: soften \"A log with the pass marker and no fatal marker ... is `infrastructure`\" — a stricter post-sim gate (drain / unfinished-transaction check, exit-code gate, a checker writing elsewhere) produces the same log shape and is a design/TB failure. Step 4 voids infrastructure buckets' results, so this misroute is expensive; allow `unknown`.",
+   "Step 1's environmental short-circuit creates a bucket whose `signature` no step assigns, while budget rule 7 forbids deriving one from a summary row. Say explicitly what that bucket's signature field carries.",
+   "Step 2 resolves a summary row to a log path with no Glob budgeted and no reference to the profile's Log location fact. Either declare that the Regression summary format must carry log paths, or name the Log location fact and budget the lookup.",
+   "Pack-level, not this skill alone: `known : known-issue <key> | not-matched | list-not-readable` is a verbatim-identical enum in dv-regression-triage-routing, dv-customer-defect-handoff and dv-customer-escalation-isolation, yet unregistered in handoff-vocabulary.md — it escapes C006 only because `_enum()` bails on `<`. That contradicts the registry's claim that the seven registered names are exactly the shared enums. Needs an ADR: register `known`, or teach `_enum` about parametrised values."
+  ],
+  "new_problems": [
+   "`run id` block value hardcodes \"the summary's test and seed columns\", breaking the registered `run id` shape in _shared/handoff-vocabulary.md and contradicting step 1's own \"seed or run identifier\" hedge",
+   "`unaccounted : <count>, derived as total minus pass minus fail` double-reports the unrun count whenever the summary does report a not-started/skipped category",
+   "`vs-baseline` has no assignment for a test present in the baseline but killed/skipped/not-started there; the fallback reading over-ranks the bucket",
+   "Step 2 has no branch for a log with neither fatal nor pass marker (the truncated timeout), so the Gotchas' \"progress right up to its final line\" test is never a step and is unreachable within the 1-Grep-1-Read per-log cap"
   ]
  }
 }

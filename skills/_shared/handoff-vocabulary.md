@@ -80,6 +80,8 @@ narrowing is `no`, dropping a token is an error.
 | `phase` | `dv-build-filelist-hygiene` | `compile` `elab` |
 | `phase` | `dv-isa-step-compare` | `run` `post` |
 | `phase` | `dv-trap-exception-triage` | `run` |
+| `phase` | `dv-dfi-boundary-blame` | `run` `finalise` |
+| `phase` | `dv-emulation-sim-mismatch-triage` | `run` `finalise` `post` |
 | `proof status` | `dv-formal-apps` | `proven` `falsified` `bounded` `inconclusive` `vacuous` |
 | `proof status` | `dv-formal-overconstraint-credit` | `proven` `falsified` `bounded` `inconclusive` `not-read` |
 

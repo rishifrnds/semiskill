@@ -10,8 +10,8 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.3.0
-  semiskill-review-by: 2027-08-05
+  semiskill-version: 1.4.0
+  semiskill-review-by: 2027-07-02
   semiskill-tags: reproducer, bisection, determinism, triage, handoff, debug
 ---
 
@@ -76,15 +76,25 @@ Every shrink iteration produces another log. Hold to this:
    than a path, ask for the path on disk, or ask them to save what they pasted to a file and give you
    that path. Until a path exists you may reason over the pasted lines by eye — but say that is what
    you did. You have not searched the log, only the fragment you were shown.
-3. Per iteration the budget is one **Grep** for the fatal markers from the slots table, one **Grep**
-   for the pass marker, and at most two **Read** windows of about 80 lines each. Three named **Grep**
-   groups sit outside that per-iteration budget, and nothing else does: one marker **Grep** per
-   repeat log in step 2 — three logs, so three **Grep** calls; in step 3, one **Grep** of the
-   original log for the simulated time of failure and — only when the End-of-run summary slot is
-   filled — one **Grep** of that same log for that line; and in step 7 those same one or two
-   **Grep** calls once more, against the final accepted log.
-4. To locate a config knob or a tier directory, **Grep** for the knob name or **Glob** the tier path
-   rather than reading the file — then **Read** at most 40 lines either side of the hit.
+3. Per shrink iteration the budget is one **Grep** for the fatal markers from the slots table, one
+   **Grep** for the pass marker, and at most two **Read** windows of about 80 lines each. Step 5
+   spends both of those **Grep** calls every time; neither is optional. Four named groups sit outside
+   that per-iteration budget, and nothing else does:
+   - **Step 2, determinism.** One **Grep** per determinism log, its pattern alternating the fatal
+     markers with the pass marker so one call classifies the log. Five logs — three same-seed
+     repeats and two different-seed runs — so five **Grep** calls.
+   - **Step 3, baseline.** One **Grep** of the original log for the simulated time of failure, and —
+     only when the End-of-run summary slot is filled — one **Grep** of that same log for that line.
+   - **Step 7, reproducer.** Those same one or two **Grep** calls once more, against the final
+     accepted log.
+   - **Step 4, non-log lookups.** At most one lookup per proposal, priced in rule 4, and only on the
+     two axes that need one.
+4. **Non-log lookups, priced.** To locate a configuration knob or a tier directory, **Grep** for the
+   name or **Glob** the path rather than reading the file — then **Read** at most 40 lines either
+   side of the hit. One lookup is at most one **Glob**, one **Grep** and one 40-line **Read**. Two
+   places spend one and no others do: the **Configuration** axis, against the paths in the Config
+   surface slot, and the **Hierarchy** axis, against the paths in the Testbench tiers slot. These are
+   configuration and filelist text, never logs, and they are not charged against rule 3's log budget.
 5. If a **Grep** returns more than about 200 hits, the pattern is too broad. Narrow it before reading
    anything.
 6. **Stopping rule.** If two windowed **Read** calls have not confirmed the signature, report that
@@ -104,21 +114,57 @@ log against it.
 Everything below is measured against this string. If you cannot produce a signature from the original
 log, shrinking has nothing to preserve — stop here and say so.
 
+**The `phase` token travels with the signature; do not re-derive it.** It is the signature's own first
+field, and the handoff block in step 8 spells it with the same five tokens
+`_shared/failure-signature-schema.md` accepts, so a phase column joins against a signature prefix.
+Copy it across unchanged. Check only the one pair people get wrong: `finalise` is the simulator still
+running — its end-of-run report and final-phase checks, lines that sit in this same log after the last
+design activity; `post` is a step that ran after the simulator exited, and its diagnostics live in a
+file this log does not contain. A `post` failure can still be shrunk here, but only by shrinking the
+simulation that fed it — say that is what you did. A `compile` or `elab` phase means you are in the
+wrong skill: there is no stimulus to bisect, and the routing above sends it elsewhere.
+
 ### 2. Establish determinism before shrinking anything
 
 If the failure is not reliably reproducible, a shrink step that "fixes" it has told you nothing.
 
-Ask the engineer to repeat the unmodified test three times and to give you the **path of each log**.
-A pasted tail is useful context but is not searchable — see budget rule 2. Then classify with one
-marker **Grep** per log:
+**Say the seed policy out loud when you ask, because the classes below turn on it.** Most regression
+harnesses draw a fresh seed per invocation unless one is pinned, so "repeat the test three times"
+usually means three different seeds — under which the Deterministic class can never be observed and
+seed-dependence can never be isolated. Ask for two things instead, and for the **path of each log**:
 
-- **Deterministic** — same seed, same signature, same simulated time of failure. Ideal.
-- **Signature-stable** — same signature, but the failure time or the transaction index moves between
-  runs. Usually fine to shrink, but time-window shrinking becomes risky.
-- **Seed-dependent** — fails on one seed only. Ask for the failing seed to be pinned and recorded as
-  part of the reproducer, not as an aside.
-- **Intermittent** — fails roughly 1 run in N. Ask the engineer for the observed rate and record N,
-  along with how many runs that rate was measured over. Every later step is judged against that N.
+- **three repeats with the original failing seed pinned**, taken from the Determinism controls slot
+  and held fixed along with everything else that slot names — plusargs, build tag, model revision
+- **two further runs on deliberately different seeds, each seed recorded**, not whatever the harness
+  happens to generate. Two is the minimum that can distinguish "this seed only" from "any seed"; it
+  is not a rate measurement and must not be reported as one.
+
+A pasted tail is useful context but is not searchable — see budget rule 2. Then classify with one
+**Grep** per log, its pattern alternating the fatal markers with the pass marker. Classify from the
+**matched lines themselves** — the marker hit carries the message and usually the time, which is all
+four classes need. Do not derive a full signature per repeat: that costs a windowed **Read** per log
+and the budget does not carry five of them. Step 1's baseline is the only signature derived here.
+
+- **Deterministic** — the three pinned-seed repeats hit the same fatal marker, with the same message
+  and the same simulated time. Ideal.
+- **Signature-stable** — same fatal marker, and the same message once the schema's normalisation is
+  applied by eye, but the time or the transaction index moves across the three. Usually fine to
+  shrink, but time-window shrinking becomes risky, and the movement is itself a finding — read the
+  nondeterminism list below before proposing anything.
+- **Seed-dependent** — the pinned seed hits the fatal marker every time and both recorded alternative
+  seeds hit the pass marker instead. Ask for the failing seed to be pinned and recorded as part of the
+  reproducer, not as an aside.
+- **Intermittent** — the pinned seed hits the fatal marker only some of the time, with everything
+  else held fixed: roughly 1 run in N. Ask the engineer for the observed rate and record N, along
+  with how many runs that rate was measured over. Five logs cannot measure N — say it came from the
+  engineer. Every later step is judged against that N.
+
+If a repeat hits a *different* fatal marker, or the same one with a message that will not normalise
+to the baseline, you are not looking at one failure and there is nothing here to shrink yet. Say so
+and send it back to triage rather than picking whichever run you like best.
+
+If a log carries neither the fatal markers nor the pass marker it did not run to completion, and it
+classifies nothing. Ask for it to be repeated rather than counting it as a pass or as a miss.
 
 These four class names are local to this skill. `_shared/failure-signature-schema.md` covers the
 signature only; if a second skill ever needs to filter on determinism class, move this list there
@@ -153,39 +199,60 @@ Ask the engineer for wall-clock duration, tier, and whether a build was needed �
 readable from here, so if the engineer does not report one, leave that part of the baseline empty
 rather than estimating it. A shrink with no baseline is a claim, not a measurement.
 
-### 4. Propose one shrink step, on the cheapest axis first
+### 4. Propose one shrink step, working the axes in order
 
-Work the axes in this order. Each is cheaper to try and more likely to pay than the one after it.
+Work the axes in this order. Axes 1 to 3 are ordered by cost: each is cheaper to try and more likely
+to pay than the next. Axes 4 and 5 are not on that scale and are ordered by **how loudly they fail**.
+Hierarchy is the most expensive item here — it usually means standing up a different environment, and
+its own text below says it often does not pay — but when it is wrong you find out at once and
+unmistakably. Test length is cheap and still comes last, because when it is wrong it is silent: the
+warm-up you trimmed was the precondition, the failure simply stops happening, and you spend the next
+two iterations recording a sensitivity that is an artefact of your own edit.
 
-1. **Time window.** Cut the run so it stops shortly after the failure time. If the flow supports a
-   saved checkpoint, propose restoring close to the failure instead of starting cold. Biggest win,
-   lowest effort, highest risk of changing initialisation — see Gotchas.
-2. **Configuration.** Switch off what is not implicated — unrelated agents, coverage collection,
-   scoreboards for other interfaces, debug verbosity, protocol checkers in untouched blocks. Prefer
-   knobs that take effect at runtime over anything that forces a rebuild.
-3. **Stimulus.** Reduce the number of transactions, then constrain randomisation toward the pattern
-   that failed, then replace the random sequence with a directed replay of the observed transactions.
-   Do this before touching anything else that would disturb the random stream.
-4. **Hierarchy.** Move down a tier — full chip to subsystem to block — only if a lower tier can
-   actually drive the same stimulus. Use **Glob** on the paths named in the **Testbench tiers** slot
-   and **Grep** for the failing component name to check it even exists at that tier — the slot also
-   says what stimulus each tier can reach, which is what decides this. This axis often does not pay,
-   and a reproducer that stays at its original tier is still a success if it meets the runtime budget.
-5. **Test length.** Trim warm-up, preceding phases, training or calibration sequences. Last, because
-   these are the parts most likely to be carrying the real precondition.
+Every bullet below is a proposal you put to the engineer, not a change you make.
+
+1. **Time window.** Propose cutting the run so it stops shortly after the failure time. If the flow
+   supports a saved checkpoint, propose restoring close to the failure instead of starting cold.
+   Biggest win, lowest effort, highest risk of changing initialisation — see Gotchas.
+2. **Configuration.** Propose switching off what is not implicated — unrelated agents, coverage
+   collection, scoreboards for other interfaces, debug verbosity, protocol checkers in untouched
+   blocks. The **Config surface** slot names where our test configuration lives and which knobs take
+   effect without a rebuild: **Grep** those paths for the knob you mean to change, to confirm it
+   exists and is set where you assume, then **Read** at most 40 lines around the hit — budget rule 4.
+   Propose runtime knobs over anything that forces a rebuild. If that slot is unfilled, propose the
+   change by description and say you could not confirm where the knob lives or whether it rebuilds.
+3. **Stimulus.** Propose reducing the number of transactions, then constraining randomisation toward
+   the pattern that failed, then replacing the random sequence with a directed replay of the observed
+   transactions. Propose these before anything else that would disturb the random stream.
+4. **Hierarchy.** Propose moving down a tier — full chip to subsystem to block — only if a lower tier
+   can actually drive the same stimulus. Use **Glob** on the paths named in the **Testbench tiers**
+   slot and **Grep** for the failing component name to check it even exists at that tier — the slot
+   also says what stimulus each tier can reach, which is what decides this. This axis often does not
+   pay, and a reproducer that stays at its original tier is still a success if it meets the budget.
+5. **Test length.** Propose trimming warm-up, preceding phases, training or calibration sequences.
+   Last, because these are the parts most likely to be carrying the real precondition.
 
 Propose exactly one change — name the axis, the change, and the expected outcome. Then ask the
 engineer to make that one change, run it, and give you the path of the resulting log.
 
 ### 5. Re-check the signature after every single change
 
-**Grep** the new log at the path the engineer gave you, **Read** one bounded window, derive the
-signature and compare it to the baseline **field by field**. Accept the step only when all four
-fields match exactly.
+At the path the engineer gave you, spend both of budget rule 3's per-iteration calls: **Grep** the new
+log for the fatal markers, and **Grep** it for the **pass marker**. Both, every time — the absence of
+a fatal marker is not a pass, and this is the only step that can tell those apart. Then **Read** one
+bounded window, derive the signature and compare it to the baseline **field by field**. Accept the
+step only when all four fields match exactly.
 
-- All four match → keep the change, update the running config diff, propose the next step.
-- Any field differs → revert. Do not carry a changed signature forward.
-- No failure at all → revert, and treat the change as a sensitivity, not a success.
+- Fatal marker present, all four fields match → keep the change, update the running config diff,
+  propose the next step.
+- Fatal marker present, any field differs → revert. Do not carry a changed signature forward.
+- No fatal marker, **pass marker present** → a genuine clean run. Revert, and treat the change as a
+  sensitivity, not a success.
+- No fatal marker and **no pass marker either** → the run did not finish. A hung, truncated,
+  out-of-disk or licence-starved run looks exactly like a pass to anyone checking only for errors,
+  and counting it as one is the most expensive mistake in this loop. This is not a shrink result:
+  say so, ask for the run to be repeated, and if it repeats, record the iteration as
+  `infrastructure` per step 8 rather than as a sensitivity.
 
 For an intermittent failure, one passing run is not evidence. Ask for enough repeats to be meaningful
 against the recorded N before accepting the step, and record how many repeats you actually got.
@@ -212,8 +279,15 @@ of these as a stop-and-revert:
   particular factor. The repeats needed to measure a rate change grow with N, and the Gotchas say
   that is what you cannot afford — so treat the rate as unmeasured and judge the step on the
   signature alone.
-- the failure still appears with the block under test stubbed out or held in reset
-- the run now ends on a different marker — a timeout where there was a miscompare, or the reverse
+- the failure still appears with the block under test stubbed out or held in reset. This is the
+  sharpest evidence available here, and it is about **ownership**: whatever is failing is not the
+  block you were shrinking. Step 8 says what it does and does not do to `class`.
+- the run now ends on a different marker — a timeout where there was a miscompare, or the reverse.
+  Decide it from the two **Grep** calls step 5 already spent; do not open anything further. One fatal
+  marker swapped for another fatal marker is the bug moving, and belongs in `sensitivity`. *Neither*
+  marker firing is not the bug moving at all — the run did not finish, step 5 says what to do with
+  it, and step 8 turns a repeat of it into `class : infrastructure`. That second case is the one that
+  most often masquerades as a shrink finding, because a log with no errors in it reads like success.
 
 Each of these is information. The change that made the bug move is describing the mechanism; record
 it in the sensitivity line of the handoff rather than discarding it.
@@ -258,6 +332,26 @@ Take the repeat line from the team profile's **Rerun convention**, exactly as `d
 does; if that entry is unfilled, leave the field empty rather than inventing an invocation. This skill
 has no rerun slot of its own, so there is nowhere else that answer can come from.
 
+**`class` is carried, not re-derived — and say which.** Shrinking does not re-triage the failure, so
+the default is to copy the value from the triage that produced your baseline signature
+(`dv-sim-log-first-error` assigns it in its own step 3) and to write "class carried from triage" in
+`notes`. Depart from that only on evidence this skill actually produced:
+
+- **`infrastructure`** — a step-5 iteration came back with neither the fatal markers nor the pass
+  marker, and did so again on repeat; or the engineer reports the run died on licence, queue, host or
+  disk, which you cannot see from here and must attribute to them. The shrink result is void until a
+  complete run replaces it; say the class describes the run you have, not the bug you were shrinking.
+- **`design`** — carried from triage, and nothing in steps 5 or 6 contradicted it. Stubbing the block
+  out and still seeing the failure (step 6) does *not* flip this on its own: it says the failure is
+  not where you thought, which changes the owner, not the design/infrastructure line. Put that in
+  `sensitivity` and say the class is unchanged.
+- **`unknown`** — the triage never assigned one, or step 6 moved the signature and you reverted to a
+  state nobody has re-triaged. Blank is not a substitute; `unknown` is the honest token.
+
+If two engineers could read your evidence and fill this field differently, you have not said enough.
+A wrongly carried `class` routes the ticket to the wrong owner, and that costs a day before anyone
+looks at the shrink at all.
+
 The second block is this skill's local extension:
 
 ```
@@ -274,6 +368,15 @@ coverage    : <which numbers you read out of a log yourself and which the engine
 
 `not tried` matters more than it looks. It stops the recipient repeating work you already did and
 stops them assuming an axis was clean when it was simply never touched.
+
+**Then satisfy the ticket, without disturbing either block.** The two blocks above are fixed: the
+first is a join key with `dv-sim-log-first-error` and the second is compared across shrinks. Whatever
+our own ticket demands on top of them is listed in the **Handoff template** slot — append those as
+further lines *below* the second block. Never rename a field, drop one, or fold a ticket field into
+one of the blocks: a ticket field that asks the same question under a different name gets its own
+line, because a renamed field silently breaks the mechanical match this ordering exists to give you.
+If that slot is unfilled, say plainly that the ticket may require fields you have not supplied, and
+name whoever fills the ticket in as the person to ask.
 
 **State the coverage — an unstated shortcut is far worse than a stated one.** Wall clock, tier and
 build status can only ever be reported to you, never measured here, and a reproducer accepted on two
@@ -318,16 +421,26 @@ Before sending the handoff, check:
 
 - the shrunk reproducer was **confirmed by an actual log at a path you searched**, not predicted from
   the shrink reasoning and not read only from a pasted fragment
+- the final accepted log was checked for the **pass marker** as well as the fatal markers, so a run
+  that merely stopped early is not being handed over as a clean one
+- the determinism classification rests on **three repeats of one pinned seed** plus at least two other
+  recorded seeds, and the block says which seed is the reproducer's
 - all four signature fields match the baseline character for character
 - the config diff lists every change, including the ones that felt too small to mention
 - the determinism class of the reproducer is the same as the baseline's, or the change is called out
+- `class` says in `notes` whether it was carried from the triage or revised here, and on what
 - `to repeat` is taken from the profile's **Rerun convention**, or left empty
+- anything the ticket needs beyond the two blocks is appended below them, with no field in either
+  block renamed or removed to make room
 - `coverage` names every number that was reported rather than measured, and the repeat counts behind
   each verdict
 
 A wrong answer looks like "reduced from four hours to three minutes", where the three-minute version
 fails on a different component, or fails deterministically when the original failed one run in forty,
-or needs a file that exists only in the author's area. It reads as a triumph and bounces in a day.
+or needs a file that exists only in the author's area. The quieter wrong answer is a three-minute run
+that no longer fails *and no longer passes* — it dies early on something the shrink broke, nobody
+Grepped for the pass marker, and it is handed over as a success. Both read as a triumph and bounce in
+a day.
 
 ## Done when
 

@@ -298,9 +298,17 @@ def test_the_shipped_registry_loads_the_signed_vocabulary():
                                    "window"}
     assert len(reg.shape) == 5
     assert reg.shape == frozenset({"signature", "run id", "owner", "evidence", "notes"})
-    assert len(reg.narrowings) == 5
-    assert len(reg.held) == 19
-    assert len(reg.retired) == 11
+    # Not counted. T2 and T3 grow every time a skill legitimately narrows an enum or claims a bare
+    # noun, so a magic number here fails on correct work and teaches you to bump it without reading
+    # — which is how a snapshot stops guarding anything. What must stay true is the SHAPE: every
+    # narrowing is a proper subset of the enum it narrows, and no name is in two categories at once.
+    for (field, slug), values in reg.narrowings.items():
+        assert field in reg.registered, f"{field} is narrowed but not registered"
+        assert values < reg.registered[field], f"{field}/{slug} is not a proper subset"
+        assert reg.narrowing_allowed[field], f"{field} does not permit narrowing"
+    assert not (set(reg.held) & set(reg.registered)), "a name cannot be both held and registered"
+    assert not (set(reg.held) & reg.shape), "a name cannot be both held and a shape lock"
+    assert reg.retired, "the ADR-011 rename wave is recorded here; an empty table means it was lost"
     assert reg.registered["class"] == frozenset({"design", "infrastructure", "unknown"})
     assert reg.narrowing_allowed["phase"] is True
     assert reg.narrowing_allowed["class"] is False

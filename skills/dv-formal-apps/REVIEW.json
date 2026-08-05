@@ -1,0 +1,66 @@
+{
+ "slug": "dv-formal-apps",
+ "wave": "b3",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "recorded_at": "2026-08-05T19:53:59Z",
+ "author": {
+  "agent": "author:dv-formal-apps",
+  "lint_line": "",
+  "uncertainties": []
+ },
+ "review": {
+  "agent": "review:dv-formal-apps",
+  "must_fix": [
+   "The 'When to use something else' section (lines 32-46) omits three closely-related dv-formal-* siblings that a reader would need: (1) dv-formal-target-scoping, which its own SKILL.md line 34 calls dv-formal-apps 'the closest neighbour' and explicitly hands off `claim: connectivity`, `claim: unreachability`, `claim: equivalence` targets straight to it — dv-formal-apps never reciprocates this reference, so a reader arriving cold has no way to discover the upstream scoping skill; (2) dv-formal-convergence, whose entire purpose is choosing a technique for exactly the 'bounded' or 'inconclusive' proof-status outcomes dv-formal-apps step 4 produces, and is never mentioned; (3) dv-formal-overconstraint-credit, whose over-constraint/vacuity audit directly overlaps with Gate 2 of step 6 and the vacuous-check Gotcha, and is never mentioned (the omission is mutual — that skill doesn't reference dv-formal-apps back either). Fix: add these three to the routing table the way dv-ral-bringup, dv-sim-log-first-error, dv-build-filelist-hygiene, dv-regression-triage-routing and dv-repo-orientation already are.",
+   "Flag for the pack maintainer (fix lives outside this file): dv-formal-target-scoping/SKILL.md line 34 states dv-formal-apps '*runs and reads* the packaged apps,' which misrepresents this skill and should be corrected to match its actual read-only/handoff behavior."
+  ],
+  "technical_errors": [],
+  "verb_honesty": [
+   "No violations found inside dv-formal-apps/SKILL.md itself — every step uses read/locate/classify/cross-check/record verbs, and step 3 (line 156) explicitly states 'The agent cannot start a formal engine, take a licence, or submit to a compute farm' before handing the run off to the engineer.",
+   "Cross-file issue (not in this file, but directly about this skill's verb honesty): E:\\code\\VLSI\\semiskill\\skills\\dv-formal-target-scoping\\SKILL.md line 34 describes dv-formal-apps as something that '*runs and reads* the packaged apps' — this contradicts dv-formal-apps' own step 3 disclaimer and should be corrected in the sibling file."
+  ],
+  "hallucination_risks": [],
+  "budget_violations": [],
+  "open_twice": ""
+ },
+ "fix": {
+  "agent": "fix:dv-formal-apps",
+  "fixed": [
+   "must_fix #1 — 'When to use something else' now names all three missing formal siblings with an honest boundary each: dv-formal-target-scoping (upstream target selection, reciprocating its handoff of claim: connectivity / unreachability / equivalence), dv-formal-convergence (where step 4's bounded or inconclusive statuses go, instead of asking for a longer run), and dv-formal-overconstraint-credit (the wider counterexample-artifact / vacuity / sign-off-credit audit that step 6 Gate 2 stops short of).",
+   "must_fix #2, the part that lives inside this file — the target-scoping bullet states the correction explicitly: 'its routing paragraph describes this one as *running* the packaged apps. It does not. Step 3 hands the run to a named engineer, and every step after it reads only the report that comes back.' A reader arriving from the sibling is told the right thing before step 1.",
+   "Made the new routing load-bearing rather than decorative: step 3 now compares a dv-formal-target-scoping record's `assumes` and `run id` against what the run actually did (a mismatch is itself a finding); step 4 ends by handing the bounded/inconclusive counts and depths to dv-formal-convergence; step 6 Gate 2 names its own narrowness and routes the wider audit to dv-formal-overconstraint-credit.",
+   "Fixed a contradiction the required fix would otherwise have introduced: the closing bullet claimed a hand-written property, an abstraction, a decomposition, a non-converging proof and constraint-legitimacy judgement were 'Not in this pack at all' — false once four siblings covering exactly those are named above it. It now reads 'Still the specialist's call, sibling skill or not', which is true (those siblings are senior / staff / senior-staff; this one is junior). Also added dv-formal-property-authoring, whose omission was what made the old sentence false.",
+   "Frontmatter: semiskill-version 1.0.0 -> 1.1.0; semiskill-review-by 2027-07-09 -> 2027-07-07 (the old date was shared with six siblings, violating the stagger rule; 2027-07-07 is unused pack-wide). semiskill-role and semiskill-level left exactly at formal-verification / junior as instructed."
+  ],
+  "not_fixed": [
+   "must_fix #2, the part that lives outside this file — the actual edit to E:\\code\\VLSI\\semiskill\\skills\\dv-formal-target-scoping\\SKILL.md line 34 ('it *runs and reads* the packaged apps'). Reason: the task forbids editing sibling skills, and that file is owned by another agent editing concurrently. It stands as a live finding for the pack maintainer: line 34 should say dv-formal-apps *reads the report* a packaged app produced, not that it runs the app. I removed the reader-facing harm from my side by stating the correction in my own routing bullet, but the sibling text itself is still wrong.",
+   "Body length is 424 lines against the 180-260 guideline. It was already 383 lines before this review and the linter accepts it; the must_fix work required adding routing, not removing content, so I tightened rather than expanded (three routing bullets plus three in-step pointers, ~41 lines) and did not cut existing procedure text that the review did not fault."
+  ],
+  "lint_line": "skills\\dv-formal-apps\\SKILL.md  [approve 1.000]  clean  —  1/1 clean, 0 errors, 0 advisories, 1 predicted to publish"
+ },
+ "recheck": {
+  "agent": "recheck:dv-formal-apps",
+  "ready": false,
+  "why": "Lints 1.000 clean, role/level are exactly formal-verification/junior, verb honesty is clean (step 3 is a proper handoff), and the retrieval ledger's arithmetic is exact (3+1=4 Globs, 2+2+2+3=9 Greps, 3+2+3=8 Reads, all matching the declared totals). The domain content is largely correct and the Gotchas are genuinely good. But three defects survive, two of which a junior reader — the declared audience — cannot detect. (1) Step 3 tells the reader that a dv-formal-target-scoping record's `assumes` and `run id` lines carry the plan's expected revision. That sibling has no `run id` field and explicitly explains three separate times that it never will (\"It deliberately carries no `run id`, and that is not an oversight\"); the field that carries revision is `source revision`, which dv-formal-apps never names. The same skill gets this right in its \"When to use something else\" bullet (`bound`, `assumes`, `owner` all exist), so it is drift in one place only. (2) Step 7's first ordered item, \"Count the state points the tool could not pair up\", requires a report string for unmapped/compare points that no slot declares — the Proof status strings slot enumerates only the five proof outcomes — and it spends a Grep over the equivalence report that budget rule 5 does not cover (rule 5 scopes its calls to 4 constraint files and 3 report rows cross-checked against RTL/reference). Human verification makes that count mandatory, and the handoff block has no field to hold it. So one of the four apps the skill exists to cover has a step that cannot be executed inside the skill's own caps without inventing a marker. (3) The block spends `run id`, a sixth profile fact (Run identity) that the \"Five facts\" table does not declare, glossed generically as \"this run\" when the profile's Run identity is a simulation identity — precisely the profile/formal conflation the skill itself warns against twice, and handled explicitly by both formal siblings. I would not hand this to a working DV engineer today.",
+  "remaining": [
+   "Step 3 (line 192) cites a field that does not exist: 'that record's `assumes` and `run id` lines already say what capacity, licence and revision the plan expected'. dv-formal-target-scoping carries no `run id` and documents that decision at its lines 291-295 and 379; the revision lives in `source revision`. Replace `run id` with `source revision`, or drop the revision half of the claim — `assumes` alone covers capacity and licence.",
+   "Step 7 item 1 ('Count the state points the tool could not pair up') greps an undeclared marker. The Proof status strings slot lists only full proof, counterexample, bounded, inconclusive and vacuous — nothing for unmapped/non-equivalent compare points. Either widen that slot to cover the equivalence report's compare-point vocabulary, or add a dedicated slot for it.",
+   "Step 7 item 1 also falls outside the ledger. Budget rule 5 allots 2 Greps + 2 Reads 'over at most 4 constraint files' and 3 Greps + 3 Reads 'cross-checking at most 3 report rows against the RTL or the reference document'; a Grep of the equivalence report for unmapped points is neither, and step 7 item 2's read of the ECO intent document is not clearly covered either. Extend rule 5 to name the equivalence path explicitly and re-total rule 6.",
+   "Human verification requires 'the unmapped-point count is quoted before the non-equivalent-point count', but no handoff field holds it — `checks` is defined as 'counts per proof status', and unmapped is not a proof status. Add a field for it or fold it into `checks` with an explicit definition.",
+   "The block spends `run id : <whatever identifies this run for us>` but the 'Fill this in for our team' table declares only five profile facts and never names Run identity. Add it to the table, and qualify the gloss as the *formal* run the way dv-formal-convergence does ('whatever identifies this formal run for us') — the profile's Run identity is seed/test name/build tag, which a formal run has none of.",
+   "The profile table maps **Coverage output** to 'step 6 — the uncovered items an unreachability run is given come from there', but it is actually spent at line 169 in step 2 and step 6 never names it. Correct the step number.",
+   "**Report location** is spent only in retrieval-budget rule 1 and never in a Procedure step, while step 3 item 1 already asks the engineer for the report path — leaving budget rule 4's '1 Glob for the report' doing unclear work. Either name the slot in step 4 and say what the Glob resolves, or drop the Glob and re-total rule 6.",
+   "Step 4's table labels statuses 'full proof' and 'counterexample', which _shared/handoff-vocabulary.md identifies as the older spellings requiring normalisation to `proven` and `falsified`. State the mapping where the table is, or an agent transcribing the table into the block emits a token that will not join."
+  ],
+  "new_problems": [
+   "Step 3 references `run id` on a dv-formal-target-scoping record; that field does not exist there and the sibling explicitly documents its absence and rationale in three places. The correct field, `source revision`, is never named by this skill. Direct cross-skill contradiction.",
+   "Step 7 item 1 requires counting unmapped state points, which needs a report marker string that no [[FILL:]] slot declares (violates the markers-must-be-slots rule) and spends a Grep the ledger does not account for (violates the budget rule). Human verification makes the count mandatory, so it is not optional.",
+   "The handoff block has nowhere to record the unmapped-point count that Human verification demands — `checks` is scoped to counts per proof status.",
+   "`run id` in the block is a sixth profile fact (Run identity) that the 'Five facts' table does not declare, and it is glossed generically rather than as a formal run, repeating exactly the profile-conflation error the skill warns about for App inventory and Proof status strings.",
+   "The profile-fact table sends the reader to step 6 for **Coverage output**; it is actually consumed in step 2 and step 6 never mentions it.",
+   "**Report location** is never spent by a numbered Procedure step — only by the retrieval budget — and is redundant with step 3's request for the report path.",
+   "Step 4 uses the deprecated 'full proof'/'counterexample' spellings without stating the mapping to the block's canonical `proven`/`falsified` tokens.",
+   "Soft domain note (not a blocker): the connectivity row 'falsified, and the counterexample shows both ends holding still → source and destination swapped in the table' describes the tie-off symptom more than the swapped-row symptom; a swapped row usually shows the free-driven end toggling while the observed end stays put."
+  ]
+ }
+}

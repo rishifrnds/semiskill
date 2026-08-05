@@ -1,0 +1,72 @@
+{
+ "slug": "dv-regression-runtime-tuning",
+ "wave": "b1",
+ "gate": "author -> lint 1.000 -> adversarial review -> fix -> independent recheck",
+ "recorded_at": "2026-08-05T19:53:59Z",
+ "author": {
+  "agent": "author:dv-regression-runtime-tuning",
+  "lint_line": "",
+  "uncertainties": []
+ },
+ "review": {
+  "agent": "review:dv-regression-runtime-tuning",
+  "must_fix": [
+   "Body is 308 lines against the CLAUDE.md-mandated 180-260 line cap (~18% over) — E:\\code\\VLSI\\semiskill\\skills\\dv-regression-runtime-tuning\\SKILL.md.",
+   "Slot 'Waveform controls' (line 57) is declared but never consumed by any step, Gotcha, or report field — a rule-5/C001 unused-slot violation, notable because waveform dumping is explicitly named in the skill's own description trigger list (line 3).",
+   "Retrieval budget's own totals (lines 90-93) do not sum from its itemized per-step breakdown — fix the arithmetic so 'first pass' figures are self-consistent.",
+   "Report field 'run id' (line 230) is never sourced by any step or by the skill's own 'seven pack-wide facts' accounting (lines 62-70), despite team-profile.md having a Run identity fact and the handoff-vocabulary's canonical 'run id' shape pointing to exactly that fact.",
+   "Report field 'owner' (line 236) is never sourced by any step or tied to team-profile.md's Area-to-owner map; it is defined only inline in the report template itself."
+  ],
+  "technical_errors": [
+   "None at high confidence. Verified as correct: auto_bin_max default of 64 (line 175, matches IEEE 1800 LRM default), the 64^3=262,144 cross-bin arithmetic (line 176), the Amdahl-style ceiling example 'two fifths of the time -> about 1.7x' (line 181, = 1/0.6 = 1.667), and the UVM report-macro verbosity-guard behavior (lines 265-269), which is also appropriately hedged rather than overclaimed. Lower-confidence, not reported as a defect: step 2's CPU-time-vs-wall-clock binary (compute vs waiting) doesn't address CPU time exceeding wall clock, which can happen in parallel/multi-threaded build or elaboration stages that step 1's own stage split includes."
+  ],
+  "verb_honesty": [
+   "Clean overall — the skill opens with an explicit disclaimer (lines 30-32) that it 'cannot start a simulation, profile one, watch a queue or time anything,' and steps 3 and 7 correctly route actual reruns through 'Ask the engineer to...' handoffs.",
+   "Borderline, not high-confidence: step 7 (line 211) says 'Say so, revert, take the next change' as a bare imperative rather than routing the revert through the same explicit engineer-handoff phrasing used elsewhere in the step. Worth tightening but not a clear violation since the surrounding step already established the handoff pattern."
+  ],
+  "hallucination_risks": [
+   "None found at high confidence. All vendor/tool-specific facts (profiling flags, marker strings, resource-line format) are behind [[FILL:]] slots. Cross-skill fact citations (dv-minimal-reproducer's End-of-run summary, dv-compute-license-efficiency's Cost columns, dv-regression-tiering-farm's Resource request, dv-build-filelist-hygiene's Build-finished marker) were checked against those files and all resolve correctly with consistent meanings."
+  ],
+  "budget_violations": [
+   "Retrieval budget item 3 (lines 90-93) is internally inconsistent: it claims 'the first pass is 2 Globs, 5 Greps and 7 windowed Reads' for steps 1/3/4/5, but summing the itemized per-step counts in the same sentence gives 1 Glob, 5 Greps, 6 Reads. The stated totals only reconcile if step 8's Glob and Read are silently folded into the 'first pass' figure while its Grep is not (1+1=2 Globs, 6+1=7 Reads, but 5+1=6 not 5 Greps). This is a self-contradictory budget the reader cannot audit against."
+  ],
+  "open_twice": "\"Likely yes on the first read — the step-4 hot-spot decision table and the Gotchas section are dense, technically credible, and clearly the strongest part of the skill. But the never-consumed Waveform controls slot (despite dumping being front-and-center in the description), the self-contradictory retrieval-budget arithmetic, and the 48-line overrun are the kind of loose ends that would make a careful staff-level reviewer send it back for a tightening pass rather than trust it outright.\""
+ },
+ "fix": {
+  "agent": "fix:dv-regression-runtime-tuning",
+  "fixed": [
+   "must_fix: body length — cut from 308 to 260 lines, inside the CLAUDE.md 180-260 cap, by tightening prose throughout rather than deleting the step-4 decision table or the Gotchas (8 bullets retained, still in the 6-10 range)",
+   "must_fix + unused_slots: 'Waveform controls' is now genuinely consumed — step 4's kernel row cites it by name to decide which half of the dumping fix is attemptable (dumping off vs narrowed to a scope or time window) and routes a rebuild-requiring narrowing to step 6's `unknown` price; it is no longer reachable only via the incidental word 'dumping'",
+   "budget_violations: retrieval-budget item 3 now sums from its own itemisation — steps 1 to 5 are 1 Glob, 5 Greps, 6 windowed Reads (step 1: 1 Grep + 1 Read; step 3: 1 Glob + 1 Grep + 2 Reads; step 4: 2 Greps + 2 Reads; step 5: 1 Grep + 1 Read); step 8 is stated as conditional and adds a second Glob, a sixth Grep and a seventh Read, giving a widest first pass of 2 Globs, 6 Greps and 7 Reads",
+   "must_fix: report field 'run id' is now sourced — step 1 reads the run's identity off the log using team-profile's Run identity fact and carries it into the field, matching the handoff-vocabulary shape entry; the pack-wide-facts accounting was corrected from seven to nine facts and lists Run identity against step 1",
+   "must_fix: report field 'owner' is now sourced — step 6 names it from team-profile's Area to owner map keyed on the unit the profile named, with the vocabulary's blank-plus-candidates rule where the change is a flow option the map does not reach; Area to owner map is listed in the nine-fact accounting against step 6",
+   "technical_errors: step 2's CPU-vs-wall-clock binary is now a three-way split — CPU time above wall clock is called out as not-a-fault (several cores, as parallel builds and multi-threaded elaboration do, which step 1's own stage split includes), with the instruction to read that ratio against wall clock times cores; the matching Gotcha now reads the CPU-to-wall ratio in both directions",
+   "verb_honesty: step 7's bare 'Say so, revert, take the next change' now routes the revert through the same explicit engineer handoff as the rest of the step — 'say so in the report, ask the engineer to put the change back as it was, and move to the next candidate'",
+   "metadata: semiskill-version bumped 1.0.0 -> 1.1.0; role/level unchanged at applications-engineer/staff; review-by left at its staggered 2027-04-09"
+  ],
+  "not_fixed": [
+   "Nothing from must_fix, technical_errors, verb_honesty or budget_violations was left unfixed. Two incidental consequences of the length cut, neither flagged by the review, are worth naming: the report block's 'complaint' field folded into 'notes' and 'log' folded into 'evidence' (which now names both log and profile-report paths and lines), and the standalone 'Dumping and a debug build are two costs' Gotcha was absorbed into step 6's `unknown` price rationale and the toggle-coverage Gotcha. No fact was dropped, only relocated."
+  ],
+  "lint_line": "skills\\dv-regression-runtime-tuning\\SKILL.md  [approve 1.000]  clean — 1/1 clean, 0 errors, 0 advisories, 1 predicted to publish"
+ },
+ "recheck": {
+  "agent": "recheck:dv-regression-runtime-tuning",
+  "ready": false,
+  "why": "Lint is 1.000 and clean, the DV content is technically correct throughout (auto_bin_max 64 / 64^3=262144, Amdahl 2/5 -> ~1.7x, the uvm_info verbosity guard, global time precision, associative vs packed allocation, CPU:wall read both ways), all seven slots are spent, role/level are applications-engineer/staff, 260 lines, and no handoff field collides with a T1 enum or a T3 held noun. But it ships two dangling cross-references of exactly the class standing rule 8 names: it calls dv-compute-license-efficiency's slot \"Cost columns\" when that skill names it \"Cost and status columns\" (dv-compute-license-efficiency/SKILL.md:45), and it calls dv-regression-tiering-farm's slot \"Resource request\" when that skill names it \"Job resource and retry\" (dv-regression-tiering-farm/SKILL.md:48). Each is wrong in two places and each is load-bearing inside the Procedure (line 190 tells the agent to Grep for what \"Cost columns\" names; line 111 routes a killed run to \"Resource request\"), so a reader who follows the pointer finds no such slot. On top of that the budget does not account for every Grep step 7 actually spends: rule 4 prices an iteration at two Greps and one Read \"of the new log\" while the step asks for the path of EACH resulting log and demands the ratio beat the band over the repeats the band was measured across, so the real cost is 2N Greps and N Reads per iteration with N unbounded. I would not hand this to a working DV engineer today.",
+  "remaining": [
+   "BLOCKER — wrong sibling slot name, twice: lines 59 and 190 say `dv-compute-license-efficiency`'s **Cost columns**. That skill's slot is **Cost and status columns** (skills/dv-compute-license-efficiency/SKILL.md:45). Line 190 is a Procedure step that instructs a Grep for 'the resource columns dv-compute-license-efficiency's Cost columns names' — a step depending on a slot nobody defined.",
+   "BLOCKER — wrong sibling slot name, twice: lines 59 and 111 say `dv-regression-tiering-farm`'s **Resource request**. That skill has no such slot; the fact ('the memory, wall clock and queue one job asks for by default, what the scheduler does when a job exceeds one of them') lives under **Job resource and retry** (skills/dv-regression-tiering-farm/SKILL.md:48). Line 111 is the Procedure's routing step for a run killed rather than slowed.",
+   "Undeclared narrowing: line 58-59 asserts identity ('are') between 'the summary's wall clock, CPU time, cores and memory columns' and the sibling slot, but that slot is strictly wider — it also asks 'what its status column writes for a job killed at a wallclock or memory limit'. Standing rule 8 requires saying exactly how it is narrower.",
+   "Budget under-counts step 7: rule 4 prices each tuning iteration at 'two Greps and one 60-line Read of the new log', but step 7 asks for 'the path of each resulting log' and requires the ratio to beat the Noise band 'over the repeats that band was measured across'. With a band measured over N runs an iteration costs 2N Greps and N Reads; the five-iteration stopping rule bounds iterations, not logs, so nothing bounds the Grep count.",
+   "`run id` has no budgeted retrieval. Step 1's single Grep alternates only the Stage markers with the Resource summary line and the text says it is 'the only Grep this step gets', yet the same step must 'read the run's identity off it' via the profile's Run identity fact, and the verification section forbids taking it from the log's file name. Either add the Run identity string to that Grep's alternation or budget a call for it.",
+   "Baseline repeat count is never obtainable. The `speedup` field asks 'how many runs each number rests on' and Human verification requires 'the repeat count behind each number is stated', but only the tuned side gets repeats — the baseline is the one log from step 1, which the skill's own rule ('One run against one on a shared farm is not a measurement') then rejects.",
+   "Minor: the `evidence` line reads 'for every number quoted below' while _shared/handoff-vocabulary.md registers the shape as 'A file path and line for every claim in the block above it', and the sibling dv-compute-license-efficiency:377 writes 'above'. Either move `evidence` after the claims or reword.",
+   "Minor: step 5 offers 'the repeated Resource summary line if the flow prints one periodically', but the slot as declared asks only for 'the line our flow prints at the end of a run'. The slot never asks whether it is also emitted periodically, so the step leans on a property the engineer was not asked to state.",
+   "Minor / systemic: semiskill-review-by 2027-04-09 is shared with eight siblings (dv-cdc-rdc-triage, dv-compliance-test-authoring, dv-emulation-dump-strategy, dv-power-aware-sim-debug, dv-real-signal-behavioural-checks, dv-tb-architecture-record, dv-vip-integration, dv-xprop-triage) — the stagger requirement is not being met pack-wide."
+  ],
+  "new_problems": [
+   "Lines 54-64 and 111/190 carry a sibling-fact reconciliation paragraph whose two outward pointers are both wrong ('Cost columns' and 'Resource request'). Whatever round added this paragraph introduced two false cross-references into the Procedure itself — the precise failure mode standing rule 8 was written to stop.",
+   "The step-7 per-log measurement discipline ('give you the path of each resulting log', 'over the repeats that band was measured across') is not reflected in budget rule 4, which still prices an iteration as a single log. The budget and the step disagree about the unit of work."
+  ]
+ }
+}

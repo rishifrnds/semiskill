@@ -339,6 +339,42 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: specs/skill_registry.json
   next: author it through the gate with the rest
 
+- [J-003 partial] 2026-08-05T16:25Z  status: in-progress (stopped on the session token limit)
+  what: four gate batches (48 skills) ran author-already-done -> adversarial review -> fix ->
+  INDEPENDENT recheck. 44 completed a full pass and **0 were judged ready**. That is the honest
+  headline and it is not a malfunction: the reviews are finding real defects no linter can reach --
+  dv-signal-trace-localisation's only log window points AWAY from the value step 1 tells you to
+  record (the pack's own schema puts "expected N got N" on the line AFTER the marker);
+  dv-coverage-hole-disposition budgets 2 Greps for a step that needs 3, so a branch is unreachable
+  and the procedure silently degrades to a weaker ranking rule, and it asserts "a failing test
+  contributes no coverage" as universal fact when coverage is sampled regardless of verdict and
+  merging is flow policy -- a claim the same skill handles correctly everywhere else.
+  Round 1 also CONFLATED a nit with a blocker: reviewers listed date collisions and phrasing
+  preferences beside genuine blockers and then failed the skill, so ready:true was unreachable by
+  construction. tools/dv-gate2.js fixes the calibration -- every finding must be sorted into
+  BLOCKING (would make an engineer take a wrong action, or a step cannot be executed) or
+  NON-BLOCKING, ready:true iff BLOCKING is empty, with explicit instruction not to inflate a nit to
+  look rigorous nor demote a real defect to look generous.
+  the integrity fix that matters: ~40 agents died on the session limit, and collect_wave.py would
+  have written ready:false for every one of them -- recording "an independent reviewer rejected
+  this" when nobody looked, indistinguishable from a real rejection. It now SKIPS a skill with no
+  recheck record entirely, so 17 skills stay "never-reviewed", which is true. A wave that dies
+  halfway must leave no gate record rather than a false one.
+  also closed two defects the fix agents INTRODUCED, which is why the pack check runs after every
+  batch: an undeclared `phase` narrowing (C007) in dv-emulation-sim-mismatch-triage and a
+  value-wearing-a-sentence (C009, wave-blocking) in dv-dfi-boundary-blame. And made the registry
+  snapshot tests assert SHAPE -- every narrowing a proper subset, no name in two categories -- since
+  the magic counts failed on correct work and taught you to bump them without reading.
+  correction: I diagnosed 30 test failures as C006 erroring on identical fixture enums. Wrong. The
+  cause was my own pytest racing an agent's against the shared dev DB, whose fixture TRUNCATEs
+  `artifacts`. The C006 flaw was real and is fixed, but it was not what broke those tests.
+  state: ready 3, not-ready-with-findings 32, never-reviewed 49, published 0. 456 tests green,
+  zero consistency errors, all 84 at lint 1.000, findings 214 -> 62.
+  artifacts: tools/dv-gate.js, tools/dv-gate2.js, tools/gate_args.py, tools/gate2_args.py,
+  tools/collect_wave.py, skills/*/REVIEW.json (32), skills/_shared/handoff-vocabulary.md
+  next: rerun round 2 over the 32, then the gate over the 49, then publish + scoreboard + site
+
+
 ## In-Flight Step
 - [J-003] gate the 80 unreviewed/not-ready skills: adversarial review -> fix -> INDEPENDENT recheck
   -> REVIEW.json, in 7 batches of 12 via tools/dv-gate.js. Blocked on J-004 landing first.

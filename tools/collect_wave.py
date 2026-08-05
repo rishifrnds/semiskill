@@ -58,12 +58,20 @@ def main(argv: list[str]) -> int:
             rec["author"] = v
 
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    ready, not_ready, missing = [], [], []
+    ready, not_ready, missing, incomplete = [], [], [], []
 
     for slug, rec in sorted(by_slug.items()):
         d = REPO / "skills" / slug
         if not (d / "SKILL.md").exists():
             missing.append(slug)
+            continue
+        if "recheck" not in rec:
+            # The recheck agent never returned — killed, rate-limited, or crashed. Writing
+            # ready:false here would record "an independent reviewer rejected this" when in fact
+            # nobody looked, and the scoreboard cannot tell those apart. A wave that dies halfway
+            # must leave NO gate record rather than a false one; the skill stays "never-reviewed",
+            # which is the truth, and gate_args.py will pick it up again.
+            incomplete.append(slug)
             continue
         rc = rec.get("recheck") or {}
         out = {
@@ -95,12 +103,15 @@ def main(argv: list[str]) -> int:
             json.dumps(out, indent=1, ensure_ascii=False))
         (ready if out["recheck"]["ready"] else not_ready).append(slug)
 
-    print(f"wave {wave}: {len(ready)} ready, {len(not_ready)} not ready, {len(missing)} missing")
+    print(f"wave {wave}: {len(ready)} ready, {len(not_ready)} not ready, "
+          f"{len(incomplete)} never rechecked, {len(missing)} missing")
     for s in ready:
         print(f"  READY      {s}")
     for s in not_ready:
         n = len((by_slug[s].get("recheck") or {}).get("remaining", []))
         print(f"  NOT-READY  {s}  ({n} remaining)")
+    for s in incomplete:
+        print(f"  NO-RECHECK {s}  (agent never returned — deliberately left with NO gate record)")
     for s in missing:
         print(f"  MISSING    {s}  (no SKILL.md on disk)")
     return 0
