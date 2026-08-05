@@ -52,7 +52,7 @@ def source(tmp_path):
 
 @pytest.mark.integration
 def test_pack_contains_every_published_skill(pg_store, pg_dsn, source, tmp_path):
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist",
                                 generated_at="2026-08-05")
     assert manifest.skill_count == 2
@@ -63,7 +63,7 @@ def test_pack_contains_every_published_skill(pg_store, pg_dsn, source, tmp_path)
 @pytest.mark.integration
 def test_packed_bytes_are_identical_to_the_source(pg_store, pg_dsn, source, tmp_path):
     """Packaging places bytes; it never re-serialises them (ADR-008)."""
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
     for s in manifest.skills:
         packed = (root / s.name / "SKILL.md").read_bytes()
@@ -76,7 +76,7 @@ def test_packed_bytes_are_identical_to_the_source(pg_store, pg_dsn, source, tmp_
 @pytest.mark.integration
 def test_pack_refuses_when_the_source_has_drifted(pg_store, pg_dsn, source, tmp_path):
     """Shipping content that changed after it was scanned would give it a badge it did not earn."""
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     p = source / "dv-alpha" / "SKILL.md"
     p.write_text(p.read_text(encoding="utf-8") + "\nAn edit made after publication.\n",
                  encoding="utf-8")
@@ -91,7 +91,7 @@ def test_unpublished_skills_are_excluded(pg_store, pg_dsn, source, tmp_path):
     blocked = source / "dv-blocked"
     blocked.mkdir()
     (blocked / "SKILL.md").write_text(skill_md("dv-blocked", tools="Read Bash"), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
 
     root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
     names = {s.name for s in manifest.skills}
@@ -108,7 +108,7 @@ def test_pack_refuses_when_nothing_is_published(pg_store, source, tmp_path):
 @pytest.mark.integration
 def test_directory_name_equals_frontmatter_name(pg_store, pg_dsn, source, tmp_path):
     """Cursor resolves a skill by its directory; a mismatch means it silently does not load."""
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
     for s in manifest.skills:
         text = (root / s.name / "SKILL.md").read_text(encoding="utf-8")
@@ -117,7 +117,7 @@ def test_directory_name_equals_frontmatter_name(pg_store, pg_dsn, source, tmp_pa
 
 @pytest.mark.integration
 def test_pack_ships_docs_shared_files_and_the_body_linter(pg_store, pg_dsn, source, tmp_path):
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     root, _ = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
 
     assert (root / "README-INSTALL.md").exists()
@@ -135,7 +135,7 @@ def test_pack_ships_docs_shared_files_and_the_body_linter(pg_store, pg_dsn, sour
 
 @pytest.mark.integration
 def test_manifest_records_verdict_and_checksums(pg_store, pg_dsn, source, tmp_path):
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     root, _ = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
     data = json.loads((root / "MANIFEST.json").read_text(encoding="utf-8"))
     assert data["skill_count"] == 2
@@ -149,7 +149,7 @@ def test_manifest_records_verdict_and_checksums(pg_store, pg_dsn, source, tmp_pa
 @pytest.mark.integration
 def test_zip_is_written_and_contains_the_pack(pg_store, pg_dsn, source, tmp_path):
     import zipfile
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
     z = tmp_path / "dist" / "semiskill-dv.zip"
     assert z.exists()
@@ -161,7 +161,7 @@ def test_zip_is_written_and_contains_the_pack(pg_store, pg_dsn, source, tmp_path
 
 @pytest.mark.integration
 def test_pack_is_deterministic(pg_store, pg_dsn, source, tmp_path):
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
     _, a = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "d1",
                       generated_at="fixed", make_zip=False)
     _, b = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "d2",
@@ -177,7 +177,7 @@ def test_a_skill_that_bundles_files_is_not_reported_as_drifted(pg_store, pg_dsn,
     (source / "dv-alpha" / "REVIEW.json").write_text('{"recheck": {"ready": true}}', encoding="utf-8")
     (source / "dv-alpha" / "references").mkdir()
     (source / "dv-alpha" / "references" / "notes.md").write_text("# Notes\n", encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(source), allow_ungated=True)
 
     root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
     assert "dv-alpha" in {s.name for s in manifest.skills}

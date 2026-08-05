@@ -12,6 +12,13 @@ Replaces `seed.seed_catalog` (ADR-009). What that one-liner got wrong, and this 
     appended a second card nobody could tell apart. Here the wave is content-addressed: an identical
     slug+hash is skipped, a changed one supersedes.
 
+  * **The content gate was advisory.** A skill published without `skills/<slug>/REVIEW.json`
+    recording an *independent* recheck (`recheck.ready: true`), and only `scoreboard --strict-gate`
+    noticed — after the catalog was already written. Here an unready recheck is a precondition
+    failure: the item is skipped, loudly, and the rest of the wave proceeds. `--allow-ungated`
+    restores the old behaviour for fixtures and seeds, and every skill it lets through is named in
+    the report.
+
 The catalog is its own checkpoint — there is no side state to desynchronize. A crash at item 27
 replays items 1-26 as no-ops in seconds.
 
@@ -30,6 +37,7 @@ from typing import Callable, Iterable
 
 from semiskill.artifacts.schema import Artifact, ArtifactType
 from semiskill.artifacts.store import ArtifactStore
+from semiskill.authoring.gate import READY, REVIEW_FILENAME, gate_status, has_review, read_review_dir
 from semiskill.capture.intake import build_skill_version, load_skill_dir
 from semiskill.governance.publish import PublishRefused, publish_skill
 from semiskill.governance.rollback import RollbackRefused, unpublish_skill
@@ -43,6 +51,10 @@ CHANGES_REQUESTED = "changes-requested"
 BLOCKED = "blocked"
 LINT_FAILED = "lint-failed"
 ERROR = "error"
+# The content gate refused the item. Two statuses, not one, because "nobody ever reviewed this" and
+# "a reviewer looked and said no" need different people to do different things.
+GATE_MISSING = "gate-missing"
+GATE_NOT_READY = "gate-not-ready"
 
 SUCCESS = frozenset({PUBLISHED, SUPERSEDED, SKIPPED_IDENTICAL})
 
@@ -74,6 +86,7 @@ class WaveItemResult:
     status: str
     skill_version_id: str | None = None
     verdict: str | None = None
+    gate: str | None = None          # content-gate status of REVIEW.json (authoring.gate)
     blocked_at: int | None = None
     aggregate_safety: float | None = None
     superseded_approval_id: str | None = None
@@ -93,12 +106,20 @@ class WaveReport:
     finished_at: str
     permissions_label: str
     on_duplicate: str
+    allow_ungated: bool = False
     items: tuple[WaveItemResult, ...] = ()
     counts: dict[str, int] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
         return bool(self.items) and all(i.ok for i in self.items)
+
+    @property
+    def ungated_published(self) -> tuple[str, ...]:
+        """Slugs that reached the catalog without a ready recheck — only possible under the
+        escape hatch. An override that leaves no trace is the problem it was meant to solve."""
+        return tuple(i.slug for i in self.items
+                     if i.status in (PUBLISHED, SUPERSEDED) and i.gate != READY)
 
 
 def payload_hash(payload: dict) -> str:
@@ -147,6 +168,26 @@ def _published_index(store: ArtifactStore) -> dict[str, tuple[Artifact, Artifact
     return out
 
 
+def _gate_refusal(item: WaveItem, review: dict | None) -> tuple[str, str]:
+    """(status, reason) for an item whose content gate is not `recheck-ready`.
+
+    The reason has to name the fix, not just the fault: a missing record means nobody has reviewed
+    this skill yet, an unready one means somebody did and said no.
+    """
+    if review is None:
+        if has_review(item.path):
+            return GATE_MISSING, (f"{REVIEW_FILENAME} in {item.path} is unreadable — a gate record "
+                                  "that will not parse proves nothing; re-run the authoring gate")
+        return GATE_MISSING, (f"no {REVIEW_FILENAME} in {item.path} — this skill has had no "
+                              "independent content recheck; run the authoring gate, or pass "
+                              "--allow-ungated if this is a fixture")
+    why = str((review.get("recheck") or {}).get("why") or "").strip()
+    remaining = (review.get("recheck") or {}).get("remaining") or []
+    detail = why or (f"{len(remaining)} item(s) remaining" if remaining else "no reason recorded")
+    return GATE_NOT_READY, (f"{REVIEW_FILENAME} records recheck.ready is not true "
+                            f"({gate_status(review)}): {detail}")
+
+
 def _is_infrastructure_error(exc: BaseException) -> bool:
     """Connection/permission/migration failures mean the next 39 items will fail identically."""
     name = type(exc).__name__
@@ -161,10 +202,15 @@ def run_wave(*, store: ArtifactStore, dsn: str, items: Iterable[WaveItem],
              actor: str = "wave-driver", approver_actor: str = "wave-approver",
              permissions_label: str = "public", on_duplicate: str = "supersede",
              dry_run: bool = False, only: set[str] | None = None,
+             allow_ungated: bool = False,
              journal_path: str | Path | None = None,
              progress: Callable[[WaveItemResult], None] | None = None,
              now: Callable[[], float] = time.time) -> WaveReport:
-    """Run a wave. Publishes only through the gated actuator; never writes the catalog directly."""
+    """Run a wave. Publishes only through the gated actuator; never writes the catalog directly.
+
+    `allow_ungated` skips the `REVIEW.json` precondition — for fixtures, seeds and local
+    experiments only. The report names every skill it lets through.
+    """
     if on_duplicate not in {"supersede", "skip", "fail"}:
         raise ValueError(f"on_duplicate must be supersede|skip|fail, got {on_duplicate!r}")
 
@@ -183,7 +229,8 @@ def run_wave(*, store: ArtifactStore, dsn: str, items: Iterable[WaveItem],
         try:
             result = _run_one(store=store, dsn=dsn, item=item, actor=actor,
                               approver_actor=approver_actor, permissions_label=permissions_label,
-                              on_duplicate=on_duplicate, dry_run=dry_run, published=published)
+                              on_duplicate=on_duplicate, dry_run=dry_run, published=published,
+                              allow_ungated=allow_ungated)
         except WaveAborted:
             raise
         except Exception as exc:                                   # noqa: BLE001 — isolate the item
@@ -207,35 +254,50 @@ def run_wave(*, store: ArtifactStore, dsn: str, items: Iterable[WaveItem],
         counts[r.status] = counts.get(r.status, 0) + 1
     counts["total"] = len(results)
     counts["ok"] = sum(1 for r in results if r.ok)
+    # Gate arithmetic is part of the counts, not a footnote: a wave that quietly published half of
+    # what it loaded, or published anything ungated, must be visible from the numbers alone.
+    counts["gate-refused"] = sum(1 for r in results if r.status in (GATE_MISSING, GATE_NOT_READY))
+    counts["ungated-published"] = sum(1 for r in results
+                                      if r.status in (PUBLISHED, SUPERSEDED) and r.gate != READY)
 
     return WaveReport(wave_id=wave_id, started_at=started, finished_at=_iso(now()),
                       permissions_label=permissions_label, on_duplicate=on_duplicate,
-                      items=tuple(results), counts=counts)
+                      allow_ungated=allow_ungated, items=tuple(results), counts=counts)
 
 
 def _run_one(*, store, dsn, item: WaveItem, actor, approver_actor, permissions_label,
-             on_duplicate, dry_run, published) -> WaveItemResult:
+             on_duplicate, dry_run, published, allow_ungated=False) -> WaveItemResult:
+    # The content gate is a PRECONDITION, so it is evaluated before the duplicate check and before
+    # anything is written — including in a dry run, where reporting "would publish" for a skill the
+    # gate will refuse is a lie you find out about later.
+    review = read_review_dir(item.path)
+    gate = gate_status(review)
+    if gate != READY and not allow_ungated:
+        status, reason = _gate_refusal(item, review)
+        return WaveItemResult(slug=item.slug, path=item.path, status=status, gate=gate,
+                              payload_sha256=item.payload_sha256, error=reason)
+
     prior = published.get(item.slug)
 
     if prior is not None:
         prior_sv, prior_approval = prior
         if payload_hash(prior_sv.payload) == item.payload_sha256:
             return WaveItemResult(slug=item.slug, path=item.path, status=SKIPPED_IDENTICAL,
-                                  skill_version_id=str(prior_sv.artifact_id),
+                                  skill_version_id=str(prior_sv.artifact_id), gate=gate,
                                   payload_sha256=item.payload_sha256)
         if on_duplicate == "skip":
             return WaveItemResult(slug=item.slug, path=item.path, status=SKIPPED_IDENTICAL,
-                                  skill_version_id=str(prior_sv.artifact_id),
+                                  skill_version_id=str(prior_sv.artifact_id), gate=gate,
                                   payload_sha256=item.payload_sha256,
                                   error="content changed but on_duplicate=skip")
         if on_duplicate == "fail":
-            return WaveItemResult(slug=item.slug, path=item.path, status=ERROR,
+            return WaveItemResult(slug=item.slug, path=item.path, status=ERROR, gate=gate,
                                   payload_sha256=item.payload_sha256,
                                   error=f"slug {item.slug!r} is already published with different content")
 
     if dry_run:
         return WaveItemResult(slug=item.slug, path=item.path,
-                              status=SKIPPED_IDENTICAL if prior else PUBLISHED,
+                              status=SKIPPED_IDENTICAL if prior else PUBLISHED, gate=gate,
                               payload_sha256=item.payload_sha256,
                               error="dry run — nothing was written")
 
@@ -243,7 +305,7 @@ def _run_one(*, store, dsn, item: WaveItem, actor, approver_actor, permissions_l
                                           permissions_label=permissions_label, files=item.files))
     res = run_pipeline(store=store, dsn=dsn, skill_version_id=sv.artifact_id)
     common = dict(slug=item.slug, path=item.path, skill_version_id=str(sv.artifact_id),
-                  verdict=res.verdict, payload_sha256=item.payload_sha256,
+                  verdict=res.verdict, gate=gate, payload_sha256=item.payload_sha256,
                   blocked_at=int(res.blocked_at) if res.blocked_at is not None else None)
     aggregate = res.review.payload.get("aggregate_safety") if res.review is not None else None
 
@@ -304,17 +366,21 @@ def render_report(report: WaveReport, *, style: str = "markdown") -> str:
             "wave_id": report.wave_id, "started_at": report.started_at,
             "finished_at": report.finished_at, "ok": report.ok,
             "permissions_label": report.permissions_label, "on_duplicate": report.on_duplicate,
+            "allow_ungated": report.allow_ungated,
+            "ungated_published": list(report.ungated_published),
             "counts": report.counts, "items": [_as_dict(i) for i in report.items],
         }, indent=2, sort_keys=True)
 
+    gate_line = "**BYPASSED (--allow-ungated)**" if report.allow_ungated else "enforced"
     lines = [f"# Wave {report.wave_id}", "",
              f"- started: {report.started_at} · finished: {report.finished_at}",
              f"- label: `{report.permissions_label}` · on duplicate: `{report.on_duplicate}`",
+             f"- content gate: {gate_line}",
              f"- result: **{'all items succeeded' if report.ok else 'INCOMPLETE'}**", "",
-             "| skill | status | verdict | safety |", "|---|---|---|---|"]
+             "| skill | status | verdict | gate | safety |", "|---|---|---|---|---|"]
     for i in report.items:
         safety = f"{i.aggregate_safety:.3f}" if i.aggregate_safety is not None else "—"
-        lines.append(f"| `{i.slug}` | {i.status} | {i.verdict or '—'} | {safety} |")
+        lines.append(f"| `{i.slug}` | {i.status} | {i.verdict or '—'} | {i.gate or '—'} | {safety} |")
     lines.append("")
     lines.append(" · ".join(f"{k}: {v}" for k, v in sorted(report.counts.items())))
     failures = [i for i in report.items if not i.ok]
@@ -322,6 +388,13 @@ def render_report(report: WaveReport, *, style: str = "markdown") -> str:
         lines += ["", "## Not published", ""]
         for i in failures:
             lines.append(f"- `{i.slug}` — {i.status}: {i.error or 'see the scan report'}")
+    ungated = report.ungated_published
+    if ungated:
+        lines += ["", "## Published WITHOUT an independent content recheck", "",
+                  "`--allow-ungated` was used. These skills reached the catalog with no "
+                  f"`{REVIEW_FILENAME}` recording `recheck.ready: true`:", ""]
+        for slug in ungated:
+            lines.append(f"- `{slug}`")
     return "\n".join(lines)
 
 

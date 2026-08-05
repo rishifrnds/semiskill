@@ -58,6 +58,14 @@ EXTENDED_DV_ROLES: tuple[str, ...] = (
     "static-signoff-engineer",         # lint, CDC/RDC, static sign-off
     "safety-verification-engineer",    # ISO 26262 fault campaigns
     "security-verification-engineer",  # security properties and negative testing
+    # Added by the I-001 top-up design (specs/skill_registry.json), which planned five cells each
+    # for these three and so made them reachable facets. They are deliberately NOT folded into
+    # `ip-dv-engineer`: a memory-IP engineer's failure modes (refresh, timing checks, DFI) and a
+    # processor-IP engineer's (ISA step-compare, traps, WARL) share almost no vocabulary, and
+    # collapsing them is what produced the facet drift the scoreboard caught.
+    "memory-ip-dv-engineer",           # DRAM/SRAM controller and PHY IP verification
+    "processor-ip-dv-engineer",        # CPU/DSP core verification — ISA, traps, memory ordering
+    "eda-product-validation-engineer", # validates the EDA tools themselves against their own specs
 )
 
 DV_ROLES: tuple[str, ...] = PUBLISHED_DV_ROLES + EXTENDED_DV_ROLES

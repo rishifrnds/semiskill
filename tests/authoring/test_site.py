@@ -48,7 +48,7 @@ def site(pg_store, pg_dsn, tmp_path):
         d = root / name
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text(skill_md(name, role=role, level=level), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     return build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="2026-08-05")
 
 
@@ -113,7 +113,7 @@ def test_an_unpublished_skill_never_reaches_the_site(pg_store, pg_dsn, tmp_path)
         d = root / name
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text(skill_md(name, tools=tools), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
 
     res = build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="t")
     assert {e.slug for e in res.entries} == {"dv-ok"}
@@ -171,7 +171,7 @@ def test_a_hostile_body_stays_inert_on_its_page(pg_store, pg_dsn, tmp_path):
     nasty = BODY + ('\nA body with </script><script>window.pwned=1</script> and '
                     '<img src=x onerror=alert(1)> and [a link](evil.html).\n')
     (d / "SKILL.md").write_text(skill_md("dv-hostile", body=nasty), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
 
     res = build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="t")
     page = (res.root / "skills" / "dv-hostile.html").read_text(encoding="utf-8")
@@ -193,7 +193,7 @@ def test_generation_is_deterministic(pg_store, pg_dsn, tmp_path):
     d = root / "dv-a"
     d.mkdir(parents=True)
     (d / "SKILL.md").write_text(skill_md("dv-a"), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
 
     a = build_site(store=pg_store, out_dir=tmp_path / "s1", generated_at="fixed")
     b = build_site(store=pg_store, out_dir=tmp_path / "s2", generated_at="fixed")

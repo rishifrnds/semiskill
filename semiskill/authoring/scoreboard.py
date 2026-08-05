@@ -11,9 +11,10 @@ is derived from two files-of-record and nothing else:
 A skill on disk that never published counts as missing, because from an engineer's point of view it
 is. An agent's assertion that a skill is "done" counts for nothing at all.
 
-Gate status comes from `skills/<slug>/REVIEW.json`, written by the authoring gate. A skill that
-published without an independent recheck returning `ready: true` is reported as `unreviewed` and fails
-`--strict-gate` — that is the Phase-H lesson made mechanical.
+Gate status comes from `skills/<slug>/REVIEW.json`, read through `authoring.gate` — the same reader
+the wave uses to *refuse* to publish an ungated skill. This scoreboard is the audit behind that
+precondition: anything published without an independent recheck returning `ready: true` (a seed, or
+a `--allow-ungated` wave) is reported as `unreviewed` and fails `--strict-gate`.
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from semiskill.artifacts.store import ArtifactStore
+from semiskill.authoring.gate import READY, REVIEWED, UNREVIEWED, gate_status, read_review
 from semiskill.wave import _published_index
 
 DEFAULT_TARGET = 5
@@ -33,10 +35,8 @@ UNPUBLISHED = "lint-clean-unpublished"
 PUBLISHED = "published"
 DECLINED = "declined"
 
-# Gate status for a published cell.
-UNREVIEWED = "unreviewed"
-REVIEWED = "reviewed"
-READY = "recheck-ready"
+# Gate status for a published cell (UNREVIEWED / REVIEWED / READY) is imported from
+# `authoring.gate`, which owns the definition and is also what the wave enforces against.
 
 
 @dataclass(frozen=True)
@@ -108,27 +108,6 @@ def load_registry(path: str | Path) -> list[dict]:
     return list(cells)
 
 
-def read_review(skills_root: str | Path, slug: str) -> dict | None:
-    p = Path(skills_root) / slug / "REVIEW.json"
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-
-
-def _gate_status(review: dict | None) -> str:
-    if not review:
-        return UNREVIEWED
-    recheck = review.get("recheck") or {}
-    if recheck.get("ready") is True:
-        return READY
-    if review.get("findings") is not None or review.get("review"):
-        return REVIEWED
-    return UNREVIEWED
-
-
 def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
                      skills_root: str | Path = "skills", target: int = DEFAULT_TARGET,
                      generated_at: str = "unset", lint: bool = True,
@@ -165,7 +144,7 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
             if got != want:
                 drift = f"published as {got[0]}/{got[1]}, registry says {want[0]}/{want[1]}"
             cells.append(CellStatus(status=PUBLISHED,
-                                    gate=_gate_status(read_review(root, slug)),
+                                    gate=gate_status(read_review(root, slug)),
                                     lint_verdict=verdict, findings=errs, drift=drift, **common))
         elif not (root / slug / "SKILL.md").exists():
             cells.append(CellStatus(status=MISSING, **common))

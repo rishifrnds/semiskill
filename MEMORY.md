@@ -287,8 +287,64 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   artifacts: tools/dv-wave.js, tools/collect_wave.py
   next: collect each wave, publish what is recheck-ready, scoreboard, site
 
+- [J-001] 2026-08-05T12:20Z  status: done
+  what: measured the real state of the 13 launched waves instead of trusting the launch record, and
+  it is materially worse than the I-006 entry above implies. 83 skills are AUTHORED, but only 6 have
+  a REVIEW.json at all (3 ready, 3 awaiting recheck-2) — the other 77 never got a gate record, so
+  nothing has been adversarially reviewed or independently rechecked. The catalog database holds
+  ZERO published registry skills; the site's "6 skills" is the whole published catalog.
+  Then closed three tooling blockers that were silently gating everything downstream:
+  (1) FACET VOCABULARY DRIFT — specs/skill_registry.json plans five cells each for
+  memory-ip-dv-engineer, processor-ip-dv-engineer and eda-product-validation-engineer, but
+  authoring/facets.py never learned those three roles. Consequence: 10 skills failed lint L019 with
+  an unreachable facet, and 5 MORE had been quietly remapped to ip-dv-engineer by their authors to
+  get past the linter — facet drift caused by the linter itself. Added the three roles (with the
+  reason they are not folded into ip-dv-engineer recorded in the source); L019 10 -> 0, drift 5 -> 0.
+  (2) C002 HAD ZERO PRECISION — `\b[A-Z][A-Za-z-]+(?: [a-z-]+){0,3} slot\b` matched any sentence
+  starting with a capital and containing "slot", so "If a slot is unfilled" reported a slot named
+  "If a". 105 findings on the real pack, 105 false. Fixed by stripping leading function words and
+  requiring what remains to still start with a capital — a slot reference names a LABEL, and a
+  capital that is merely sentence-initial is not one. 105 -> 1, and the survivor is genuine
+  (dv-build-filelist-hygiene references an undeclared "Block-versus-top" slot). 8 regression tests.
+  This is the same lesson as the earlier rounds: a rule that fires on everything hides the one real
+  finding inside it, so it is worse than no rule.
+  (3) the working copy's new C005 rule had broken an existing test (a fixture offering an enum no
+  step assigns) — fixture corrected rather than the rule weakened.
+  Also: the 10 C003 ERRORs are NOT drift. Measured across all 83 skills, only 16 handoff fields
+  appear in more than one skill; `class` (44 skills) and `phase` (23) are genuine pack-wide
+  vocabulary, but seven fields (chain, culprit, disposition, divergence, match, mechanism, ruling)
+  appear in exactly 2 unrelated skills with COMPLETELY DISJOINT enums. C003 treats field-NAME
+  identity as field identity, so it reports a name collision as drift. Handed to a design workflow.
+  artifacts: semiskill/authoring/facets.py, semiskill/authoring/consistency.py,
+  tests/authoring/test_consistency.py (+8), skills/{dv-csr-warl-access-audit,
+  dv-custom-instruction-verification-plan,dv-mem-refresh-lowpower-audit,dv-memory-model-training,
+  dv-trap-exception-triage}/SKILL.md facets restored, tools/dv-gate.js, tools/gate_args.py
+  next: J-002 handoff vocabulary, J-003 gate the 80 unreviewed skills, J-004 publish + scoreboard
+
+- [J-002] 2026-08-05T12:35Z  status: done
+  what: closed the >=5-per-role gap the registry carried. security-verification-engineer had only 4
+  active cells — three top-up candidates had been declined earlier on the design rubric (a secure-boot
+  log-triage cell duplicated dv-sim-log-first-error; a side-channel RTL review needed a measurement a
+  text tool cannot make; a requirement-traceability cell duplicated dv-safety-req-trace-audit). Those
+  declines were right, so the fifth cell had to be genuinely different in METHOD, not in nouns. A
+  design agent given the full decline record proposed dv-security-build-divergence-audit (principal):
+  its unit is not a design object but a DIFFERENCE between two configurations — the build the security
+  tests actually compiled versus the shipped device — swept in five classes (compile-time guards,
+  boundary inputs tied to their safe value, behavioural stand-ins for fuse/entropy/key-store,
+  testbench reach-in past the control under test, security counters shortened for speed) and then
+  adjudicated benign/weakens/voids/unknown against a claim list the four existing security cells
+  produce. That makes it a consumer of the role's other cells rather than a fifth variant of them.
+  Registry now 84 active cells, all 16 roles at >=5. Note carried into authoring: its proposed
+  handoff block used `class`, which is pack-wide vocabulary (44 skills) and must be renamed.
+  artifacts: specs/skill_registry.json
+  next: author it through the gate with the rest
+
 ## In-Flight Step
-_(none)_
+- [J-003] gate the 80 unreviewed/not-ready skills: adversarial review -> fix -> INDEPENDENT recheck
+  -> REVIEW.json, in 7 batches of 12 via tools/dv-gate.js. Blocked on J-004 landing first.
+- [J-004] pack-wide handoff vocabulary: _shared/handoff-vocabulary.md + C003 rescoped to registered
+  fields + a distinct name-collision rule. Design workflow in flight.
+- [J-005] make the recheck gate a PRECONDITION of `semiskill wave`, not a scoreboard report.
 
 ## Pending Steps
 1. [H-001] ADR-008 — SKILL.md conforms to the Agent Skills open standard; taxonomy under `metadata:`

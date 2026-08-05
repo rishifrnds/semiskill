@@ -1091,6 +1091,17 @@
     "why": "audit: dv-safety-req-trace-audit (proposed, safety-verification-engineer): same method — grep requirement-ID tags across a requirements list, plan export, test/assertion sources and results/coverage reports; same three gap classes (untraced requirement, orphan evidence, stale evidence); same deliverable (t"
    },
    "wave": 13
+  },
+  {
+   "slug": "dv-security-build-divergence-audit",
+   "role": "security-verification-engineer",
+   "level": "principal",
+   "title": "As-Verified Versus As-Shipped: Divergence Audit for the Security Build",
+   "one_line": "Enumerates every way the build that ran the security tests differs from the device that actually ships - compile-time guards around security logic, boundary inputs tied to their safe value, behavioural stand-ins for the fuse, entropy source or key store, testbench reach-in past the control under test, and security counters shortened for speed - then rules on which security claims survive each difference and names the evidence that would restore the rest. Use before a security sign-off or a tapeout checklist, when a security regression is entirely green in a configuration nobody has ever compared to the shipped one, or after an escape traced to something simulation never modelled.",
+   "priority": 2,
+   "source": "topup-gapfill",
+   "wave": 14,
+   "note": "Added 2026-08-05 to close security-verification-engineer at 4/5 against the >=5-per-role target. Passed the same rubric that declined three earlier candidates: its unit is a DIFFERENCE between two configurations, not a design object, so its method is a differencing sweep rather than the identifier-crossref that made dv-security-requirement-traceability a duplicate of dv-safety-req-trace-audit."
   }
  ]
 }

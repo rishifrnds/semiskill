@@ -107,7 +107,7 @@ def test_published_counts_and_role_target(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
     for n in ("dv-a", "dv-b"):
         write_skill(root, n)
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     reg = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
         {"slug": "dv-b", "role": "dv-engineer", "level": "senior"},
@@ -125,7 +125,7 @@ def test_facet_drift_between_the_registry_and_what_published_is_a_failure(pg_sto
     collapsed the role x level grid onto a single role. Nothing caught it."""
     root = tmp_path / "skills"
     write_skill(root, "dv-a", role="dv-engineer", level="senior")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     reg = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "soc-dv-engineer", "level": "junior"}])
 
@@ -154,7 +154,7 @@ def test_a_declined_cell_counts_toward_the_target_only_with_a_reason(pg_store, p
     """A role at 1/2 with a recorded decline is honest coverage; a decline with no reason is not."""
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
 
     with_reason = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
@@ -178,7 +178,7 @@ def test_a_declined_cell_counts_toward_the_target_only_with_a_reason(pg_store, p
 def test_published_without_an_independent_recheck_fails_strict_gate(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     reg = write_registry(tmp_path, [{"slug": "dv-a", "role": "dv-engineer", "level": "senior"}])
 
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1,
@@ -198,7 +198,7 @@ def test_published_without_an_independent_recheck_fails_strict_gate(pg_store, pg
 def test_a_review_without_a_ready_recheck_is_reviewed_not_ready(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     (root / "dv-a" / "REVIEW.json").write_text(json.dumps({
         "findings": [{"rule": "x"}], "recheck": {"ready": False, "why": "still wrong"},
     }), encoding="utf-8")
@@ -215,7 +215,7 @@ def test_a_published_skill_missing_from_the_registry_is_a_failure(pg_store, pg_d
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
     write_skill(root, "dv-surprise")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     reg = write_registry(tmp_path, [{"slug": "dv-a", "role": "dv-engineer", "level": "senior"}])
 
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1)
@@ -227,7 +227,7 @@ def test_a_published_skill_missing_from_the_registry_is_a_failure(pg_store, pg_d
 def test_render_styles(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     reg = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
         {"slug": "dv-b", "role": "vip-engineer", "level": "staff"},

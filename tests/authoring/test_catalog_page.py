@@ -49,7 +49,7 @@ def populated(pg_store, pg_dsn, tmp_path):
         d = root / name
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text(skill_md(name, role=role, level=level), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
     return pg_store, root
 
 
@@ -73,7 +73,7 @@ def test_an_unpublished_skill_never_appears(populated, pg_store, pg_dsn):
     d = root / "dv-blocked"
     d.mkdir()
     (d / "SKILL.md").write_text(skill_md("dv-blocked", tools="Read Bash"), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
 
     entries = collect(store)
     assert "dv-blocked" not in {e.slug for e in entries}
@@ -90,7 +90,7 @@ def test_an_untrusted_body_cannot_break_out_of_the_page(pg_store, pg_dsn, tmp_pa
     d.mkdir(parents=True)
     nasty = BODY + "\nA body containing </script><script>window.pwned=1</script> and \"quotes\".\n"
     (d / "SKILL.md").write_text(skill_md("dv-hostile", body=nasty), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root))
+    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
 
     html = render_html(collect(pg_store), generated_at="t")
     # The HTML parser ends a <script> block on `</script` and nothing else, so that is the sequence

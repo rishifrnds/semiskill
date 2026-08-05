@@ -4,65 +4,46 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T08:30Z_
+_Last updated: 2026-08-05T14:07Z_
 
 ## Phase
-Phase I: 84 skills (>=5 per role across 16 roles), every one through
-author -> lint 1.000 -> adversarial review -> fix -> INDEPENDENT recheck ready:true,
-tracked by a deterministic scoreboard, published to a skills.sh-shaped multi-page site.
-Plan: plans/the-problem-statement-is-generic-llama.md (approved 2026-08-05)
+Phase J: take the 84 authored DV skills through a REAL content gate (adversarial review -> fix ->
+INDEPENDENT recheck -> REVIEW.json), publish them through the pipeline, and prove coverage of
+16 roles x >=5 with a deterministic scoreboard.
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05
-- Started: 2026-08-05
-- Host: Rishi_PC
-- Lock held: yes (.session-lock taken over 2026-08-05T03:19Z from stale
-  20260713T024006Z-Rishi_PC-2a55fa, ~3 weeks past the 2h window — user approved takeover in the
-  Phase H plan)
-- Session goal: Phase H — make the catalog reach a real DV team (Cursor pack + SharePoint page).
+- Lock held: yes
 
 ## Right now
-Phases A–G complete (183 tests), dashboard committed, Phase G archived. Now in
-**Phase H**: author a validated first wave of DV skills and deliver them as an Agent-Skills pack a
-Cursor user can install, plus a SharePoint-native catalog page.
-
-Plan: `C:\Users\rishi\.claude\plans\the-problem-statement-is-generic-llama.md` (approved 2026-08-05).
+Tooling is unblocked and committed; the content gate is RUNNING. Batches 1-3 (36 skills) are in
+flight through review -> fix -> independent recheck. Batches 4-7 (45 skills) are queued.
 
 ## Active step
-- Step ID: I-006 (in progress) — all 13 authoring waves in flight, 77 skills
-- Sub-state: Phase I underway; top-up cell design running. Content still not set-ready (below).
-- Started: 2026-08-05T03:19Z
+- [J-003] content gate, 7 batches of 12 via tools/dv-gate.js (args: tools/gate_args.py).
+  Batches 1,2,3 in flight. Nothing may publish until a skill's REVIEW.json says recheck.ready.
+
+## Done this session (all verified, 454 tests green)
+- [J-001] facet vocabulary learned the 3 registry roles it lacked (L019 10->0); it had been CAUSING
+  the drift it existed to catch (5 skills remapped by their authors to get past it) — drift 5->0.
+  C002 rescued from zero precision: 105 findings on the pack, all false; now 1, genuine.
+- [J-002] dv-security-build-divergence-audit authored; security-verification-engineer 4/5 -> 5/5.
+  Registry is 84 active cells and every one of the 16 roles is at >=5.
+- [J-004 / ADR-011] skills/_shared/handoff-vocabulary.md is the signed field registry. The 10 C003
+  "errors" were name COLLISIONS, not drift. C003 rescoped, C006-C012 added, 11 field + 2 value
+  renames landed. Zero consistency errors pack-wide. C005 no longer contradicts the registry
+  (205 -> 129). Measured: the only 7 enum names shared across skills are exactly the 7 registered.
+- [J-005] the recheck gate is a PRECONDITION now, not a scoreboard report. `wave` refuses
+  gate-missing / gate-not-ready per item before writing, --allow-ungated is recorded in the report,
+  and the wave runs the pack check too. wave-plan currently refuses 81 of 84 — correct.
+
+## Known gaps still open
+- 81 skills still carry no independent recheck. 0 registry skills are published.
+- 129 C005 + 4 C008 + 3 C011 + 1 C001 + 1 C002 warns: the authoring backlog the gate is closing.
+- C008/C011 pack assertions are deliberately CEILINGS while the gate runs; tighten to `== set()`
+  when it finishes.
+- Never run `pytest` while an agent runs it — the shared dev DB fixture TRUNCATEs `artifacts` and
+  both runs fail confusingly. Cost an hour of misdiagnosis this session.
 
 ## Last commit
-- SHA: a41b488
-- Message: wip: I-005 delimiter + ADR-010
-- Time: 2026-08-05
-
-## Two findings that reshape the work (verified 2026-08-05)
-- **Cursor 2.4+ supports Agent Skills natively** (`.cursor/skills/`, `~/.cursor/skills/`, legacy
-  `.claude/skills/`). Install = file placement. BUT `name` must be kebab-case and match the folder —
-  so **none of the 8 published seeds would load in Cursor** (`name: RTL Onboarding for Freshers`,
-  `slug: dv/rtl-onboarding-fresher`). ADR-008 fixes this.
-- **SharePoint downloads `.html` but renders `.md` natively** (Apr–May 2026). The deliverable is a
-  Markdown pack + a native Site Page, not the Next.js app (which cannot build) or `catalog-demo.html`.
-
-## Content status — DO NOT ship the pack to a team yet
-An adversarial review of the six wave-1 skills returned "not ready to publish as a set", twice.
-Round-2 fixes landed (all 6 at lint 1.000, re-published, re-packed), but the re-review still says no.
-- READY: dv-ral-bringup, dv-regression-triage-routing
-- NEEDS WORK: dv-repo-orientation (weakest — step 1 still exceeds its own Glob cap; step 2 reads a
-  doc/ directory step 1 no longer locates), dv-build-filelist-hygiene (two step-6 audits cannot obey
-  its own one-directory rule), dv-minimal-reproducer (revert trigger unmeasurable at its own scale)
-- SET-LEVEL: slot count 44 -> 50 and _shared/retrieval-budget.md was never created, so the budget
-  block is still duplicated 6x with the same magic numbers; repo-orientation lost the shared
-  200-Grep-hit guard; two ral-bringup gotchas lost their sharpest closing lines in the rewrite
-- The lesson worth keeping: lint 1.000 is a SECURITY score. It says nothing about whether the DV
-  content is correct, and the two rounds above are what that distinction costs.
-
-## Known gaps (unchanged; each needs an external resource)
-Stage-2 live security-audit (egress sandbox), stage-5 live judge (API keys), pgvector, SharePoint
-tenant. Plus: no auth, nothing deployed, no CI, no backups.
-
-## If resumed
-Read MEMORY.md (Phase H) and the approved plan above. DB: `docker compose up -d db` (127.0.0.1).
-Tests: `pytest` (393, Docker PG running). Nothing pushed to remote.
+- pending: J-001..J-005 tooling checkpoint (skills/ deliberately excluded, gate mid-run)

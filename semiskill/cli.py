@@ -67,7 +67,11 @@ def cmd_wave(args, store, out) -> int:
 
     Refuses to touch a database whose name looks like the test DB unless --yes is given: the pytest
     fixture TRUNCATEs `artifacts`, so pointing a wave at it silently destroys a real catalog.
+
+    Refuses to publish a skill whose `REVIEW.json` does not record an independent `recheck.ready`,
+    unless --allow-ungated is given.
     """
+    from semiskill.authoring.gate import READY, gate_status, read_review_dir
     from semiskill.authoring.lint import lint_wave_dir, render as render_lint
     from semiskill.wave import load_wave, render_report, run_wave, write_wave_report
 
@@ -83,9 +87,19 @@ def cmd_wave(args, store, out) -> int:
 
     if args.lint_first:
         lint = lint_wave_dir(args.path)
-        if not lint.ok:
-            print(render_lint(lint, style="text"), file=out)
-            print("\nwave aborted before any artifact was written — fix the lint errors first.",
+        # The per-skill lint asks "is this file publishable"; the pack check asks "does this pack
+        # agree with itself". `semiskill lint` has always run both, but the wave ran only the first,
+        # so a pack that disagreed with itself could still publish — the gate was advisory exactly
+        # where it needed to be a precondition. Only error-level findings abort; warns are the
+        # authoring backlog and must not block a release.
+        from semiskill.authoring.consistency import check_pack, render as render_pack
+        pack_errors = [f for f in check_pack(args.path) if f.level == "error"]
+        if not lint.ok or pack_errors:
+            if not lint.ok:
+                print(render_lint(lint, style="text"), file=out)
+            if pack_errors:
+                print("\n" + render_pack(pack_errors), file=out)
+            print("\nwave aborted before any artifact was written — fix the errors above first.",
                   file=out)
             return 1
 
@@ -101,13 +115,23 @@ def cmd_wave(args, store, out) -> int:
         store = PostgresArtifactStore(dsn)
 
     if args.command == "wave-plan" or args.dry_run:
+        gates = {i.slug: gate_status(read_review_dir(i.path)) for i in items}
         for i in items:
-            print(f"{i.slug}\t{i.payload_sha256[:12]}\t{i.path}", file=out)
+            print(f"{i.slug}\t{i.payload_sha256[:12]}\t{gates[i.slug]}\t{i.path}", file=out)
+        # A plan that says "40 would run" when 38 have no gate record is the same misleading
+        # report the wave itself refuses to produce.
+        refused = [s for s, g in gates.items() if g != READY]
         print(f"\n{len(items)} skill(s) would run against {dsn}", file=out)
+        if refused and not args.allow_ungated:
+            print(f"{len(refused)} would be REFUSED by the content gate (no ready REVIEW.json): "
+                  + ", ".join(refused), file=out)
+        elif refused:
+            print(f"{len(refused)} would publish ungated (--allow-ungated): " + ", ".join(refused),
+                  file=out)
         return 0
 
     report = run_wave(store=store, dsn=dsn, items=items, permissions_label=args.label,
-                      on_duplicate=args.on_duplicate,
+                      on_duplicate=args.on_duplicate, allow_ungated=args.allow_ungated,
                       journal_path=Path(args.reports) / "journal.jsonl" if args.reports else None)
     print(render_report(report, style="markdown"), file=out)
     if args.reports:
@@ -241,6 +265,9 @@ def build_parser() -> argparse.ArgumentParser:
         w.add_argument("--dry-run", action="store_true")
         w.add_argument("--no-lint-first", dest="lint_first", action="store_false", default=True,
                        help="skip the pre-flight lint (not recommended)")
+        w.add_argument("--allow-ungated", dest="allow_ungated", action="store_true",
+                       help="publish skills with no independent REVIEW.json recheck (fixtures and "
+                            "seeds only; every such skill is named in the wave report)")
         w.add_argument("--yes", action="store_true", help="confirm writing to this database")
         w.set_defaults(func=cmd_wave, needs_store=needs_store)
 
