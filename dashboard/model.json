@@ -1,4 +1,5 @@
 {
+  "schema_version": "semiskill.dashboard-model/v1",
   "_comment": "Security-sensitive curated project and go-to-market configuration for the SemiSkill command centre. Live signals (git, DB, tests, inbox) are merged by dashboard/server.py. Changes require the normal reviewed repository workflow plus an updated adjacent integrity pin; prompt text becomes separate-worker input.",
   "project": {
     "name": "SemiSkill",

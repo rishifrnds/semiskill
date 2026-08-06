@@ -1,4 +1,5 @@
 import concurrent.futures
+import copy
 import hashlib
 import http.client
 import json
@@ -6,6 +7,7 @@ import threading
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -17,22 +19,19 @@ _OMIT = object()
 
 
 def _model(actions=None):
-    return {
-        "actions": actions or [
-            {
-                "id": "A-01",
-                "group": "Build",
-                "label": "Build approver console",
-                "prompt": "Implement the approver console under the governed workflow.",
-            },
-            {
-                "id": "A-27",
-                "group": "Quality",
-                "label": "Request isolated full-suite verification",
-                "prompt": "Run the suite serially against the exact isolated test database.",
-            },
-        ]
-    }
+    model = json.loads(Path("dashboard/model.json").read_text(encoding="utf-8"))
+    model.setdefault("schema_version", "semiskill.dashboard-model/v1")
+    if actions is not None:
+        model["actions"] = copy.deepcopy(actions)
+    return model
+
+
+def _write_model_pair(path, model):
+    path.write_text(json.dumps(model), encoding="utf-8")
+    path.with_suffix(".sha256").write_text(
+        "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest() + "\n",
+        encoding="ascii",
+    )
 
 
 @contextmanager
@@ -166,8 +165,8 @@ def test_prepared_action_is_server_derived_durable_and_idempotent(tmp_path):
         assert len(rows) == 1
         row = rows[0]
         assert row["schema_version"] == "semiskill.dashboard-request/v1"
-        assert row["title"] == "Build approver console"
-        assert row["prompt"] == "Implement the approver console under the governed workflow."
+        assert row["title"] == "Build the approver console"
+        assert "resolver-authenticated human" in row["prompt"]
         assert row["template_sha256"].startswith("sha256:")
         assert row["template_registry_sha256"].startswith("sha256:")
         assert row["credit"] == "none"
@@ -416,6 +415,338 @@ def test_template_registry_is_frozen_and_drift_fails_closed(tmp_path):
         assert not inbox.exists()
 
 
+def test_pinned_loader_checks_hash_before_decode_or_parse(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.json"
+    model_path.write_bytes(b"\xff")
+    model_path.with_suffix(".sha256").write_text(
+        "sha256:" + ("0" * 64) + "\n",
+        encoding="ascii",
+    )
+    monkeypatch.setattr(
+        server.action_queue,
+        "strict_json_loads",
+        lambda _text: (_ for _ in ()).throw(AssertionError("parser must not run")),
+    )
+
+    with pytest.raises(server.action_queue.QueueUnavailable, match="integrity"):
+        server.action_queue.load_pinned_model(model_path)
+
+
+def test_load_pinned_model_reads_model_bytes_exactly_once(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.json"
+    _write_model_pair(model_path, _model())
+    real_read_bytes = Path.read_bytes
+    reads = 0
+
+    def counted_read_bytes(path):
+        nonlocal reads
+        if path == model_path:
+            reads += 1
+        return real_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", counted_read_bytes)
+    loaded = server.action_queue.load_pinned_model(model_path)
+
+    assert reads == 1
+    assert loaded.model["schema_version"] == "semiskill.dashboard-model/v1"
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "unknown_root_authority",
+        "verified_register",
+        "measured_metric",
+        "mixed_user_unit",
+        "forged_publish_instrument",
+        "published_asset",
+        "offered_pricing",
+        "dangling_deferred_scope",
+        "altered_action_prompt",
+        "hostile_layer_color",
+        "floating_stage_number",
+        "ascending_user_funnel",
+        "fractional_people_target",
+        "unknown_channel_scale",
+        "boolean_stage_number",
+        "boolean_people_target",
+        "ascending_supply_funnel",
+        "fractional_supply_target",
+        "unknown_channel_impact",
+        "validated_channel",
+        "forged_channel_evidence",
+        "list_deferred_scope",
+        "dict_stage_kind",
+        "list_metric_comparator",
+    ],
+)
+def test_repinned_semantic_model_violations_fail_closed(tmp_path, case):
+    model = _model()
+    if case == "unknown_root_authority":
+        model["release_gate"] = {"passed": True}
+    elif case == "verified_register":
+        model["register_authority"]["features"] = "verified"
+    elif case == "measured_metric":
+        model["gtm"]["metrics"][0]["measurement"] = {
+            "status": "measured",
+            "value": 1,
+            "observed_at": "2026-08-06T00:00:00Z",
+            "evidence_ref": "forged",
+            "reason": "forged",
+        }
+    elif case == "mixed_user_unit":
+        model["gtm"]["funnels"]["user"][0]["unit"] = "skill_versions"
+    elif case == "forged_publish_instrument":
+        model["gtm"]["funnels"]["supply"][1]["instrument"] = "approval artifact"
+    elif case == "published_asset":
+        model["gtm"]["assets"][0]["availability"] = "published"
+    elif case == "offered_pricing":
+        model["gtm"]["pricing"][0]["availability"] = "offered"
+    elif case == "dangling_deferred_scope":
+        model["gtm"]["channels"][0]["deferred_scope_id"] = "D-MISSING"
+    elif case == "altered_action_prompt":
+        model["actions"][0]["prompt"] += " Contact an external party immediately."
+    elif case == "hostile_layer_color":
+        model["layers"][0]["color"] = '" onload="alert(document.domain)'
+    elif case == "floating_stage_number":
+        model["pipeline_stages"][0]["n"] = 1.0
+    elif case == "ascending_user_funnel":
+        model["gtm"]["funnels"]["user"][1]["target_count"] = 500
+    elif case == "fractional_people_target":
+        model["gtm"]["funnels"]["user"][0]["target_count"] = 399.5
+    elif case == "unknown_channel_scale":
+        model["gtm"]["channels"][0]["effort_hypothesis"] = "instant"
+    elif case == "boolean_stage_number":
+        model["pipeline_stages"][0]["n"] = True
+    elif case == "boolean_people_target":
+        model["gtm"]["funnels"]["user"][0]["target_count"] = True
+    elif case == "ascending_supply_funnel":
+        model["gtm"]["funnels"]["supply"][1]["target_count"] = 50
+    elif case == "fractional_supply_target":
+        model["gtm"]["funnels"]["supply"][0]["target_count"] = 39.5
+    elif case == "unknown_channel_impact":
+        model["gtm"]["channels"][0]["impact_hypothesis"] = "massive"
+    elif case == "validated_channel":
+        model["gtm"]["channels"][0]["validation_status"] = "validated"
+    elif case == "forged_channel_evidence":
+        model["gtm"]["channels"][0]["evidence_ref"] = "forged"
+    elif case == "list_deferred_scope":
+        model["gtm"]["channels"][0]["deferred_scope_id"] = []
+    elif case == "dict_stage_kind":
+        model["pipeline_stages"][0]["kind"] = {"forged": True}
+    elif case == "list_metric_comparator":
+        model["gtm"]["metrics"][0]["target"]["comparator"] = []
+
+    model_path = tmp_path / "model.json"
+    _write_model_pair(model_path, model)
+    queue = server.ActionQueue(inbox_path=tmp_path / "inbox.jsonl", model_path=model_path)
+    try:
+        with pytest.raises(server.action_queue.QueueUnavailable):
+            queue.public_templates()
+        with pytest.raises(server.action_queue.QueueUnavailable):
+            queue.enqueue(_valid_payload())
+        assert not (tmp_path / "inbox.jsonl").exists()
+    finally:
+        queue.close()
+
+
+@pytest.mark.parametrize("case", ["deferred", "stage", "metric"])
+def test_repinned_collection_types_are_normalized_to_api_unavailability(tmp_path, case):
+    model = _model()
+    if case == "deferred":
+        model["gtm"]["channels"][0]["deferred_scope_id"] = []
+    elif case == "stage":
+        model["pipeline_stages"][0]["kind"] = {"forged": True}
+    else:
+        model["gtm"]["metrics"][0]["target"]["comparator"] = []
+
+    with _running_server(tmp_path, model=model) as (httpd, inbox):
+        state = _request(httpd, "GET", "/api/state")
+        action = _request(httpd, "POST", "/api/action", body=_valid_payload())
+
+    assert state["status"] == action["status"] == 503
+    assert state["json"] == action["json"] == {"error": "queue_unavailable"}
+    assert not inbox.exists()
+
+
+@pytest.mark.parametrize("drift", ["model_only", "manifest_only", "model_and_repin"])
+def test_action_replay_fails_closed_after_registry_drift(tmp_path, drift):
+    with _running_server(tmp_path) as (httpd, inbox):
+        payload = _valid_payload()
+        first = _request(httpd, "POST", "/api/action", body=payload)
+        assert first["status"] == 202
+        original = inbox.read_bytes()
+
+        model_path = tmp_path / "model.json"
+        if drift == "manifest_only":
+            model_path.with_suffix(".sha256").write_text(
+                "sha256:" + ("0" * 64) + "\n",
+                encoding="ascii",
+            )
+        else:
+            changed = _model()
+            changed["features"][0]["note"] += " Drifted after startup."
+            model_path.write_text(json.dumps(changed), encoding="utf-8")
+            if drift == "model_and_repin":
+                model_path.with_suffix(".sha256").write_text(
+                    "sha256:" + hashlib.sha256(model_path.read_bytes()).hexdigest() + "\n",
+                    encoding="ascii",
+                )
+
+        replay = _request(httpd, "POST", "/api/action", body=payload)
+        assert replay["status"] == 503
+        assert replay["json"] == {"error": "queue_unavailable"}
+        assert inbox.read_bytes() == original
+
+
+@pytest.mark.parametrize("repin", [False, True], ids=["body-only", "body-and-manifest"])
+def test_api_state_fails_closed_after_model_drift(tmp_path, repin):
+    with _running_server(tmp_path) as (httpd, _inbox):
+        model_path = tmp_path / "model.json"
+        changed = _model()
+        changed["features"][0]["note"] += " Drifted before the state request."
+        model_path.write_text(json.dumps(changed), encoding="utf-8")
+        if repin:
+            model_path.with_suffix(".sha256").write_text(
+                "sha256:" + hashlib.sha256(model_path.read_bytes()).hexdigest() + "\n",
+                encoding="ascii",
+            )
+
+        response = _request(httpd, "GET", "/api/state")
+        assert response["status"] == 503
+        assert response["json"] == {"error": "queue_unavailable"}
+
+
+def _stub_state_sources(monkeypatch):
+    monkeypatch.setattr(server, "repo_signals", lambda: {})
+    monkeypatch.setattr(server, "state_files", lambda: {})
+    monkeypatch.setattr(server, "runtime_signals", lambda: {
+        "checked_at": "now",
+        "db": {"status": "unavailable", "detail": ""},
+    })
+    monkeypatch.setattr(server, "migration_witness_signal", lambda: {
+        "status": "unavailable",
+        "reason": "database_unavailable",
+    })
+    monkeypatch.setattr(server, "canonical_snapshot_signals", lambda **_kwargs: {
+        "scoreboard": {"status": "unavailable", "snapshot": None},
+        "progress": {"status": "unavailable", "snapshot": None},
+    })
+    monkeypatch.setattr(server, "redteam_signal", lambda: {
+        "status": "not_executed",
+        "reason": "no_authoritative_execution_result",
+        "observed_at": None,
+        "corpus_observed_at": None,
+        "corpus": [],
+        "execution": None,
+    })
+    monkeypatch.setattr(server, "adrs", lambda: [])
+
+
+def test_api_state_action_projection_has_exact_public_fields(tmp_path, monkeypatch):
+    _stub_state_sources(monkeypatch)
+    with _running_server(tmp_path) as (httpd, _inbox):
+        response = _request(httpd, "GET", "/api/state")
+
+    assert response["status"] == 200
+    actions = response["json"]["model"]["actions"]
+    assert len(actions) == 36
+    assert all(set(action) == {"id", "group", "label", "description"} for action in actions)
+    rendered = json.dumps(actions).lower()
+    assert '"prompt"' not in rendered
+    assert "template_sha256" not in rendered
+    assert "template_registry_sha256" not in rendered
+
+
+def test_hostile_model_text_is_json_data_and_every_risk_sink_escapes(tmp_path, monkeypatch):
+    _stub_state_sources(monkeypatch)
+    payload = '<svg/onload=alert(document.domain)>'
+    model = _model()
+    model["risks"][0]["title"] = payload
+
+    with _running_server(tmp_path, model=model) as (httpd, _inbox):
+        response = _request(httpd, "GET", "/api/state")
+
+    assert response["status"] == 200
+    assert response["json"]["model"]["risks"][0]["title"] == payload
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    assert html.count("${esc(r.title)}") == 2
+    assert html.count("${esc(r.detail)}") == 2
+    assert "${r.title}" not in html and "${r.detail}" not in html
+
+
+def test_all_model_dependent_queue_surfaces_fail_after_repinned_drift(tmp_path):
+    model_path = tmp_path / "model.json"
+    _write_model_pair(model_path, _model())
+    inbox = tmp_path / "inbox.jsonl"
+    queue = server.ActionQueue(inbox_path=inbox, model_path=model_path)
+    payload = _valid_payload()
+    first = queue.enqueue(payload)
+    original = inbox.read_bytes()
+    changed = _model()
+    changed["features"][0]["note"] += " Valid but changed after startup."
+    _write_model_pair(model_path, changed)
+
+    operations = (
+        queue.read,
+        queue.public_templates,
+        lambda: queue.receipt(first["receipt_id"]),
+        lambda: queue.enqueue(payload),
+        lambda: queue.archive({
+            "schema_version": "semiskill.dashboard-archive/v1",
+            "request_id": str(uuid.uuid4()),
+        }),
+    )
+    try:
+        for operation in operations:
+            with pytest.raises(server.action_queue.QueueUnavailable):
+                operation()
+        assert inbox.read_bytes() == original
+    finally:
+        queue.close()
+
+
+def test_queue_state_inputs_reads_and_validates_model_once(tmp_path, monkeypatch):
+    model_path = tmp_path / "model.json"
+    _write_model_pair(model_path, _model())
+    queue = server.ActionQueue(inbox_path=tmp_path / "inbox.jsonl", model_path=model_path)
+    original = server.action_queue.load_pinned_model
+    calls = 0
+
+    def counted_loader(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(server.action_queue, "load_pinned_model", counted_loader)
+    try:
+        model, inbox = queue.state_inputs()
+        assert calls == 1
+        assert model["schema_version"] == "semiskill.dashboard-model/v1"
+        assert inbox == []
+    finally:
+        queue.close()
+
+
+def test_action_replay_from_prior_manifest_fails_closed_after_restart(tmp_path):
+    payload = _valid_payload()
+    with _running_server(tmp_path) as (httpd, inbox):
+        assert _request(httpd, "POST", "/api/action", body=payload)["status"] == 202
+        original = inbox.read_bytes()
+
+    model_path = tmp_path / "model.json"
+    changed = _model()
+    changed["features"][0]["note"] += " Approved model revision after restart."
+    _write_model_pair(model_path, changed)
+    queue = server.ActionQueue(inbox_path=inbox, model_path=model_path)
+    try:
+        with pytest.raises(server.action_queue.QueueUnavailable, match="registry changed"):
+            queue.enqueue(payload)
+        assert inbox.read_bytes() == original
+    finally:
+        queue.close()
+
+
 def test_template_manifest_pins_registry_before_startup(tmp_path):
     model_path = tmp_path / "model.json"
     model_path.write_text(json.dumps(_model()), encoding="utf-8")
@@ -443,7 +774,7 @@ def test_browser_listing_never_exposes_server_prompt(tmp_path):
         listing = _request(httpd, "GET", "/api/inbox")
         assert listing["status"] == 200
         rendered = json.dumps(listing["json"])
-        assert "Implement the approver console" not in rendered
+        assert "resolver-authenticated human" not in rendered
         assert '"prompt"' not in rendered
 
 

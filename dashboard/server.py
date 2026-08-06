@@ -19,6 +19,7 @@ state collection may run bounded Git and read-only database observations.
 """
 from __future__ import annotations
 
+import copy
 import json
 import hashlib
 import hmac
@@ -840,22 +841,19 @@ def read_inbox() -> list[dict]:
     return rows
 
 
+def read_public_model() -> dict:
+    loaded = action_queue.load_pinned_model(MODEL)
+    return action_queue.public_model(loaded)
+
+
 def read_public_templates() -> list[dict]:
-    templates, registry_sha256 = action_queue._load_templates(MODEL)
-    if action_queue._load_model_manifest(MODEL.with_suffix(".sha256")) != registry_sha256:
-        raise action_queue.QueueUnavailable("template manifest mismatch")
-    return [
-        {
-            "id": template["template_id"],
-            "group": template["group"],
-            "label": template["title"],
-            "description": (
-                f"Hash-bound schema-v1 {template['group']} request; the server resolves the "
-                "integrity-pinned prompt when queued."
-            ),
-        }
-        for template in templates.values()
-    ]
+    """Compatibility projection; state assembly reads the complete model exactly once."""
+    return read_public_model()["actions"]
+
+
+def read_state_inputs() -> tuple[dict, list[dict]]:
+    """Default file-backed state inputs; the HTTP server supplies its queue-owned equivalent."""
+    return read_public_model(), read_inbox()
 
 
 def artifact_schema_signal() -> dict:
@@ -876,13 +874,18 @@ def artifact_schema_signal() -> dict:
     }
 
 
-def build_state(inbox_reader=None, template_reader=None) -> dict:
-    inbox_reader = inbox_reader or read_inbox
-    template_reader = template_reader or read_public_templates
-    model = strict_json_loads(MODEL.read_text(encoding="utf-8", errors="strict"))
-    if not isinstance(model, dict):
+def build_state(state_reader=None, model_reader=None) -> dict:
+    if model_reader is None:
+        model, inbox = (state_reader or read_state_inputs)()
+    else:
+        model = model_reader()
+        inbox = (state_reader or read_inbox)()
+    model = copy.deepcopy(model)
+    inbox = copy.deepcopy(inbox)
+    if not isinstance(model, dict) or not isinstance(model.get("actions"), list):
         raise action_queue.QueueUnavailable("dashboard model invalid")
-    model["actions"] = template_reader()
+    if not isinstance(inbox, list):
+        raise action_queue.QueueUnavailable("queue projection invalid")
     migration = migration_witness_signal()
     canonical = canonical_snapshot_signals(migration=migration)
     redteam = redteam_signal()
@@ -899,7 +902,7 @@ def build_state(inbox_reader=None, template_reader=None) -> dict:
         "migration": migration,
         "redteam": redteam,
         "adrs": adrs(),
-        "inbox": inbox_reader(),
+        "inbox": inbox,
     }
 
 
@@ -1051,8 +1054,8 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/state":
             try:
                 return self._json(200, build_state(
-                    self.server.action_queue.read,
-                    self.server.action_queue.public_templates,
+                    self.server.action_queue.state_inputs,
+                    None,
                 ))
             except QueueError as exc:
                 return self._queue_error(exc)

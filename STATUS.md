@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T18:10:05Z_
+_Last updated: 2026-08-06T19:00:03Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3d: load one integrity-pinned model byte string through a fail-closed semantic validator,
-  then reject idempotent action replay after model/manifest drift before returning any receipt.
+- J-010b3d checkpoint: one pinned semantic model snapshot now governs state and queue reads; drift,
+  unapproved prompts, malformed authority and old-registry replay fail closed; commit pending.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -26,13 +26,13 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Catalog: 0 projection-backed published; legacy raw fixture chains remain non-published/non-crediting.
 - Consistency: 0 errors, 60 warnings. Full isolated suite on guarded `semiskill_test`: 878 passed,
   4 skipped, 1 xpassed; this console run is not yet a persisted source-bound run artifact.
-- J-010b3c: 122 dashboard tests plus 42 targeted pipeline/publication/reconciliation tests; Ruff,
-  Python, JavaScript, JSON, model-pin and diff checks pass; three independent audits have 0 P0/P1/P2.
+- J-010b3d: 164 dashboard tests plus 42 targeted pipeline/publication/reconciliation tests; Ruff,
+  Python, JSON, model-pin and diff checks pass; three independent audits have 0 P0/P1/P2.
 - Fresh v2 snapshot `sha256:50bdd85c...d953` is bound to clean commit `6c04c86`, the live
   development database and matching empty-worker progress; release gate remains blocked at 0/84.
 
 ## Immediate order
-1. Make the model one semantic trust root and close replay/drift bypasses.
+1. Commit the independently audited J-010b3d semantic trust-root slice.
 2. Fail closed on unavailable Git/state/ADR/runtime signals and persist source-bound full-suite evidence.
 3. Resolve the approval-bound `_shared` payload topology and build the production Next.js catalog.
 4. Re-review/fix/recheck all 84, human-approve in batches <=10, publish and verify 84/84.

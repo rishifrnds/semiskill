@@ -17,8 +17,8 @@ precondition of publishing**, so there is one internal place to safely share ski
 > **human-approved**. The catalog is written **only** by the approval actuator. Every action is an
 > immutable, ACL-labeled, provenanced artifact.
 
-This is enforced *structurally*, not by prompting — and proven by tests (a red-team panel plus 7 novel
-LLM-crafted attacks all blocked; zero escapes).
+This is enforced *structurally*, not by prompting, and exercised by deterministic and fixture-backed
+security tests. The seven-entry adversarial corpus is input inventory only; authoritative corpus execution is currently unavailable, so it supplies no blocked-attack or zero-escape claim.
 
 ## Architecture (AIOS 6 layers)
 | Layer | Module(s) | Role |

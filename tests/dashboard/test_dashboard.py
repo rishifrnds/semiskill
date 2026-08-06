@@ -497,7 +497,7 @@ def test_migration_signal_gates_current_schema_and_never_leaks_bad_payload(monke
     assert unavailable["adoption"] is None
 
 
-def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
+def _stub_build_state_dependencies(monkeypatch):
     monkeypatch.setattr(server, "repo_signals", lambda: {})
     monkeypatch.setattr(server, "state_files", lambda: {})
     monkeypatch.setattr(server, "runtime_signals", lambda: {
@@ -518,6 +518,10 @@ def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
     monkeypatch.setattr(server, "adrs", lambda: [])
     monkeypatch.setattr(server, "read_inbox", lambda: [])
 
+
+def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
+    _stub_build_state_dependencies(monkeypatch)
+
     state = server.build_state()
 
     assert "seeds" not in state
@@ -526,6 +530,31 @@ def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
     assert "attacks" not in state and state["redteam"]["status"] == "not_executed"
     assert len(state["model"]["actions"]) == 36
     assert all("prompt" not in action and action.get("description") for action in state["model"]["actions"])
+
+
+def test_build_state_uses_one_prevalidated_model_snapshot(monkeypatch):
+    _stub_build_state_dependencies(monkeypatch)
+    expected = server.read_public_model()
+    pristine = json.loads(json.dumps(expected))
+    calls = 0
+
+    def state_reader():
+        nonlocal calls
+        calls += 1
+        return expected, []
+
+    state = server.build_state(state_reader)
+
+    assert calls == 1
+    assert state["model"]["actions"] == pristine["actions"]
+    assert expected == pristine
+
+
+def test_root_readme_does_not_claim_unexecuted_redteam_results():
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "7 novel LLM-crafted attacks all blocked; zero escapes" not in readme
+    assert "authoritative corpus execution is currently unavailable" in readme
 
 
 def test_dashboard_html_uses_only_canonical_catalog_state():
@@ -601,6 +630,30 @@ def test_dashboard_model_is_bound_to_adjacent_integrity_pin():
     raw = Path("dashboard/model.json").read_bytes()
     manifest = Path("dashboard/model.sha256").read_text(encoding="ascii").strip()
     assert manifest == "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def test_public_action_projection_has_exact_fields_and_no_aliasing():
+    loaded = server.action_queue.load_pinned_model(Path("dashboard/model.json"))
+    first = server.action_queue.public_model(loaded)
+    raw_ids = [action["id"] for action in loaded.model["actions"]]
+    pristine_name = loaded.model["project"]["name"]
+    pristine_label = loaded.model["actions"][0]["label"]
+
+    assert [action["id"] for action in first["actions"]] == raw_ids
+    assert all(
+        set(action) == {"id", "group", "label", "description"}
+        for action in first["actions"]
+    )
+    rendered = json.dumps(first["actions"])
+    assert all(action["prompt"] not in rendered for action in loaded.model["actions"])
+    assert "template_sha256" not in rendered.lower()
+    first["project"]["name"] = "mutated caller copy"
+    first["actions"][0]["label"] = "mutated caller copy"
+    assert loaded.model["project"]["name"] == pristine_name
+    assert loaded.model["actions"][0]["label"] == pristine_label
+    second = server.action_queue.public_model(loaded)
+    assert second["project"]["name"] == pristine_name
+    assert second["actions"][0]["label"] == pristine_label
 
 
 def test_curated_launch_plan_never_claims_release_readiness():

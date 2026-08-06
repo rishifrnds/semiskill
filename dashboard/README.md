@@ -50,9 +50,14 @@ outcome receives credit.
 ## Governed request loop
 
 Every action control submits only a template ID, page-level dashboard context, priority and UUID.
-The server verifies `model.json` against the adjacent `model.sha256` integrity pin, resolves the frozen
-schema-v1 prompt, hashes it, durably appends a non-crediting journal row to
-`dashboard/inbox.jsonl`, and responds only after `fsync`.
+The server hashes the exact `model.json` bytes before parsing, verifies the adjacent `model.sha256`,
+validates the complete `semiskill.dashboard-model/v1` non-crediting contract, and requires every
+resolved schema-v1 action template to match its code-reviewed digest allowlist. It then durably
+appends a non-crediting journal row to `dashboard/inbox.jsonl` and responds only after `fsync`.
+Each model-dependent operation performs one raw model read, checks the adjacent and startup hashes
+before UTF-8 decoding or JSON parsing, then derives both curated state and public actions from that
+one parsed snapshot. `/api/state` obtains the model and inbox view together under the queue lock;
+body-only drift and a correctly re-pinned post-start body both return fail-closed unavailability.
 
 The durable journal row contains the template provenance and server-only prompt; prompt text and the
 registry hash are removed from every browser projection:
@@ -67,8 +72,8 @@ launch credit.
 
 The browser cannot submit a title, prompt, kind, status, executable command or free text. A mutation
 requires the exact loopback Host and Origin, a per-process same-origin CSRF capability, strict UTF-8
-JSON, a bounded body and one of the 36 unique server templates. UUID retries are idempotent; a UUID
-reused for another action fails closed.
+JSON, a bounded body and one of the 36 unique server templates. UUID retries are idempotent only for
+the same pinned model registry; a UUID from another registry or reused for another action fails closed.
 
 The request library spans Build, Security, Ops, Marketing, Sales, Analytics and Quality. Section-level
 controls select fixed templates and a page-level context; they do not claim that a particular table
@@ -78,9 +83,10 @@ quarantined and must never be auto-worked.
 `Archive current request journal` is protected by the same Host/Origin/CSRF boundary and may include
 requests accepted after the browser's last refresh. The server first commits a canonical archive
 intent, then moves the exact journal to its collision-safe recovery file. Restart recovery completes
-an interrupted intent exactly once. Every read, replay and mutation validates the sidecar's IDs,
-timestamp, path, byte hash and row count plus global request/receipt uniqueness before proceeding.
-The response records the row count, file hash and recovery reference.
+an interrupted intent exactly once. Every model-dependent read, replay and mutation first reloads one
+pinned semantic model snapshot and then validates the sidecar's IDs, timestamp, path, byte hash and
+row count plus global request/receipt uniqueness before proceeding. The response records the row
+count, file hash and recovery reference.
 
 ## Queue-only authority
 
@@ -100,10 +106,12 @@ diagrams and KPIs still render if the chart CDN is unavailable.
 
 The page refreshes every 15 seconds while visible. `model.json` is security-sensitive server
 configuration: its prompt strings become separate-worker input even though they are never
-browser-executable. The adjacent digest detects inconsistent checkout/runtime drift; it does not
-prove human review or defend against an actor who can rewrite both files. Any one-file pin mismatch
-or post-start model drift fails the queue closed. Production authenticity must come from the normal
-reviewed commit/release provenance, not this local digest alone.
+browser-executable. The adjacent digest detects inconsistent checkout/runtime drift, while the exact
+schema and action-template allowlist stop a correctly re-pinned model from gaining evidence credit or
+widening worker prompts. Neither proves human review or defends against an actor who can also rewrite
+the validator code. Any one-file pin mismatch, semantic violation, unapproved prompt or post-start
+model drift fails all model-dependent state and queue surfaces closed. Production authenticity must
+come from the normal reviewed commit/release provenance, not this local digest alone.
 
 The local queue integrity boundary covers accidental corruption, interrupted writes and cooperating
 processes that respect the queue lease. Its hashes are unkeyed: an actor with direct write access to
