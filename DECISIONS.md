@@ -356,6 +356,34 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   until J-010b2 passes, queued requests are untrusted and must not be consumed automatically.
 - Related: ADR-014, J-010b1; dashboard/server.py; dashboard/index.html
 
+## [ADR-016] Dashboard feedback is a same-origin template-bound non-crediting journal
+- Date: 2026-08-06
+- Status: accepted
+- Context: A queue-only UI still accepted browser-supplied prompt text and mutable identifiers, so a
+  cross-site request, model drift or interrupted append could manufacture work that appeared to come
+  from a curated command-centre action. Plain JSON writes and rotation also lacked a recoverable
+  commit boundary, global lineage checks and durable request receipts.
+- Decision: The only dashboard mutation APIs are `POST /api/action` and
+  `POST /api/inbox/archive`. They require an exact same-origin Host/Origin, a per-process CSRF token,
+  strict JSON framing and a canonical request UUID; the server selects the exact action from an
+  integrity-pinned in-process template and journals it under a cross-process lease with fsync,
+  atomic replacement, deterministic receipts and restart reconciliation. Queue and archive records
+  explicitly carry `credit:none` and can never satisfy scan, review, approval, publication, test or
+  launch gates.
+- Alternatives considered:
+  - Accept a browser-supplied prompt or arbitrary task body — rejected because untrusted page state
+    could widen worker scope or forge a curated request.
+  - Execute a fixed command directly from the dashboard — rejected because a loopback UI is not an
+    authorization boundary and execution would race repository/database governance.
+  - Treat the adjacent SHA-256 pin as an authenticity signature — rejected because it is unkeyed;
+    host and repository ACLs remain the trust root for direct filesystem writers.
+- Consequences: Restart invalidates browser CSRF state and uncertain requests retry by the same UUID.
+  A separate worker must consume requests under the normal repository lock, tool/network limits and
+  evidence gates. Cooperative leases protect consistency, not malicious direct writers; deployment
+  must restrict filesystem write access. No queue count or receipt may be shown as completed work.
+- Related: ADR-014, ADR-015, J-010b2; dashboard/action_queue.py; dashboard/server.py;
+  dashboard/index.html
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

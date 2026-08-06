@@ -663,9 +663,25 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010b2 harden the append-only action queue and archive boundary
 
 
+- [J-010b2] 2026-08-06T16:46:46Z  status: done
+  what: replaced arbitrary dashboard ingestion with a same-origin, per-process-CSRF,
+  server-template-derived request journal; canonical UUID-bound rows and non-crediting receipts now
+  survive concurrent writers, rotation, ambiguous fsync/rename failures and restart reconciliation,
+  while hostile framing, model drift, forged history and every retired actuator fail closed
+  delayed: true, reason: the adversarial crash/durability review crossed the checkpoint ceiling; the
+  commit hook then stopped stale state and a rebase-normalized integrity pin was repaired and
+  independently rechecked before committing without bypassing hooks
+  artifacts: fd8d70f, ADR-016, dashboard/action_queue.py, dashboard/server.py,
+  dashboard/index.html, dashboard/model.json, dashboard/model.sha256,
+  tests/dashboard/test_action_queue_http.py, tests/dashboard/test_dashboard.py; 116 focused tests;
+  Ruff, Python, JavaScript, JSON, exact model-pin and diff checks passed; independent backend and
+  visual/truth audits found no remaining P0/P1/P2 in the scoped queue contract
+  next: J-010b3 remove remaining stale or fabricated dashboard evidence and runtime probes
+
+
 ## In-Flight Step
-- [J-010b2] replace arbitrary action ingestion and queue rotation with a same-origin, CSRF-bound,
-  template-derived append-only task queue, strict receipts, locking and adversarial HTTP tests.
+- [J-010b3] remove remaining stale or fabricated dashboard evidence and replace request-time test
+  discovery/probes with immutable, observation-bound evidence before browser verification.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
