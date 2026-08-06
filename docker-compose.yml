@@ -8,10 +8,11 @@ services:
       POSTGRES_USER: semiskill
       POSTGRES_PASSWORD: semiskill
       POSTGRES_DB: semiskill
+    volumes:
+      - ./docker/postgres/init-test-db.sql:/docker-entrypoint-initdb.d/10-test-db.sql:ro
     ports: ["127.0.0.1:5432:5432"]
-    # Throwaway local dev/test DB (ADR-005): durability disabled so the disposable-DB-per-test
-    # fixture's CREATE/DROP DATABASE is fast on Docker-for-Windows (fsync to the VM filesystem is
-    # otherwise pathologically slow). Never use these flags for data you care about.
+    # Throwaway local databases (ADR-005). Development catalog and pytest use different DB names;
+    # the fixture can truncate only the guarded `_test` database. Never use these flags in prod.
     command: >
       postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
       -c checkpoint_timeout=60min -c max_wal_size=2GB
