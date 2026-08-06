@@ -431,6 +431,31 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-001, ADR-011, ADR-017, J-010b3b; semiskill/artifacts/schema.py;
   dashboard/server.py; dashboard/index.html
 
+## [ADR-019] Curated dashboard registers cannot earn observed evidence credit
+- Date: 2026-08-06
+- Status: accepted
+- Context: Feature inventories, pipeline descriptions, risk candidates, launch checklists, market
+  hypotheses, assets and target funnels were hand-authored planning inputs but used status, severity,
+  completion and KPI shapes that could be mistaken for executed verification or measured outcomes.
+  Some funnel rows also mixed people and skill-version units in one conversion sequence.
+- Decision: Curated registers carry explicit non-crediting authority, typed declared or hypothesis
+  fields, validation state and source references. Observations are separate typed records whose value,
+  time and evidence reference remain unavailable until an authoritative provider supplies them. Only
+  the verified canonical scoreboard's exact `release_gate` can determine launch readiness.
+- Alternatives considered:
+  - Keep familiar `done`, `high` and numeric KPI fields with explanatory copy - rejected because
+    presentation styling, downstream consumers and tests could still treat them as factual evidence.
+  - Remove business planning from the command centre - rejected because the plans remain useful when
+    their authority, units, validation state and deferred scope are machine-readable and explicit.
+  - Combine user adoption, supply and advocacy in one funnel - rejected because people, skill versions
+    and targets have incompatible denominators and cannot form one observed conversion chain.
+- Consequences: Curated completion uses neutral visual semantics and cannot affect readiness counts.
+  GTM, pricing and launch assets remain drafts, not offers or published collateral. Prepared requests
+  may ask for source-bound measurement or drafts but cannot publish, contact, distribute or invent
+  unavailable proof. Existing consumers of the dashboard model must adopt the typed fields.
+- Related: ADR-014, ADR-017, ADR-018, J-010b3c; dashboard/model.json;
+  dashboard/server.py; dashboard/index.html
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

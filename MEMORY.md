@@ -703,9 +703,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010b3c separate curated plans and hypotheses from observed evidence
 
 
+- [J-010b3c] 2026-08-06T18:08:34Z  status: done
+  what: separated every curated feature, pipeline, risk, launch, asset, analytics and go-to-market
+  record from observed verification credit; typed hypotheses, cohorts and measurements remain
+  explicitly unvalidated, unmeasured or unpublished, while only the canonical scoreboard release
+  gate can claim launch readiness and prepared requests preserve no-side-effect boundaries
+  artifacts: 929c7e1, ADR-019, dashboard/index.html, dashboard/model.json,
+  dashboard/model.sha256, dashboard/server.py, tests/dashboard/test_dashboard.py;
+  122 dashboard tests and 42 targeted pipeline/publication/reconciliation tests; Ruff, Python,
+  JavaScript, JSON, exact model-pin and diff checks passed; independent freshness, visual and
+  scoreboard audits found zero scoped P0/P1/P2
+  next: J-010b3d make the integrity-pinned model one semantic trust root and close replay/drift bypasses
+
+
 ## In-Flight Step
-- [J-010b3c] make feature, risk, launch, analytics and go-to-market registers explicitly curated and
-  non-crediting; remove fabricated measurements, rankings, proof and incompatible funnel cohorts.
+- [J-010b3d] load one integrity-pinned model byte string through a fail-closed semantic validator,
+  then reject idempotent action replay after model/manifest drift before returning any receipt.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
