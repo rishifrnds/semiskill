@@ -24,15 +24,15 @@ def store(pg_dsn):
 
 
 @pytest.mark.integration
-def test_generated_seed_wave_publishes_via_gate(store, pg_dsn):
+def test_generated_seed_wave_is_scanned_and_queued_without_auto_approval(store, pg_dsn):
     for s in _SEEDS:
         r = seed_skill(store=store, dsn=pg_dsn, skill_md=s["skill_md"])
-        assert r.published, f"{s['slug']} did not publish (verdict={r.verdict}, blocked_at={r.blocked_at})"
+        assert not r.published
         scans = [a for a in store.by_type(ArtifactType.SCAN_RUN) if r.skill_version_id in a.input_refs]
         assert scans and not any(a.payload.get("hard_fail") for a in scans)      # passing scan trail
-        assert any(a.input_refs and a.input_refs[0] == r.skill_version_id and a.payload.get("published")
-                   for a in store.by_type(ArtifactType.APPROVAL))                # a real approval
+        assert not any(a.input_refs and a.input_refs[0] == r.skill_version_id
+                       for a in store.by_type(ArtifactType.APPROVAL))
 
     cat = {c.slug for c in search_catalog(dsn=pg_dsn, principal=["team"])}
     dv = {c.slug for c in search_catalog(dsn=pg_dsn, principal=["team"], function="design-verification")}
-    assert cat == {s["slug"] for s in _SEEDS} and dv == cat                       # all published + faceted
+    assert cat == set() and dv == set()

@@ -1,7 +1,7 @@
 """Adversarial red-team harness for the verification pipeline.
 
-Submits crafted malicious skills through the FULL path (L1 intake → pipeline → attempted publish with
-a COLLUDING approver) and asserts each is (1) caught, (2) never discoverable, and (3) that the held-out
+Submits crafted malicious skills through capture and the queue-only pipeline and asserts each is
+(1) caught, (2) never discoverable, and (3) that the held-out
 corpus stays unreadable by the pipeline role the whole time. These cases are ATTACKS that live in the
 repo; the corpus signatures they must trip stay unreadable in the DB. Novel attacks can be appended by
 the red-team Workflow fan-out (see run_generated_cases).
@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 import psycopg
 from semiskill.capture.intake import build_skill_version
 from semiskill.context.retrieve import search_catalog
-from semiskill.governance.publish import publish_skill
 from semiskill.spine.pipeline import run_pipeline
 
 _ALL_LABELS = ["public", "team", "need-to-know", "regulated"]
@@ -71,13 +70,8 @@ def run_case(store, dsn: str, case: RedTeamCase) -> CaseResult:
     sv = store.append(build_skill_version(skill_md=case.skill_md, actor="redteam", files=case.files))
     res = run_pipeline(store=store, dsn=dsn, skill_version_id=sv.artifact_id)
     caught = res.blocked_at is not None or res.verdict != "approve"
-    # Even a COLLUDING approver must not be able to publish it.
-    if res.review is not None:
-        try:
-            publish_skill(store=store, skill_version_id=sv.artifact_id, review_id=res.review.artifact_id,
-                          approver_actor="colluder", approver=lambda d: True)
-        except Exception:  # noqa: BLE001 - PublishRefused/GateBlocked both mean "blocked"
-            pass
+    # Pipeline execution is queue-only. Forgery/detached-evidence resistance is exercised against
+    # the authenticated approval actuator in governance tests, never through a callback shortcut.
     slug = sv.payload["slug"]
     in_catalog = slug in {c.slug for c in search_catalog(dsn=dsn, principal=_ALL_LABELS)}
     return CaseResult(name=case.name, attack_class=case.attack_class, caught=caught,

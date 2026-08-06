@@ -8,8 +8,10 @@ behind the human approval actuator (ADR-002).
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from semiskill.artifacts.schema import ArtifactType
+from semiskill.artifacts.schema import ArtifactType, ActorKind
 from semiskill.artifacts.store import ArtifactStore
+from semiskill.authoring.gate import SECURITY_REVIEW_KIND
+from semiskill.governance.publish import APPROVAL_SCHEMA
 from semiskill.sensor.judge import require_no_drift, JudgeUncalibrated
 from semiskill.intelligence.stability import evaluate_stability, StabilityParams
 
@@ -28,11 +30,27 @@ def review_queue(store: ArtifactStore) -> list[QueueItem]:
     risk — lowest aggregate safety first (most-suspicious to the top)."""
     approvals = store.by_type(ArtifactType.APPROVAL)
     superseded = {a.corrects_ref for a in approvals if a.corrects_ref is not None}
-    decided = {a.input_refs[0] for a in approvals
-               if a.artifact_id not in superseded and a.payload.get("verdict") == "approve"
-               and a.input_refs}
+    decided = {
+        approval.input_refs[0]
+        for approval in approvals
+        if approval.artifact_id not in superseded
+        and approval.actor_kind is ActorKind.HUMAN
+        and approval.payload.get("schema_version") == APPROVAL_SCHEMA
+        and approval.payload.get("decision") in {"approve", "reject", "unpublish"}
+        and approval.input_refs
+    }
+    latest_reviews = {}
+    for review in store.by_type(ArtifactType.REVIEW):
+        if review.payload.get("review_kind") != SECURITY_REVIEW_KIND or not review.input_refs:
+            continue
+        skill_id = review.input_refs[0]
+        prior = latest_reviews.get(skill_id)
+        if prior is None or (review.timestamp_start, str(review.artifact_id)) > (
+            prior.timestamp_start, str(prior.artifact_id)
+        ):
+            latest_reviews[skill_id] = review
     items: list[QueueItem] = []
-    for r in store.by_type(ArtifactType.REVIEW):
+    for r in latest_reviews.values():
         sv_id = r.input_refs[0] if r.input_refs else None
         if sv_id is None or sv_id in decided:
             continue

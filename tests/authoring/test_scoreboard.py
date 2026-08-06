@@ -11,11 +11,13 @@ import pytest
 
 from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.store import PostgresArtifactStore
+from semiskill.authoring.gate import make_content_review
 from semiskill.authoring.scoreboard import (
-    DECLINED, FAILING_LINT, MISSING, PUBLISHED, READY, UNPUBLISHED, UNREVIEWED,
+    DECLINED, FAILING_LINT, MISSING, PUBLISHED, READY, REVIEWED, UNPUBLISHED, UNREVIEWED,
     build_scoreboard, load_registry, render,
 )
-from semiskill.wave import load_wave, run_wave
+from semiskill.capture.intake import build_skill_version, load_skill_dir
+from tests.support import content_checks, publish_wave_sources
 
 MIG = Path("semiskill/artifacts/migrations")
 BODY = ("# Title\n\nA procedure with enough substance to be a skill.\n\n"
@@ -107,7 +109,7 @@ def test_published_counts_and_role_target(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
     for n in ("dv-a", "dv-b"):
         write_skill(root, n)
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
     reg = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
         {"slug": "dv-b", "role": "dv-engineer", "level": "senior"},
@@ -125,7 +127,7 @@ def test_facet_drift_between_the_registry_and_what_published_is_a_failure(pg_sto
     collapsed the role x level grid onto a single role. Nothing caught it."""
     root = tmp_path / "skills"
     write_skill(root, "dv-a", role="dv-engineer", level="senior")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
     reg = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "soc-dv-engineer", "level": "junior"}])
 
@@ -150,11 +152,11 @@ def test_declines_do_not_credit_a_role_that_has_not_published_yet(pg_store, tmp_
 
 
 @pytest.mark.integration
-def test_a_declined_cell_counts_toward_the_target_only_with_a_reason(pg_store, pg_dsn, tmp_path):
-    """A role at 1/2 with a recorded decline is honest coverage; a decline with no reason is not."""
+def test_a_declined_cell_is_non_crediting_provenance(pg_store, pg_dsn, tmp_path):
+    """A decline remains visible but never substitutes for a published skill."""
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
 
     with_reason = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
@@ -162,7 +164,7 @@ def test_a_declined_cell_counts_toward_the_target_only_with_a_reason(pg_store, p
          "declined": {"why": "no distinct week-one task at this level"}},
     ])
     sb = build_scoreboard(store=pg_store, registry_path=with_reason, skills_root=root, target=2)
-    assert sb.roles[0].declined == 1 and sb.roles[0].ok and sb.ok
+    assert sb.roles[0].declined == 1 and not sb.roles[0].ok and not sb.ok
     assert sb.cells[1].status == DECLINED and sb.cells[1].declined_why
 
     (tmp_path / "registry.json").write_text(json.dumps({"cells": [
@@ -175,38 +177,43 @@ def test_a_declined_cell_counts_toward_the_target_only_with_a_reason(pg_store, p
 
 
 @pytest.mark.integration
-def test_published_without_an_independent_recheck_fails_strict_gate(pg_store, pg_dsn, tmp_path):
+def test_published_exact_chain_is_independently_recheck_ready(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
     reg = write_registry(tmp_path, [{"slug": "dv-a", "role": "dv-engineer", "level": "senior"}])
 
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1,
                           strict_gate=True)
-    assert sb.cells[0].gate == UNREVIEWED and not sb.ok
-    assert any("not an independent recheck-ready" in f for f in sb.failures)
-
-    (root / "dv-a" / "REVIEW.json").write_text(json.dumps({
-        "findings": [{"rule": "x"}], "recheck": {"ready": True, "agent": "recheck:dv-a"},
-    }), encoding="utf-8")
-    sb2 = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1,
-                           strict_gate=True)
-    assert sb2.cells[0].gate == READY and sb2.ok
+    assert sb.cells[0].gate == READY and sb.ok
 
 
 @pytest.mark.integration
-def test_a_review_without_a_ready_recheck_is_reviewed_not_ready(pg_store, pg_dsn, tmp_path):
+def test_an_adversarial_review_is_reviewed_not_ready(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
-    write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
-    (root / "dv-a" / "REVIEW.json").write_text(json.dumps({
-        "findings": [{"rule": "x"}], "recheck": {"ready": False, "why": "still wrong"},
-    }), encoding="utf-8")
+    directory = write_skill(root, "dv-a")
+    skill_md, files = load_skill_dir(directory)
+    skill_version = pg_store.append(build_skill_version(
+        skill_md=skill_md, actor="test-author", permissions_label="public", files=files,
+    ))
+    pg_store.append(make_content_review(
+        skill_version=skill_version,
+        phase="adversarial",
+        prompt_version="P1-ADVERSARIAL@1",
+        run_id="test-run",
+        batch_id="test-batch",
+        attempt=1,
+        reviewer_identity="test-reviewer",
+        fixer_identity="test-fixer",
+        checks=content_checks(),
+        findings=[],
+    ))
     reg = write_registry(tmp_path, [{"slug": "dv-a", "role": "dv-engineer", "level": "senior"}])
 
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1,
                           strict_gate=True)
-    assert sb.cells[0].gate == "reviewed" and not sb.ok
+    assert sb.cells[0].status == UNPUBLISHED
+    assert sb.cells[0].gate == REVIEWED and not sb.ok
 
 
 @pytest.mark.integration
@@ -215,7 +222,7 @@ def test_a_published_skill_missing_from_the_registry_is_a_failure(pg_store, pg_d
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
     write_skill(root, "dv-surprise")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
     reg = write_registry(tmp_path, [{"slug": "dv-a", "role": "dv-engineer", "level": "senior"}])
 
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1)
@@ -227,7 +234,7 @@ def test_a_published_skill_missing_from_the_registry_is_a_failure(pg_store, pg_d
 def test_render_styles(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
     write_skill(root, "dv-a")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
     reg = write_registry(tmp_path, [
         {"slug": "dv-a", "role": "dv-engineer", "level": "senior"},
         {"slug": "dv-b", "role": "vip-engineer", "level": "staff"},

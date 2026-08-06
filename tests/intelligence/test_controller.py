@@ -4,10 +4,10 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, ActorKind
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.capture.intake import build_skill_version
-from semiskill.governance.publish import publish_skill
 from semiskill.intelligence.controller import review_queue, controller_decision, ControllerDecision
 from semiskill.intelligence.stability import ExecRecord, StabilityParams
 from semiskill.sensor.judge import GoldItem, record_gold_set, calibrate_judge
+from tests.support import publish_test_skill
 
 MIG = Path("semiskill/artifacts/migrations")
 RV = "skill_safety_v1"
@@ -24,7 +24,9 @@ def _review(store, slug, safety, verdict="request-changes"):
     review = store.append(Artifact.new(
         artifact_type=ArtifactType.REVIEW, source_system=SourceSystem.CLI, actor="ctl",
         actor_kind=ActorKind.AGENT, input_refs=[sv.artifact_id],
-        payload={"verdict": verdict, "aggregate_safety": safety}))
+        payload={"review_kind": "security_aggregate", "schema_version": 1, "stage": 6,
+                 "verdict": verdict, "aggregate_safety": safety, "judge_required": True,
+                 "scan_artifact_ids": []}))
     return sv, review
 
 
@@ -49,8 +51,7 @@ def test_review_queue_ranks_by_risk(store, pg_dsn):
 def test_approved_skill_leaves_the_queue(store, pg_dsn):
     sv, review = _review(store, "dv/x", 0.95, verdict="approve")
     assert any(i.slug == "dv/x" for i in review_queue(store))
-    publish_skill(store=store, skill_version_id=sv.artifact_id, review_id=review.artifact_id,
-                  approver_actor="alice", approver=lambda d: True)
+    publish_test_skill(store, sv)
     assert not any(i.slug == "dv/x" for i in review_queue(store))     # decided -> out of queue
 
 

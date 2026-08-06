@@ -1,16 +1,9 @@
-"""Phase G — seed the catalog by dogfooding the pipeline.
-
-Every generated role-enablement skill is submitted through L1 and must pass the FULL L4/L6 pipeline +
-human approval before it publishes — the identical path any submission takes. There is NO back-door
-insert: a seed skill reaches the catalog only via a passing scan_run + an approval (ADR-003). A
-deliberately-broken seed is blocked exactly like any other malicious submission.
-"""
+"""Seed intake: capture and scan generated skills, then stop before human approval."""
 from __future__ import annotations
 from dataclasses import dataclass
 from semiskill.artifacts.store import ArtifactStore
 from semiskill.capture.intake import build_skill_version
 from semiskill.spine.pipeline import run_pipeline
-from semiskill.governance.publish import publish_skill, PublishRefused
 
 
 @dataclass(frozen=True)
@@ -23,12 +16,12 @@ class SeedResult:
 
 
 def seed_skill(*, store: ArtifactStore, dsn: str, skill_md: str, actor: str = "seed-generator",
-               approver_actor: str = "seed-approver", auto_approve: bool = True,
                permissions_label: str = "team",
                files: dict[str, str] | None = None) -> SeedResult:
-    """Push one generated seed through the pipeline. Publishes only if the aggregate verdict is
-    'approve' AND a human approves (auto_approve simulates that human here). Blocked seeds never
-    publish. Returns the outcome for verification.
+    """Push one seed through capture/scanning and stop before independent review and approval.
+
+    This helper cannot create an approval or publication. Seeds use the same explicit authenticated
+    human decision boundary as every other submission.
 
     `permissions_label` decides who can ever see the result: a wave of generic, slot-bearing skills
     publishes as `public` (ADR-009), because labelling content that holds nothing internal as `team`
@@ -37,17 +30,8 @@ def seed_skill(*, store: ArtifactStore, dsn: str, skill_md: str, actor: str = "s
     sv = store.append(build_skill_version(skill_md=skill_md, actor=actor,
                                           permissions_label=permissions_label, files=files))
     res = run_pipeline(store=store, dsn=dsn, skill_version_id=sv.artifact_id)
-    published = False
-    if auto_approve and res.review is not None and res.verdict == "approve":
-        try:
-            publish_skill(store=store, skill_version_id=sv.artifact_id,
-                          review_id=res.review.artifact_id, approver_actor=approver_actor,
-                          approver=lambda d: True)
-            published = True
-        except PublishRefused:
-            published = False
     return SeedResult(slug=sv.payload.get("slug", "?"), skill_version_id=sv.artifact_id,
-                      verdict=res.verdict, blocked_at=res.blocked_at, published=published)
+                      verdict=res.verdict, blocked_at=res.blocked_at, published=False)
 
 
 # `seed_catalog` was deleted in favour of `semiskill.wave.run_wave` (ADR-009). It was a bare list

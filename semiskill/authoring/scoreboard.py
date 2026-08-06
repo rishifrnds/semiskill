@@ -11,10 +11,8 @@ is derived from two files-of-record and nothing else:
 A skill on disk that never published counts as missing, because from an engineer's point of view it
 is. An agent's assertion that a skill is "done" counts for nothing at all.
 
-Gate status comes from `skills/<slug>/REVIEW.json`, read through `authoring.gate` — the same reader
-the wave uses to *refuse* to publish an ungated skill. This scoreboard is the audit behind that
-precondition: anything published without an independent recheck returning `ready: true` (a seed, or
-a `--allow-ungated` wave) is reported as `unreviewed` and fails `--strict-gate`.
+Gate status comes only from immutable content-review artifacts bound to an exact skill-version hash.
+Legacy `REVIEW.json` files and agent assertions are never authoritative.
 """
 from __future__ import annotations
 
@@ -22,8 +20,17 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from semiskill.artifacts.schema import ArtifactType
 from semiskill.artifacts.store import ArtifactStore
-from semiskill.authoring.gate import READY, REVIEWED, UNREVIEWED, gate_status, read_review
+from semiskill.authoring.gate import (
+    READY,
+    REVIEWED,
+    UNREVIEWED,
+    readiness_for_review,
+    readiness_for_version,
+)
+from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
+from semiskill.governance.publish import resolve_frozen_approval_evidence
 from semiskill.wave import _published_index
 
 DEFAULT_TARGET = 5
@@ -65,17 +72,8 @@ class RoleCoverage:
 
     @staticmethod
     def decide(*, published: int, planned: int, declined: int, target: int) -> bool:
-        """A role passes if it published the target, OR it published everything it planned and the
-        plan plus its recorded declines reach the target.
-
-        The second branch is what lets a role honestly stop at 4/5 — but only once those four are
-        actually published. Crediting declines to a role that simply has not done the work yet would
-        turn "we decided not to write a fifth" into "we are finished", which is the exact optimism
-        this scoreboard exists to refuse.
-        """
-        if published >= target:
-            return True
-        return published >= planned and (planned + declined) >= target
+        """Declines are provenance only; only exact published skills satisfy a role target."""
+        return published >= target
 
 
 @dataclass(frozen=True)
@@ -123,6 +121,23 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
             if rep.slug:
                 lint_by_slug[rep.slug] = (rep.predicted_verdict, len(rep.errors))
 
+    skill_versions = store.by_type(ArtifactType.SKILL_VERSION)
+
+    def current_gate(slug: str) -> str:
+        directory = root / slug
+        if not (directory / "SKILL.md").exists():
+            return UNREVIEWED
+        skill_md, files = load_skill_dir(directory)
+        candidate = build_skill_version(skill_md=skill_md, actor="scoreboard", files=files)
+        fingerprint = payload_fingerprint(candidate.payload)
+        versions = [
+            artifact for artifact in skill_versions
+            if artifact.payload.get("slug") == slug
+            and payload_fingerprint(artifact.payload) == fingerprint
+        ]
+        version = max(versions, key=lambda artifact: artifact.timestamp_start, default=None)
+        return readiness_for_version(store, version).status if version is not None else UNREVIEWED
+
     cells: list[CellStatus] = []
     for c in registry:
         slug = c["slug"]
@@ -143,13 +158,20 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
             want = (c["role"], c["level"])
             if got != want:
                 drift = f"published as {got[0]}/{got[1]}, registry says {want[0]}/{want[1]}"
+            skill_version, approval = published[slug]
+            frozen = resolve_frozen_approval_evidence(
+                store, skill_version=skill_version, approval=approval,
+            )
             cells.append(CellStatus(status=PUBLISHED,
-                                    gate=gate_status(read_review(root, slug)),
+                                    gate=readiness_for_review(
+                                        store, skill_version, frozen.content_review,
+                                    ).status,
                                     lint_verdict=verdict, findings=errs, drift=drift, **common))
         elif not (root / slug / "SKILL.md").exists():
             cells.append(CellStatus(status=MISSING, **common))
         elif verdict == "approve" and errs == 0:
-            cells.append(CellStatus(status=UNPUBLISHED, lint_verdict=verdict, **common))
+            cells.append(CellStatus(status=UNPUBLISHED, gate=current_gate(slug),
+                                    lint_verdict=verdict, **common))
         else:
             cells.append(CellStatus(status=FAILING_LINT, lint_verdict=verdict,
                                     findings=errs, **common))
@@ -163,7 +185,7 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
         ok = RoleCoverage.decide(published=pub, planned=active, declined=dec, target=target)
         roles.append(RoleCoverage(role=role, target=target, published=pub, declined=dec,
                                   planned=active, ok=ok,
-                                  weakest_gap=max(0, target - (pub + dec))))
+                                  weakest_gap=max(0, target - pub)))
 
     levels: dict[str, int] = {}
     for c in cells:

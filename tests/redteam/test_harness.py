@@ -33,8 +33,8 @@ def test_each_case_blocked(store, pg_dsn, case):
 @pytest.mark.integration
 def test_a_benign_control_is_not_caught(store, pg_dsn):
     # Sanity: a clean skill is NOT "caught" (so the malicious-blocked results aren't trivially passing
-    # everything). A colluding approve on a CLEAN skill legitimately publishes it — that's not an escape.
+    # everything). Queueing a clean skill still cannot manufacture human publication.
     benign = RedTeamCase("benign-control", "none",
                          "---\nname: Clean\nslug: rt/clean\n---\nA helpful, safe skill.")
     r = run_case(store, pg_dsn, benign)
-    assert r.caught is False and r.published is True and r.corpus_readable is False
+    assert r.caught is False and r.published is False and r.corpus_readable is False
