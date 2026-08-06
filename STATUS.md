@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T21:24:11Z_
+_Last updated: 2026-08-06T21:33:52Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,30 +17,30 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3e3c: produce the final immutable run against the favicon-corrected checkpoint and repeat
-  the live Quality/Launch browser verification without further source edits.
+- J-010c1: resolve the approval-bound `_shared` payload topology without widening published bytes
+  or permitting review/approval evidence to drift from the exact dependency closure.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
 - Disk: 84 authored - legacy REVIEW.json files 0 - canonical ready 0 (old claims provisional).
 - Catalog: 0 projection-backed published; legacy raw fixture chains remain non-published/non-crediting.
-- Consistency: 0 errors, 60 warnings. Full isolated suite on guarded `semiskill_test`: 878 passed,
-  4 skipped, 1 xpassed; this console run is not yet a persisted source-bound run artifact.
+- Consistency: 0 errors, 60 warnings. Final immutable suite on exact clean `eb0357a` and guarded
+  `semiskill_test`: 989 passed, 0 failed/errors, 6 skipped, 1 xpassed; credit remains none.
 - J-010b3e1: 189 dashboard tests plus 30 targeted pipeline/scoreboard/reconciliation tests; Ruff,
   Python, JavaScript, JSON, model-pin and diff checks pass; exact-byte data and Chrome audits have
   0 P0/P1/P2 across all 11 views at 375px.
 - J-010b3e2: immutable producer plus strict file-only reader/UI; 152 focused tests and independent
   reader/UI audits have zero P0/P1/P2.
-- First immutable run on `12c0bac`: FAIL - 987 passed, 2 failed, 6 skipped, 1 xpassed; both failures
-  were unit tests that did not clear intentionally pinned approval/export test DSNs. Targeted fixes pass.
+- Live Quality/Launch browser verification passes at 1440px and 375px with zero console, page, HTTP,
+  request or horizontal-overflow failures; the expired scoreboard remains an explicit hard no-go.
 - The last v2 snapshot predates commit `e6b6509` and is therefore unavailable for current catalog
   credit; the deterministic release gate remains blocked at 0/84.
 
 ## Immediate order
-1. Persist source-bound full-suite evidence against a clean commit and exact isolated test database.
-2. Add repeatable browser QA evidence, restart from trusted artifacts, and verify freshness.
-3. Resolve the approval-bound `_shared` payload topology and build the production Next.js catalog.
-4. Re-review/fix/recheck all 84, human-approve in batches <=10, publish and verify 84/84.
+1. Resolve the approval-bound `_shared` payload topology and exact dependency hashing.
+2. Build the production Next.js catalog and complete accessibility/security verification.
+3. Re-review/fix/recheck all 84 in batches <=10 with independent fresh contexts.
+4. Human-approve exact versions, publish 84, regenerate outputs and prove the release gate.
 
 ## Standing hazards
 - Never run database tests concurrently; every fixture is bound to an exact `_test` database and
@@ -56,4 +56,4 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   console error as a missing favicon request; the page now loads with zero console/network errors.
 
 ## Last checkpoint commit
-- a673e39: committed the J-010b3e3b browser correction with a fresh STATUS witness.
+- eb0357a: recorded the browser-verified suite checkpoint; this repair reconciles its final evidence.

@@ -806,8 +806,23 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010b3e3c] produce the final immutable run against the favicon-corrected checkpoint and repeat
-  the live Quality/Launch browser verification without further source edits.
+- [J-010b3e3c] 2026-08-06T21:33:52Z  status: done
+  what: produced the final source-bound suite PASS for the favicon-corrected clean checkpoint and
+  independently verified its non-crediting Quality and Launch presentation at desktop/mobile widths
+  delayed: true, reason: the immutable run and browser audit completed after the preceding state
+  checkpoint, so this repair records the already-finished evidence before any new source work
+  artifacts: eb0357a, dashboard/runs/full-suite/runs/b20a98a6-ff70-4c89-bc1c-b81a8e6efb90.json,
+  sha256:edd0511c0a789c3b2af5a78bfed873e0959fccf7e93be7451213919d4d9d7be2;
+  989 passed, 0 failed, 0 errors, 6 skipped and 1 xpassed on exact `semiskill_test`; strict API
+  projection matched commit/tree/database/run identities; isolated Chrome at 1440px and 375px had
+  zero console, page, HTTP, request or horizontal-overflow failures and retained the hard no-go for
+  the expired canonical scoreboard
+  next: J-010c1 resolve the approval-bound `_shared` payload topology
+
+
+## In-Flight Step
+- [J-010c1] resolve the approval-bound `_shared` payload topology without widening published bytes
+  or permitting review/approval evidence to drift from the exact dependency closure.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
