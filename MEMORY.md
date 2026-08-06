@@ -551,9 +551,20 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a make every offline export explicitly permission-scoped and reject mixed labels
 
 
+- [J-010a1] 2026-08-06T11:12:08Z  status: done
+  what: established a resolver-issued export principal and a dedicated database capability whose
+  login is authorized for exactly one permission label; snapshot references, active SQL heads,
+  frozen evidence IDs, payload hashes and database identities must all reconcile before a payload
+  can be materialized, and direct owner/runtime/table reads are outside the export path
+  artifacts: 9f24b4f, ADR-012, semiskill/artifacts/migrations/0012_scoped_export_reader.sql,
+  semiskill/authoring/export_scope.py, semiskill/artifacts/store.py,
+  tests/authoring/test_export_scope.py, tests/artifacts/test_privilege_separation.py, 36 passed
+  next: J-010a2 route every offline materializer through the capability and emit atomic manifests
+
+
 ## In-Flight Step
-- [J-010a] make static/offline catalog exports principal- and permission-scoped, visibly stamped,
-  hash-manifested, and fail closed on mixed labels before expanding the production read API.
+- [J-010a2] route catalog/site/pack through the single-label capability, stamp scope provenance,
+  reproduce approved payload bytes, and atomically replace complete export trees.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

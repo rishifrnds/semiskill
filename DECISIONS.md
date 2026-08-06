@@ -256,6 +256,30 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   semiskill/artifacts/migrations/0011_verified_publication_projection.sql;
   semiskill/governance/reconciliation.py
 
+## [ADR-012] Materialize offline exports through one exact-label database capability
+- Date: 2026-08-06
+- Status: accepted
+- Context: Static files cannot enforce ACLs after download, and filtering an owner-level all-label
+  result in Python would disclose restricted payloads before the filter. A caller-supplied label or
+  a constructible principal record is not sufficient authorization for a distributable export.
+- Decision: Every export is authorized by a resolver-issued principal and read through a distinct
+  `semiskill_export_reader` login that holds exactly one label-marker role. A bounded
+  `SECURITY DEFINER` function selects that label before returning only active frozen evidence; the
+  export then reconciles database identity, canonical snapshot, active heads, artifact IDs and
+  payload hashes. Local OS identity can issue only a public scope; production requires Entra/OIDC.
+- Alternatives considered:
+  - Load all publications through the owner/runtime DSN and filter in Python - rejected because
+    unauthorized bodies would already have crossed the query boundary.
+  - Reuse the general ACL clearance login - rejected because downloadable materialization is a
+    narrower capability and needs an exact single-label credential, not a multi-label query session.
+- Consequences: `SEMISKILL_EXPORT_DATABASE_URL` is required outside isolated tests and must identify
+  a separate login with exactly one marker role. Restricted exports use separately provisioned
+  credentials; missing or multi-label capability fails closed. Export scope stamps contain a
+  one-way principal reference, never the raw employee subject or authentication context.
+- Related: ADR-002, ADR-005, ADR-011, J-010a1;
+  semiskill/artifacts/migrations/0012_scoped_export_reader.sql;
+  semiskill/authoring/export_scope.py
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

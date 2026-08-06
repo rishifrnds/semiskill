@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T11:11:22Z_
+_Last updated: 2026-08-06T11:12:08Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -40,9 +40,9 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- 01275da — canonical fail-closed dashboard, 15-second refresh, provenance/freshness/worker state,
-  and stricter scoreboard timestamp/database/source validation.
+- 9f24b4f — resolver-issued export authority plus exact-label SQL reader, snapshot/head/hash
+  reconciliation, and structurally distinct runtime/clearance/actuator/export identities.
 
 ## Last checkpoint commit
-- 01275da: 674 passed, 4 skipped, 1 xpassed; browser script and model JSON parse; the development
-  snapshot remains 84/0/0/0/0 authored/reviewed/ready/approved/published.
+- 9f24b4f: 36 scoped export, migration-0011 and real-login privilege tests passed on the recreated
+  isolated test DB; canonical development counts remain 84/0/0/0/0 authored/reviewed/ready/approved/published.
