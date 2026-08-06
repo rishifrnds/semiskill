@@ -402,37 +402,36 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-003a round 2 over the 32 not-ready, then J-003b over the 49 never-reviewed, then publish
 
 
+- [J-007] 2026-08-06T06:44:11Z  status: done
+  what: recovered the unrecorded workflow/prompt-library checkpoint and repaired stale session state
+  after the user approved takeover; measured 84 authored, 83 predicted lint-pass, 35 review records,
+  3 nominal ready, 0 registered published, 2 unregistered fixture publishes, and 455 tests collected
+  artifacts: 2df246c, docs/WORKFLOW.md, docs/PROMPT_LIBRARY.md, STATUS.md, .session-lock
+  next: J-008 harden the review and human-approval gates before any content batch
+
+
 ## In-Flight Step
-- [J-003] gate the 80 unreviewed/not-ready skills: adversarial review -> fix -> INDEPENDENT recheck
-  -> REVIEW.json, in 7 batches of 12 via tools/dv-gate.js. Blocked on J-004 landing first.
-- [J-004] pack-wide handoff vocabulary: _shared/handoff-vocabulary.md + C003 rescoped to registered
-  fields + a distinct name-collision rule. Design workflow in flight.
-- [J-005] make the recheck gate a PRECONDITION of `semiskill wave`, not a scoreboard report.
+- [J-008] harden content-review artifacts, deterministic readiness, payload hashing and explicit
+  human approval before resuming any skill-content batch.
 
 ## Pending Steps
-1. [H-001] ADR-008 — SKILL.md conforms to the Agent Skills open standard; taxonomy under `metadata:`
-2. [H-002] intake.py: parse `allowed-tools` as str-or-list (fixes the 0.000 bug)
-3. [H-003] intake.py: metadata facet fallback + `semiskill-title` display name (back-compat)
-4. [H-004] semiskill/authoring/lint_body.py — stdlib-only body linter + rule table
-5. [H-005] semiskill/authoring/facets.py — enumerated facet vocabulary
-6. [H-006] semiskill/authoring/lint.py + `semiskill lint` + lint/scanner drift guard
-7. [H-007] shared references (failure-signature schema, report schemas, triage buckets)
-8. [H-008] author skill 1 + draft the intake questionnaire for the DV manager
-9. [H-009] 3-day validation with her + two engineers (kill criterion agreed up front)
-10. [H-010..H-013] wave.py driver: hash/dry-run, ADR-009, per-item isolation, idempotent supersede
-11. [H-014..H-016] author skills 2-6, retire scripts/demo.py, run the wave
-12. [H-017..H-022] pack.py, pack docs, ADR-010 truthful install, SharePoint generator, harden delimiter, backlog
+1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
+2. [J-009] canonical scoreboard snapshot + live dashboard without seed/fixture fallback
+3. [J-010] ACL/provenance-bound catalog API and skills.sh-shaped list/detail UI
+4. [J-011] re-review and close the 3 nominal-ready skills
+5. [J-012] fix + fresh recheck the 32 reviewed-not-ready skills in batches <=10
+6. [J-013] review + fix + fresh recheck the 49 never-reviewed skills in batches <=10
+7. [J-014] explicit human approvals, publish 84, regenerate site/pack, adversarial final verify
 
 ## Current Phase
-Phase H: Deliver a validated DV skill pack a Cursor user can install, plus a SharePoint catalog page
+Phase J: Finish and ship the security-verified 84-skill DV catalog
 
 Exit criteria:
-- One SKILL.md form is simultaneously Agent-Skills-spec valid, Cursor-loadable, and SemiSkill-ingestible
-  (ADR-008), with the existing 8 seeds' tests passing unmodified
-- `semiskill lint` catches every empirically-measured wave-killer offline, and its scores provably match
-  the real scanners (drift guard)
-- A wave of ≥6 DV skills published **only** via the gate (passing scan_run + approval, no back-door),
-  re-runnable idempotently, with a wave report
-- `semiskill pack` emits a Cursor-installable pack whose bytes are identical to what published
-- A real DV engineer installs a skill in Cursor and it fires unprompted on a realistic phrasing
-- `docker compose up -d db && pytest` all green
+- All 84 active registry skills have hash-bound independent rechecks with zero open blocking findings.
+- All 84 exact versions have explicit human approval artifacts and are published; no automatic,
+  fixture, unregistered, stale-hash, facet-drifted or ungated publication exists.
+- Deterministic scoreboard reports 16/16 roles at >=5 and the dashboard reconciles registry, disk,
+  review artifacts and catalog without inferred or fallback counts.
+- Catalog list/detail, static export and installable pack are ACL/provenance-correct and contain no
+  fabricated metric; bytes match the approved payloads.
+- Full Python and UI verification suites pass serially on isolated test infrastructure.
