@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T07:06:42Z_
+_Last updated: 2026-08-06T07:13:08Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-008e: convert wave from auto-publish/file-gate behavior to exact-version scan/queue behavior;
-  remove the ungated escape hatch and make embedded review metadata fail closed.
+- J-008f: implement authenticated approval/v1 bound to the exact skill/hash, automated scan chain,
+  independent content review, reason, actor and authentication context; legacy approvals go dark.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -37,6 +37,6 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- dea76c8 — all 35 legacy REVIEW.json files were imported to the dev store as non-authoritative
-  artifacts and renamed into hash-addressed archive paths; canonical skill versions now retain and
-  fingerprint exact UTF-8 SKILL.md source text, including formatting and line endings.
+- d88e6d2 — wave is queue-only: exact versions and scan chains are reused, no approval or catalog
+  mutation is possible, the ungated flag is a tombstone, embedded review metadata fails closed, and
+  stages 1–5 plus stage-6 aggregate are explicit (stage 5 says not_sampled when skipped).

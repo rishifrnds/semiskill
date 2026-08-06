@@ -448,9 +448,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008e make wave queue-only and reject embedded review metadata
 
 
+- [J-008e] 2026-08-06T07:13:08Z  status: done
+  what: converted wave into an exact-version capture/scan/content-reconciliation queue that exposes
+  immutable approval inputs and cannot publish, unpublish, supersede or bypass review; embedded
+  REVIEW.json now fails closed; stages 1/2/3/4/5 and stage-6 aggregate are recorded with truthful
+  not_run/not_sampled states; 67 targeted queue/pipeline/capture/lint tests pass
+  artifacts: d88e6d2, semiskill/wave.py, semiskill/spine/pipeline.py,
+  semiskill/capture/intake.py, semiskill/cli.py, tests/wave/test_wave.py
+  next: J-008f implement authenticated approval/v1 and make legacy approvals non-authoritative
+
+
 ## In-Flight Step
-- [J-008e] remove automatic/ungated publication from wave, reuse exact captured versions, expose
-  approval inputs, and reject embedded review metadata.
+- [J-008f] implement the explicit authenticated human approval actuator, approval/v1 migration,
+  active correction-chain publication and exact frozen evidence badges.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
