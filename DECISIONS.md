@@ -384,6 +384,30 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-014, ADR-015, J-010b2; dashboard/action_queue.py; dashboard/server.py;
   dashboard/index.html
 
+## [ADR-017] Dashboard state reads cannot execute tests or network health probes
+- Date: 2026-08-06
+- Status: accepted
+- Context: `/api/state` executed `pytest --collect-only`, `docker info` and an environment-controlled
+  HTTP health request on every cache miss. Collection imports test and plugin code, Docker can target
+  a remote daemon, and the HTTP target created an egress/SSRF surface; failure also caused a static
+  function count to be mislabeled as collected tests.
+- Decision: Request-time state reads expose only static test-function inventory and bounded Git plus
+  read-only database observations. The response retires `repo.collected_tests`, `runtime.docker` and
+  `runtime.api`; `SEMISKILL_API` is no longer a dashboard environment contract. Full-suite PASS/FAIL
+  may appear only from a separately produced, source/tree/test-database-bound immutable run record.
+- Alternatives considered:
+  - Cache pytest collection — rejected because the first request and every failed/zero collection
+    still executes arbitrary import/plugin code and cache races do not create verification evidence.
+  - Keep Docker and API probes behind loopback — rejected because environment configuration can
+    redirect them and a presentation GET must not trigger unrelated process or network work.
+  - Treat static `def test_` discovery as a test result — rejected because parametrization,
+    collection errors, fixtures and execution outcomes are unobserved.
+- Consequences: The dashboard shows a smaller but truthful health surface and calls its source count
+  “test functions.” Until a trusted external runner writes the strict evidence contract, full-suite
+  status remains unavailable even when a console run succeeded. Git observations remain bounded
+  subprocesses and must not be confused with test execution.
+- Related: ADR-014, ADR-016, J-010b3a; dashboard/server.py; dashboard/index.html
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

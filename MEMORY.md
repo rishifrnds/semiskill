@@ -679,9 +679,21 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010b3 remove remaining stale or fabricated dashboard evidence and runtime probes
 
 
+- [J-010b3a] 2026-08-06T17:07:28Z  status: done
+  what: removed request-triggered pytest collection, Docker execution and HTTP health egress from
+  dashboard state reads; test counts are now explicit static function-definition inventory, the
+  remaining Postgres probe is read-only with sanitized failure output, and obsolete live/green model
+  claims were removed under the integrity-pinned configuration contract
+  artifacts: 6a4c8cd, ADR-017, dashboard/server.py, dashboard/index.html,
+  dashboard/model.json, dashboard/model.sha256, dashboard/README.md,
+  tests/dashboard/test_dashboard.py; 117 focused tests passed; Ruff, Python, JavaScript, JSON,
+  exact model-pin and diff checks passed
+  next: J-010b3b reconcile stale pipeline, publication and artifact-schema claims
+
+
 ## In-Flight Step
-- [J-010b3] remove remaining stale or fabricated dashboard evidence and replace request-time test
-  discovery/probes with immutable, observation-bound evidence before browser verification.
+- [J-010b3b] reconcile the dashboard pipeline, publication, migration and artifact-schema views with
+  current source contracts, then remove any curated record that receives observed green credit.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
