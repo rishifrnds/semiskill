@@ -489,9 +489,18 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008i remove remaining retired auto-publish and REVIEW.json assumptions, run full suite
 
 
+- [J-008i] 2026-08-06T07:49:20Z  status: done
+  what: removed the remaining automatic-publication and file-review assumptions from scoreboard,
+  seed intake, controller queueing and red-team harnesses; declines are non-crediting provenance,
+  valid published cells use frozen content evidence, and the full isolated suite is green
+  artifacts: db89147, semiskill/authoring/scoreboard.py, semiskill/seed.py,
+  semiskill/intelligence/controller.py, semiskill/redteam/harness.py, 486 passed, 1 xpassed
+  next: J-009a build the canonical deterministic scoreboard snapshot and persistence contract
+
+
 ## In-Flight Step
-- [J-008i] repair scoreboard, seed, controller and red-team assumptions around the retired callback
-  publisher and file reviews, then run the full isolated Python suite and classify true residuals.
+- [J-009a] replace the legacy presentation scoreboard with the canonical deterministic snapshot,
+  conservation checks, database/source identity and exact approval/review/scan provenance.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

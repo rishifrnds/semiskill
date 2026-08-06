@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T07:39:39Z_
+_Last updated: 2026-08-06T07:49:20Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,19 +17,18 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-008i: repair scoreboard, seed, controller and red-team assumptions around retired auto-publish
-  and file-review paths; then rerun the full isolated suite and classify any true residual defects.
+- J-009a: build the canonical deterministic scoreboard snapshot with exact source/database identity,
+  funnel conservation, every role/level cell, anomaly lists and frozen artifact provenance.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
 - Disk: 84 authored · legacy REVIEW.json files 0 · canonical ready 0 (old claims provisional).
 - Catalog: 0 registered published; dev DB contains 2 unregistered test fixtures.
-- Consistency: 0 errors, 60 warnings. Latest full isolated run: 429 passed, 30 failed, 25 errors,
-  1 xpassed; frozen approval-chain governance/catalog/pack/site run: 46 passed.
+- Consistency: 0 errors, 60 warnings. Full isolated Python suite: 486 passed, 1 xpassed.
 
 ## Immediate order
-1. Harden review collection/readiness/payload hashing and approval provenance.
-2. Build deterministic scoreboard snapshot and remove dashboard fixture fallback.
+1. Build deterministic scoreboard snapshot and remove dashboard fixture fallback.
+2. Build ACL/provenance-bound catalog API and production Next.js list/detail UI.
 3. Re-review 3 nominal-ready, fix/recheck 32 not-ready, review/fix/recheck 49 untouched.
 4. Human-approve in batches <=10, publish, regenerate catalog/site/pack, verify 84/84.
 
@@ -43,5 +42,5 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   Entra-only, legacy approvals are non-authoritative, and unpublish is an authenticated correction.
 
 ## Last checkpoint commit
-- 0d4323a: active publications and all offline exports now fail closed and freeze badges/manifests
-  to the approval's exact content review, security aggregate and scan artifact IDs.
+- db89147: all automatic publication assumptions are removed and the isolated Python suite is green;
+  scoreboard now treats declines as non-crediting and published gates as artifact-derived.
