@@ -650,9 +650,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010b remove unsafe dashboard actuators and fabricated launch credit
 
 
+- [J-010b1] 2026-08-06T15:21:53Z  status: done
+  what: removed every dashboard mutation route and browser control that could directly start tests,
+  processes, containers or database work; replaced them with non-crediting queue requests, corrected
+  the isolated-suite and database-diagnostic templates, and added accessible busy/live feedback
+  delayed: true, reason: the interrupted prior turn left a verified dirty tree and stale checkpoint;
+  the checkpoint was repaired before any new implementation and the unsafe ingestion boundary remains
+  explicitly in-flight rather than receiving security credit
+  artifacts: 3a0f545, ADR-015, dashboard/server.py, dashboard/index.html,
+  dashboard/model.json, dashboard/README.md, tests/dashboard/test_dashboard.py; 42 passed;
+  Python, JavaScript and JSON syntax plus forbidden-route scans passed
+  next: J-010b2 harden the append-only action queue and archive boundary
+
+
 ## In-Flight Step
-- [J-010b] remove direct HTTP process/test actuators and fabricated planning metrics, then replace
-  them with a same-origin, CSRF-bound append-only task queue and evidence-typed launch views.
+- [J-010b2] replace arbitrary action ingestion and queue rotation with a same-origin, CSRF-bound,
+  template-derived append-only task queue, strict receipts, locking and adversarial HTTP tests.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

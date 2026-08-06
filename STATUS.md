@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T15:20:55Z_
+_Last updated: 2026-08-06T15:21:53Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b1 checkpoint: dashboard mutation routes no longer execute tests, processes, containers, or
-  database work; next harden all feedback controls into a same-origin, CSRF-bound append-only queue.
+- J-010b2: harden all feedback controls into a same-origin, CSRF-bound, server-template-derived
+  append-only queue with durable receipts, serialization, archival audit and hostile HTTP tests.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -48,8 +48,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   remains fail-closed on BLK-001 until distinct identities and tenant configuration exist.
 
 ## Last implementation commit
-- ff70fce - observation-bound v2 scoreboard, complete input-tree/live DB/schema witness, sanitized
-  adoption projection and server-authoritative dashboard provenance; 101 focused tests.
+- 3a0f545 - removed dashboard mutation command actuators, corrected safe request templates and added
+  accessible queue busy/live feedback; 42 focused tests.
 
 ## Last checkpoint commit
-- 65413ee: recorded the exact development migration adoption and current live baseline.
+- 248c24f: recorded the observation-bound dashboard trust contract.

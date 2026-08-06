@@ -337,6 +337,25 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-011, ADR-013, J-010a9; dashboard/server.py;
   semiskill/authoring/snapshot.py
 
+## [ADR-015] Dashboard mutations are queue-only and cannot invoke command actuators
+- Date: 2026-08-06
+- Status: accepted
+- Context: Loopback-only binding and a fixed command allowlist did not make browser-triggered test,
+  container or process execution a safe control plane. A cross-site request, duplicate click or
+  compromised dashboard could invoke mutable repository code outside the repository and database gates.
+- Decision: The dashboard exposes no mutation route that runs commands. Mutation controls can only
+  request work through the audited queue; any worker executes it separately under normal locking,
+  identity, isolated-database and evidence gates. Bounded read-only state probes remain presentation
+  inputs and cannot earn verification credit.
+- Alternatives considered:
+  - Retain a fixed command allowlist - rejected because the allowed commands still execute mutable
+    repository code and can race the serial database-test contract.
+  - Keep execution behind a loopback check - rejected because DNS rebinding and cross-site requests
+    make network location alone an insufficient authorization boundary.
+- Consequences: `/api/run` and `/api/runs` are retired. Queue hardening is a separate required gate;
+  until J-010b2 passes, queued requests are untrusted and must not be consumed automatically.
+- Related: ADR-014, J-010b1; dashboard/server.py; dashboard/index.html
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>
