@@ -562,9 +562,21 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a2 route every offline materializer through the capability and emit atomic manifests
 
 
+- [J-010a2] 2026-08-06T11:28:46Z  status: done
+  what: bound standalone catalog and production static-site exports to one exact-label capability,
+  reproduced frozen approved payload bytes and full multi-file install prompts, stamped safe scope
+  provenance, and transactionally replaced owned complete trees with independently verified manifests
+  delayed: true, reason: the combined materializer and fault-injection test cycle crossed the atomic
+  checkpoint window; the coordinator stopped, repaired the stale test assertion, and checkpointed
+  artifacts: 1679115, semiskill/authoring/export_files.py,
+  semiskill/authoring/catalog_page.py, semiskill/authoring/site.py,
+  tests/authoring/test_export_files.py, 38 focused tests passed on isolated semiskill_test
+  next: J-010a3 bind the pack and CLI, then remove residual unexecuted-fixture KPI claims
+
+
 ## In-Flight Step
-- [J-010a2] route catalog/site/pack through the single-label capability, stamp scope provenance,
-  reproduce approved payload bytes, and atomically replace complete export trees.
+- [J-010a3] bind pack/catalog/site CLI commands to explicit OS/Entra export scopes, make the pack
+  reproduce only approval-bound bytes, and remove residual unexecuted-fixture KPI claims.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
