@@ -87,7 +87,7 @@ def test_name_matching_folder_is_clean(tmp_path):
     assert r.ok and r.predicted_verdict == "approve"
 
 
-def test_review_prose_is_outside_the_scanned_skill_payload(tmp_path):
+def test_embedded_review_metadata_is_refused_instead_of_becoming_a_scanner_blind_spot(tmp_path):
     d = tmp_path / "dv-sim-log-first-error"
     d.mkdir()
     (d / "SKILL.md").write_text(md(), encoding="utf-8")
@@ -96,10 +96,8 @@ def test_review_prose_is_outside_the_scanned_skill_payload(tmp_path):
         encoding="utf-8",
     )
 
-    r = lint_skill_dir(d)
-
-    assert r.ok and r.predicted_verdict == "approve"
-    assert r.stage_safety[1] == 1.0
+    with pytest.raises(ValueError, match="governance metadata must not be embedded"):
+        lint_skill_dir(d)
 
 
 def test_missing_description_is_an_error():

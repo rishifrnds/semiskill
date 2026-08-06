@@ -63,26 +63,26 @@ def cmd_lint(args, store, out) -> int:
 
 
 def cmd_wave(args, store, out) -> int:
-    """Publish a directory of authored skills through the real gate (ADR-009).
+    """Capture and scan authored skills, then queue exact evidence for later human approval.
 
-    Refuses to touch a database whose name looks like the test DB unless --yes is given: the pytest
-    fixture TRUNCATEs `artifacts`, so pointing a wave at it silently destroys a real catalog.
-
-    Refuses to publish a skill whose `REVIEW.json` does not record an independent `recheck.ready`,
-    unless --allow-ungated is given.
+    Wave never publishes. It also refuses the isolated pytest database unconditionally because the
+    fixture truncates it between tests.
     """
-    from semiskill.authoring.gate import READY, gate_status, read_review_dir
     from semiskill.authoring.lint import lint_wave_dir, render as render_lint
     from semiskill.wave import load_wave, render_report, run_wave, write_wave_report
 
     dsn = args.dsn or Config.from_env().database_url
     writes = args.command == "wave" and not args.dry_run
     dbname = dsn.rsplit("/", 1)[-1].split("?")[0]
-    if writes and not args.yes and dbname == "semiskill":
-        print("refusing to write to the default/test database without --yes\n"
+    if writes and dbname.endswith("_test"):
+        print("refusing to queue candidates in the isolated pytest database\n"
               f"  dsn: {dsn}\n"
-              "  the test fixture TRUNCATEs `artifacts`; point --dsn at a catalog DB, or pass --yes.",
+              "  point --dsn at the development catalog database.",
               file=out)
+        return 2
+    if writes and not args.yes and dbname == "semiskill":
+        print("refusing to write to the development catalog without --yes\n"
+              f"  dsn: {dsn}\n  pass --yes after checking the target database.", file=out)
         return 2
 
     if args.lint_first:
@@ -115,23 +115,14 @@ def cmd_wave(args, store, out) -> int:
         store = PostgresArtifactStore(dsn)
 
     if args.command == "wave-plan" or args.dry_run:
-        gates = {i.slug: gate_status(read_review_dir(i.path)) for i in items}
         for i in items:
-            print(f"{i.slug}\t{i.payload_sha256[:12]}\t{gates[i.slug]}\t{i.path}", file=out)
-        # A plan that says "40 would run" when 38 have no gate record is the same misleading
-        # report the wave itself refuses to produce.
-        refused = [s for s, g in gates.items() if g != READY]
-        print(f"\n{len(items)} skill(s) would run against {dsn}", file=out)
-        if refused and not args.allow_ungated:
-            print(f"{len(refused)} would be REFUSED by the content gate (no ready REVIEW.json): "
-                  + ", ".join(refused), file=out)
-        elif refused:
-            print(f"{len(refused)} would publish ungated (--allow-ungated): " + ", ".join(refused),
-                  file=out)
+            print(f"{i.slug}\t{i.payload_sha256[:12]}\t{i.path}", file=out)
+        print(f"\n{len(items)} skill(s) would be captured/scanned against {dsn}; "
+              "wave would create zero approvals and zero publications.", file=out)
         return 0
 
     report = run_wave(store=store, dsn=dsn, items=items, permissions_label=args.label,
-                      on_duplicate=args.on_duplicate, allow_ungated=args.allow_ungated,
+                      on_duplicate=args.on_duplicate,
                       journal_path=Path(args.reports) / "journal.jsonl" if args.reports else None)
     print(render_report(report, style="markdown"), file=out)
     if args.reports:
@@ -252,7 +243,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for name, helptext, needs_store in (
         ("wave-plan", "show what a wave would do, without writing anything", False),
-        ("wave", "publish a directory of skills through the pipeline + gate", False),
+        ("wave", "capture/scan skills and queue exact evidence for human approval", False),
     ):
         w = sub.add_parser(name, help=helptext)
         w.add_argument("path", help="directory containing skill folders")
@@ -265,9 +256,6 @@ def build_parser() -> argparse.ArgumentParser:
         w.add_argument("--dry-run", action="store_true")
         w.add_argument("--no-lint-first", dest="lint_first", action="store_false", default=True,
                        help="skip the pre-flight lint (not recommended)")
-        w.add_argument("--allow-ungated", dest="allow_ungated", action="store_true",
-                       help="publish skills with no independent REVIEW.json recheck (fixtures and "
-                            "seeds only; every such skill is named in the wave report)")
         w.add_argument("--yes", action="store_true", help="confirm writing to this database")
         w.set_defaults(func=cmd_wave, needs_store=needs_store)
 

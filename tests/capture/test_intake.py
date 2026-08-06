@@ -173,10 +173,6 @@ def test_metadata_not_a_mapping_is_ignored_not_fatal():
 
 def test_load_skill_dir(tmp_path):
     (tmp_path / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
-    (tmp_path / "REVIEW.json").write_text(
-        '{"recheck":{"ready":true},"prose":"https://review.invalid/function("}',
-        encoding="utf-8",
-    )
     (tmp_path / "notes.json").write_text('{"submitter":"payload"}', encoding="utf-8")
     (tmp_path / "scripts").mkdir()
     (tmp_path / "scripts" / "gen.py").write_text("print('hi')", encoding="utf-8")
@@ -186,6 +182,14 @@ def test_load_skill_dir(tmp_path):
         "notes.json": '{"submitter":"payload"}',
         "scripts/gen.py": "print('hi')",
     }
+
+
+@pytest.mark.parametrize("filename", ["REVIEW.json", "review.JSON"])
+def test_load_skill_dir_refuses_embedded_governance_metadata(tmp_path, filename):
+    (tmp_path / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
+    (tmp_path / filename).write_text('{"recheck":{"ready":true}}', encoding="utf-8")
+    with pytest.raises(ValueError, match="governance metadata must not be embedded"):
+        load_skill_dir(tmp_path)
 
 
 def test_load_skill_dir_requires_skill_md(tmp_path):

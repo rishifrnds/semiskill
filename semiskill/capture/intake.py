@@ -15,12 +15,6 @@ from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, Act
 
 _FENCE = "---"
 
-# Legacy content-review records are governance evidence, not installable skill content.  Keep the
-# exception deliberately exact and root-scoped: every other file under the directory remains an
-# untrusted part of the payload and must be scanned.  New reviews live in the artifact store; this
-# compatibility boundary exists only while legacy REVIEW.json records are migrated.
-_LEGACY_GOVERNANCE_FILES = frozenset({"REVIEW.json"})
-
 # Canonical identity of the installable skill bytes. Governance metadata, artifact IDs, actors,
 # and timestamps are intentionally absent.
 PAYLOAD_FINGERPRINT_FIELDS = (
@@ -149,11 +143,17 @@ def load_skill_dir(path: str | Path) -> tuple[str, dict[str, str]]:
         skill_md = skill_md_path.read_bytes().decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError(f"SKILL.md is not valid UTF-8: {skill_md_path}") from exc
+    embedded_reviews = [
+        child for child in p.iterdir()
+        if child.is_file() and child.name.casefold() == "review.json"
+    ]
+    if embedded_reviews:
+        raise ValueError(
+            f"governance metadata must not be embedded in a skill payload: {embedded_reviews[0]}"
+        )
     files: dict[str, str] = {}
     for f in sorted(x for x in p.rglob("*") if x.is_file() and x.name != "SKILL.md"):
         rel = f.relative_to(p).as_posix()
-        if rel in _LEGACY_GOVERNANCE_FILES:
-            continue
         try:
             files[rel] = f.read_text(encoding="utf-8")
         except UnicodeDecodeError:
