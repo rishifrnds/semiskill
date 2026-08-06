@@ -76,20 +76,22 @@ def _write_scan(store: ArtifactStore, sv: Artifact, r: ScanResult, label: str) -
 
 
 def _write_review(store: ArtifactStore, sv: Artifact, scans: list[Artifact], verdict: str,
-                  aggregate: float, label: str) -> Artifact:
+                  aggregate: float, label: str, judge_required: bool) -> Artifact:
     art = Artifact.new(
         artifact_type=ArtifactType.REVIEW, source_system=SourceSystem.CLI,
         actor="l5-controller", actor_kind=ActorKind.AGENT,
         input_refs=[sv.artifact_id, *[a.artifact_id for a in scans]],
         payload={"review_kind": "security_aggregate", "schema_version": 1, "stage": 6,
                  "verdict": verdict, "aggregate_safety": aggregate,
+                 "judge_required": judge_required,
                  "scan_artifact_ids": [str(a.artifact_id) for a in scans]})
     art = replace(art, permissions_label=label).with_eval_score(aggregate)
     return store.append(art)
 
 
 def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id,
-                 security_audit_runner=None, judge_risk_scanner=None) -> PipelineResult:
+                 security_audit_runner=None, judge_risk_scanner=None,
+                 judge_required: bool = True) -> PipelineResult:
     sv = store.get(skill_version_id)
     if sv is None or sv.artifact_type is not ArtifactType.SKILL_VERSION:
         raise ValueError("skill_version not found")
@@ -121,7 +123,7 @@ def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id,
         "reject" if aggregate < REJECT_THRESHOLD else
         "request-changes"
     )
-    review = _write_review(store, sv, scans, verdict, aggregate, label)
+    review = _write_review(store, sv, scans, verdict, aggregate, label, judge_required)
     return PipelineResult(skill_version_id=skill_version_id, scan_artifacts=scans,
                           review=review, verdict=verdict,
                           blocked_at=(ScanStage(hard_failed[0].payload["stage"])

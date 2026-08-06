@@ -34,14 +34,20 @@ def derive_state(skill_version_id, artifacts: Iterable[Artifact]) -> SkillState:
     """
     related = [a for a in artifacts if skill_version_id in a.input_refs]
     types = {a.artifact_type for a in related}
-    approvals = [a for a in related if a.artifact_type is ArtifactType.APPROVAL]
+    approvals = [
+        a for a in related
+        if a.artifact_type is ArtifactType.APPROVAL
+        and a.actor_kind.value == "human"
+        and a.payload.get("schema_version") == "approval/v1"
+        and a.payload.get("skill", {}).get("artifact_id") == str(skill_version_id)
+    ]
     # An approval superseded by a correction (another approval's corrects_ref → it) is inactive;
     # the active one is the head of the correction chain (deterministic, not timestamp-dependent).
     superseded = {a.corrects_ref for a in approvals if a.corrects_ref is not None}
     active = [a for a in approvals if a.artifact_id not in superseded]
     latest = max(active, key=lambda a: a.timestamp_start, default=None)
 
-    if latest is not None and latest.payload.get("verdict") == "approve":
+    if latest is not None and latest.payload.get("decision") in {"approve", "unpublish"}:
         if latest.payload.get("published") is True:
             return SkillState.PUBLISHED
         return SkillState.APPROVED

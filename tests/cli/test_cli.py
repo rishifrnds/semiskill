@@ -1,7 +1,7 @@
 import io
 import pytest
 from semiskill.artifacts.schema import Artifact, ArtifactType
-from semiskill.cli import main
+from semiskill.cli import build_parser, main
 
 SKILL_MD = """---
 name: STA Timing Closure
@@ -66,6 +66,36 @@ def test_list_empty():
 def test_invalid_label_rejected(skill_dir):
     with pytest.raises(SystemExit):  # argparse rejects bad choice
         main(["submit", str(skill_dir), "--label", "top-secret"], store=FakeStore(), out=io.StringIO())
+
+
+def test_approve_requires_exact_hash_both_reviews_decision_and_reason():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["approve", "00000000-0000-0000-0000-000000000000"])
+
+
+def test_approve_has_no_actor_override():
+    argv = [
+        "approve", "00000000-0000-0000-0000-000000000000",
+        "--automated-review", "00000000-0000-0000-0000-000000000001",
+        "--content-review", "00000000-0000-0000-0000-000000000002",
+        "--expected-sha256", "0" * 64,
+        "--decision", "approve", "--reason", "I reviewed this exact evidence.",
+        "--actor", "forged-user",
+    ]
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(argv)
+
+
+def test_production_approve_fails_closed_without_entra_adapter():
+    out = io.StringIO()
+    rc = main([
+        "approve", "00000000-0000-0000-0000-000000000000",
+        "--automated-review", "00000000-0000-0000-0000-000000000001",
+        "--content-review", "00000000-0000-0000-0000-000000000002",
+        "--expected-sha256", "0" * 64,
+        "--decision", "approve", "--reason", "Reviewed.", "--environment", "production",
+    ], store=FakeStore(), out=out)
+    assert rc == 2 and "Entra/OIDC" in out.getvalue()
 
 
 def test_lint_needs_no_store_and_exits_nonzero_on_error(tmp_path, capsys):

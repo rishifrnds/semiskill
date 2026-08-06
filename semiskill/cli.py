@@ -42,6 +42,63 @@ def cmd_list(args, store, out) -> int:
     return 0
 
 
+def cmd_approve(args, store, out) -> int:
+    """Record one explicit decision bound to the logged-in OS identity and exact evidence IDs."""
+    from semiskill.governance.identity import IdentityRefused, local_os_identity
+    from semiskill.governance.publish import PublishRefused, decide_publication
+
+    if args.environment == "production":
+        print("approval refused: production requires the configured Entra/OIDC adapter", file=out)
+        return 2
+    try:
+        identity = local_os_identity()
+        approval = decide_publication(
+            store=store,
+            skill_version_id=args.skill_version_id,
+            automated_review_id=args.automated_review,
+            content_review_id=args.content_review,
+            expected_payload_sha256=args.expected_sha256,
+            decision=args.decision,
+            reason=args.reason,
+            identity=identity,
+            environment=args.environment,
+        )
+    except (IdentityRefused, PublishRefused) as exc:
+        print(f"approval refused: {exc}", file=out)
+        return 2
+    print(
+        f"decision={approval.payload['decision']} published={approval.payload['published']} "
+        f"approval_id={approval.artifact_id} actor={approval.actor}",
+        file=out,
+    )
+    return 0
+
+
+def cmd_unpublish(args, store, out) -> int:
+    """Append an authenticated correction to an exact active approval/v1."""
+    from semiskill.governance.identity import IdentityRefused, local_os_identity
+    from semiskill.governance.rollback import RollbackRefused, decide_unpublication
+
+    if args.environment == "production":
+        print("unpublish refused: production requires the configured Entra/OIDC adapter", file=out)
+        return 2
+    try:
+        identity = local_os_identity()
+        correction = decide_unpublication(
+            store=store,
+            published_approval_id=args.approval_id,
+            reason=args.reason,
+            identity=identity,
+            environment=args.environment,
+            quarantine=not args.no_quarantine,
+        )
+    except (IdentityRefused, RollbackRefused) as exc:
+        print(f"unpublish refused: {exc}", file=out)
+        return 2
+    print(f"unpublished approval={args.approval_id} correction={correction.artifact_id}", file=out)
+    return 0
+
+
 def cmd_lint(args, store, out) -> int:
     """Pre-flight lint. Deliberately needs no database: authoring feedback must be instant, and a
     wave must be provably clean before the first artifact is ever written."""
@@ -232,6 +289,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     ls = sub.add_parser("list", help="list submitted skills")
     ls.set_defaults(func=cmd_list, needs_store=True)
+
+    approve = sub.add_parser("approve", help="record an explicit authenticated publication decision")
+    approve.add_argument("skill_version_id")
+    approve.add_argument("--automated-review", required=True)
+    approve.add_argument("--content-review", required=True)
+    approve.add_argument("--expected-sha256", required=True)
+    approve.add_argument("--decision", required=True, choices=["approve", "reject"])
+    approve.add_argument("--reason", required=True)
+    approve.add_argument("--environment", choices=["development", "production"],
+                         default="development")
+    approve.set_defaults(func=cmd_approve, needs_store=True)
+
+    unpublish = sub.add_parser("unpublish", help="append an authenticated unpublication correction")
+    unpublish.add_argument("approval_id")
+    unpublish.add_argument("--reason", required=True)
+    unpublish.add_argument("--environment", choices=["development", "production"],
+                           default="development")
+    unpublish.add_argument("--no-quarantine", action="store_true")
+    unpublish.set_defaults(func=cmd_unpublish, needs_store=True)
 
     lt = sub.add_parser("lint", help="pre-flight lint a skill or a wave directory (no database)")
     lt.add_argument("path", help="a SKILL.md, a skill directory, or a tree of them")
