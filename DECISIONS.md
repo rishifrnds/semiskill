@@ -456,6 +456,33 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-014, ADR-017, ADR-018, J-010b3c; dashboard/model.json;
   dashboard/server.py; dashboard/index.html
 
+## [ADR-020] Dashboard state and queue actions share one semantic model trust root
+- Date: 2026-08-06
+- Status: accepted
+- Context: The adjacent model digest detected byte drift but `build_state` parsed the body separately
+  from action-template verification, accepted correctly re-pinned authority-shaped fields, and let an
+  idempotent UUID replay return before checking post-start drift. Prompt text also lacked a deterministic
+  approval boundary beyond repository review.
+- Decision: `semiskill.dashboard-model/v1` is loaded from one raw byte read per model-dependent
+  operation; adjacent and startup hashes are checked before UTF-8 decoding or strict JSON parsing.
+  Deterministic semantic validation fixes every non-crediting authority, cohort and availability
+  invariant, while all 36 action templates must match code-reviewed exact digests. `/api/state` obtains
+  the public model and inbox from one queue-owned snapshot, and replay requires the row's exact registry.
+- Alternatives considered:
+  - Validate only action records - rejected because correctly re-pinned launch, metric, asset and funnel
+    fields could still manufacture observed authority in the command centre.
+  - Trust an updated adjacent digest as approval - rejected because an unkeyed hash proves byte
+    consistency, not review, authenticity or permission to widen separate-worker instructions.
+  - Re-read the model independently for state and templates - rejected because even fail-closed drift
+    checks leave an avoidable mixed-snapshot window and duplicate the authority boundary.
+- Consequences: Any schema change or action edit requires coordinated validator, digest-allowlist,
+  tests, model and pin updates plus server restart. Every model-dependent state/queue surface becomes
+  unavailable on mismatch or malformed types; old queued rows remain inspectable only under their
+  valid current model, and cannot be replayed under a different registry. Direct code writers remain
+  governed by repository and host ACLs; the digest is not a signature.
+- Related: ADR-016, ADR-019, J-010b3d; dashboard/action_queue.py; dashboard/server.py;
+  dashboard/model.json
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

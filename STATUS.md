@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T19:00:03Z_
+_Last updated: 2026-08-06T19:01:18Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3d checkpoint: one pinned semantic model snapshot now governs state and queue reads; drift,
-  unapproved prompts, malformed authority and old-registry replay fail closed; commit pending.
+- J-010b3e: fail closed on unavailable repository, state-file, ADR and runtime observations; add an
+  append-only clean-tree, source-bound isolated full-suite run artifact and file-only dashboard reader.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -32,8 +32,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   development database and matching empty-worker progress; release gate remains blocked at 0/84.
 
 ## Immediate order
-1. Commit the independently audited J-010b3d semantic trust-root slice.
-2. Fail closed on unavailable Git/state/ADR/runtime signals and persist source-bound full-suite evidence.
+1. Fail closed on unavailable Git/state/ADR/runtime signals and persist source-bound full-suite evidence.
+2. Complete dashboard accessibility/browser QA, restart from trusted artifacts, and verify freshness.
 3. Resolve the approval-bound `_shared` payload topology and build the production Next.js catalog.
 4. Re-review/fix/recheck all 84, human-approve in batches <=10, publish and verify 84/84.
 
@@ -47,8 +47,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   remains fail-closed on BLK-001 until distinct identities and tenant configuration exist.
 
 ## Last implementation commit
-- 929c7e1 - separated curated dashboard plans and hypotheses from observed evidence; 122 dashboard
-  and 42 targeted tests plus three independent zero-P0/P1/P2 audits.
+- 93cfdb0 - bound state and queue actions to one pinned semantic model snapshot; 164 dashboard and
+  42 targeted tests plus independent zero-P0/P1/P2 freshness, queue and scoreboard audits.
 
 ## Last checkpoint commit
-- 9990977: recorded the source-contract checkpoint and ADR-018.
+- b515d69: recorded the curated-truth checkpoint and ADR-019.

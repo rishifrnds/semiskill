@@ -716,9 +716,24 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010b3d make the integrity-pinned model one semantic trust root and close replay/drift bypasses
 
 
+- [J-010b3d] 2026-08-06T19:00:38Z  status: done
+  what: made one hash-before-decode, schema-v1 semantic model snapshot the source for dashboard state
+  and queue actions; exact code-reviewed template digests prevent prompt widening, every model-dependent
+  surface rejects post-start drift, and UUID replay is bound to the original registry across restarts
+  delayed: true, reason: adversarial single-snapshot, semantic-authority, replay, malformed-type and
+  hostile-rendering audits expanded the regression matrix and crossed the atomic checkpoint ceiling
+  artifacts: 93cfdb0, ADR-020, dashboard/action_queue.py, dashboard/server.py,
+  dashboard/model.json, dashboard/model.sha256, dashboard/README.md, README.md,
+  tests/dashboard/test_action_queue_http.py, tests/dashboard/test_dashboard.py;
+  164 dashboard tests and 42 targeted pipeline/publication/reconciliation tests; Ruff, Python,
+  JSON, exact model-pin and diff checks passed; freshness, queue and scoreboard audits found zero P0/P1/P2
+  next: J-010b3e fail closed on unavailable repository/state/ADR/runtime signals and persist a
+  clean-tree, source-bound isolated full-suite run artifact
+
+
 ## In-Flight Step
-- [J-010b3d] load one integrity-pinned model byte string through a fail-closed semantic validator,
-  then reject idempotent action replay after model/manifest drift before returning any receipt.
+- [J-010b3e] fail closed on unavailable repository, state-file, ADR and runtime observations; add an
+  append-only clean-tree, source-bound isolated full-suite run artifact and file-only dashboard reader.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
