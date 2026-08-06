@@ -15,8 +15,8 @@ python dashboard/server.py        # http://127.0.0.1:8899
 | Git branch, commits and dirty files | Feature register and declared status |
 | Module inventory and LOC | Risks and launch checklist |
 | Static test-function inventory (no execution result) | Metric targets, proposed pricing and channels |
-| Read-only Postgres artifact-store liveness | Integrity-pinned schema-v1 request templates |
-| Raw artifact counts when the database is available | Go-to-market hypotheses and draft assets |
+| Identity-bound read-only Postgres raw-artifact inventory | Integrity-pinned schema-v1 request templates |
+| Complete raw artifact counts when the database observation is available | Go-to-market hypotheses and draft assets |
 | Server-validated canonical scoreboard and progress | |
 | Exact migration/schema witness and redacted adoption provenance | |
 | Red-team input inventory and explicit execution availability | |
@@ -33,7 +33,12 @@ $env:SEMISKILL_SCOREBOARD_SNAPSHOT = "reports/scoreboard/latest.json"
 $env:SEMISKILL_PROGRESS_SNAPSHOT = "reports/scoreboard/progress.json" # optional
 $env:SEMISKILL_SCOREBOARD_MAX_AGE_SECONDS = "900" # 15..3600
 $env:SEMISKILL_PROGRESS_MAX_AGE_SECONDS = "300"   # 15..3600
+$env:SEMISKILL_STATE_MAX_AGE_SECONDS = "900"      # 15..3600
 ```
+
+The local loopback database default is accepted only when the environment is `development`.
+Every other environment requires an explicit `DATABASE_URL`; otherwise the database observation is
+`configuration_invalid` and exposes no counts or identity.
 
 The dashboard accepts only an observation-bound `semiskill.scoreboard/v2` snapshot for the exact
 `dv-84` scope and canonical registry/skills paths. It verifies age, the exact clean Git commit,
@@ -46,6 +51,35 @@ counts, seeds and fixtures are never substitutes. Progress is independently age-
 checked. Only a sanitized migration/adoption projection reaches the browser. The adversarial corpus
 is input inventory only until a corpus-hash-bound execution result exists; no inferred escape or pass
 outcome receives credit.
+
+Repository, state-file, ADR and database observations use the same typed
+`available | stale | unavailable` contract. `available` requires a timestamp, exact non-secret
+identity, declared scope, freshness and validated data. `unavailable` carries a closed reason and
+has no identity, scope, freshness or data. Unknown counts and booleans are never represented as
+zero, empty, clean or green. A zero blocker, ADR, test-function or artifact count is displayed only
+when the corresponding complete source observation is explicitly available.
+
+Repository identity includes the exact HEAD and tree plus a content inventory hash. Project-state
+identity includes the exact commit and SHA-256 of `STATUS.md`, `MEMORY.md` and `BLOCKERS.md`; the
+current `## Active step` format and status timestamp are validated. ADR identity includes the exact
+`DECISIONS.md` hash and a strict unique, monotonic heading contract. Database identity exposes only
+engine, environment, database name and a non-secret identity hash; its scope is a complete,
+database-wide, read-only inventory of the schema-qualified `public.artifacts` relation with no
+catalog or adoption credit. Each source's
+own freshness is shown; the response timestamp cannot make an older source look fresh.
+Database observation runs in a read-only transaction with a 2-second statement timeout and
+1-second lock timeout; migration attestation uses a 3-second statement timeout and the same lock
+timeout. Timeout, configuration, connection, query, identity and validation failures are distinct
+closed reasons and disclose no partial data.
+
+An expected source failure is isolated to that source and never changes the canonical scoreboard.
+If the complete `/api/state` transport or render fails, the browser clears its retained state,
+charts, counters, health badges and every view, and disables request controls. It never re-renders a
+last-good response as current after navigation. Refreshes are abortable, ordered by a monotonic
+epoch and limited to 10 seconds; a hidden page invalidates prior observations and refreshes on
+return. Client-side freshness continues aging each source independently. Full-view rerenders retain
+focus, selection and nested scroll only when the user has not navigated or interacted since the
+request began; transport invalidation moves focus to the visible Refresh recovery control.
 
 ## Governed request loop
 
@@ -74,6 +108,10 @@ The browser cannot submit a title, prompt, kind, status, executable command or f
 requires the exact loopback Host and Origin, a per-process same-origin CSRF capability, strict UTF-8
 JSON, a bounded body and one of the 36 unique server templates. UUID retries are idempotent only for
 the same pinned model registry; a UUID from another registry or reused for another action fails closed.
+The browser keeps an immutable request ID and context for every uncertain attempt. Rebuilt controls
+remain disabled only while their exact request is in flight; a persisted uncertain request becomes
+retryable after reload and reuses its ID. An accepted receipt is retained before pending retry state
+is cleared, so a delayed list refresh cannot erase proof of acceptance.
 
 The request library spans Build, Security, Ops, Marketing, Sales, Analytics and Quality. Section-level
 controls select fixed templates and a page-level context; they do not claim that a particular table

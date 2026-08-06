@@ -35,6 +35,7 @@ body{
 ::-webkit-scrollbar-thumb:hover{background:hsl(var(--accent))}
 a{color:inherit}
 code,pre,.mono{font-family:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace}
+.mono{overflow-wrap:anywhere;word-break:break-word}
 
 /* ── shell ─────────────────────────────────────────────────────────────────── */
 #app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
@@ -73,10 +74,13 @@ main{min-width:0;display:flex;flex-direction:column}
 .topbar h1{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .topbar .sub{font-size:12px;color:hsl(var(--muted-foreground))}
 .spacer{flex:1}
+.source-banner{margin:12px 24px 0;padding:9px 12px;border:1px solid hsl(var(--border));border-radius:var(--radius);font-size:11.5px;color:hsl(var(--muted-foreground));background:hsl(var(--muted)/.35)}
+.source-banner.available{border-color:hsl(var(--info)/.35);color:hsl(var(--info))}
+.source-banner.unavailable{border-color:hsl(var(--destructive)/.45);color:hsl(var(--destructive));background:hsl(var(--destructive)/.08)}
 .view{padding:20px 24px 56px;display:none;animation:fade .18s ease}
 .view.active{display:block}
 @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-.section-head{display:flex;align-items:flex-end;gap:12px;margin:26px 0 12px}
+.section-head{display:flex;align-items:flex-end;gap:12px;margin:26px 0 12px;flex-wrap:wrap;min-width:0}
 .section-head:first-child{margin-top:4px}
 .section-head h2{font-size:16px;font-weight:600;letter-spacing:-.01em}
 .section-head p{font-size:12.5px;color:hsl(var(--muted-foreground))}
@@ -86,10 +90,10 @@ main{min-width:0;display:flex;flex-direction:column}
   background:hsl(var(--card));border:1px solid hsl(var(--border));
   border-radius:var(--radius);color:hsl(var(--card-foreground));overflow:hidden;
 }
-.card-header{padding:16px 18px 0;display:flex;align-items:flex-start;gap:10px}
+.card-header{padding:16px 18px 0;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;min-width:0}
 .card-header .t{font-weight:600;font-size:13.5px;letter-spacing:-.01em}
-.card-header .d{font-size:12px;color:hsl(var(--muted-foreground));margin-top:2px}
-.card-content{padding:14px 18px 18px}
+.card-header .d{font-size:12px;color:hsl(var(--muted-foreground));margin-top:2px;overflow-wrap:anywhere}
+.card-content{padding:14px 18px 18px;min-width:0;overflow-wrap:anywhere}
 .card-content.tight{padding:10px 12px 12px}
 .grid{display:grid;gap:14px}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -127,6 +131,7 @@ main{min-width:0;display:flex;flex-direction:column}
 .badge.gap,.badge.down,.badge.critical,.badge.destructive{background:hsl(var(--destructive)/.13);color:hsl(var(--destructive));border-color:hsl(var(--destructive)/.3)}
 .badge.info,.badge.live{background:hsl(var(--info)/.13);color:hsl(var(--info));border-color:hsl(var(--info)/.3)}
 .badge.by-design-off,.badge.muted{background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+.badge[tabindex="0"]:focus-visible{outline:2px solid hsl(var(--ring));outline-offset:2px}
 .dot{width:7px;height:7px;border-radius:99px;background:currentColor;box-shadow:0 0 0 3px currentColor;opacity:.9;transform:scale(.85)}
 .pulse{animation:pulse 2.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -145,9 +150,8 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}
 thead th{
   text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;
   color:hsl(var(--muted-foreground));padding:8px 10px;border-bottom:1px solid hsl(var(--border));
-  position:sticky;top:0;background:hsl(var(--card));cursor:pointer;user-select:none;white-space:nowrap;
+  position:sticky;top:0;background:hsl(var(--card));white-space:nowrap;
 }
-thead th:hover{color:hsl(var(--foreground))}
 tbody td{padding:8px 10px;border-bottom:1px solid hsl(var(--border)/.7);vertical-align:top}
 tbody tr:hover{background:hsl(var(--accent)/.5)}
 tbody tr:last-child td{border-bottom:none}
@@ -181,6 +185,7 @@ svg .flow.bad{stroke:hsl(var(--destructive));stroke-dasharray:4 3}
 .tree .grp{font-weight:600}
 
 .matrix{display:grid;gap:4px;font-size:11px}
+.matrix-scroll{overflow-x:auto;overscroll-behavior-inline:contain;padding-bottom:4px}
 .matrix .cell{border:1px solid hsl(var(--border));border-radius:6px;padding:6px 4px;text-align:center;background:hsl(var(--muted))}
 .matrix .cell.on{background:hsl(var(--primary)/.22);border-color:hsl(var(--primary)/.5);color:hsl(var(--foreground));font-weight:600}
 .matrix button.cell{color:inherit;font:inherit;cursor:pointer;min-height:32px}
@@ -256,6 +261,7 @@ textarea{width:100%;min-height:110px;resize:vertical}
       <span id="request-session-status" class="sr-only" role="status" aria-live="polite">Request controls unavailable; activate Refresh.</span>
       <button type="button" class="btn" id="btn-refresh">↻ Refresh</button>
     </header>
+    <div id="transport-status" class="source-banner unavailable" role="status" aria-live="polite">Command-centre state has not been verified.</div>
 
     <section class="view active" id="view-overview"></section>
     <section class="view" id="view-architecture"></section>
@@ -278,6 +284,8 @@ textarea{width:100%;min-height:110px;resize:vertical}
 <script>
 /* ═══════════════════════════ state + utils ═══════════════════════════════ */
 let S = null, SESSION = null, LAST_RECEIPT = null, LAST_ARCHIVE = null, CHARTS = {}, VIEW = 'overview';
+let REFRESH_EPOCH = 0, REFRESH_CONTROLLER = null, UI_INTERACTION_EPOCH = 0;
+let MATRIX_SELECTION = null;
 function loadPendingRequests() {
   try {
     const parsed = JSON.parse(sessionStorage.getItem('semiskill.pending-requests') || '{}');
@@ -285,6 +293,8 @@ function loadPendingRequests() {
   } catch (error) { return new Map(); }
 }
 const PENDING_REQUESTS = loadPendingRequests();
+const IN_FLIGHT_REQUESTS = new Set();
+let ARCHIVE_IN_FLIGHT = false;
 let PENDING_ARCHIVE_ID = (() => {
   try {
     const value = sessionStorage.getItem('semiskill.pending-archive');
@@ -332,18 +342,29 @@ function syncMutationControls() {
     if (template && !button.hasAttribute('aria-label')) {
       button.setAttribute('aria-label', `Queue request: ${template.label}`);
     }
-    if (!SESSION) {
+    const inFlight = button.id === 'q-archive'
+      ? ARCHIVE_IN_FLIGHT
+      : [...IN_FLIGHT_REQUESTS].some(key => key.startsWith(`${button.dataset.actionId}:`));
+    if (inFlight) {
       button.disabled = true;
-      button.setAttribute('title', 'Click Refresh to establish a new same-origin request session.');
-    } else if (button.getAttribute('aria-busy') !== 'true') {
+      button.setAttribute('aria-busy', 'true');
+      button.setAttribute('title', 'This exact request is awaiting a receipt.');
+    } else if (!SESSION || !S) {
+      button.disabled = true;
+      button.removeAttribute('aria-busy');
+      button.setAttribute('title', S
+        ? 'Click Refresh to establish a new same-origin request session.'
+        : 'Command-centre state is unavailable; refresh before queueing work.');
+    } else {
       button.disabled = false;
+      button.removeAttribute('aria-busy');
       button.removeAttribute('title');
     }
   });
   const status = $('#request-session-status');
-  if (status) status.textContent = SESSION
+  if (status) status.textContent = SESSION && S
     ? 'Prepared-request controls available.'
-    : 'Request controls unavailable; activate Refresh.';
+    : 'Request controls unavailable; refresh verified command-centre state.';
 }
 
 /* card helper — every card can carry a "work on this" action button */
@@ -378,6 +399,59 @@ function freshness(iso) {
   const minutes = Math.floor(seconds / 60);
   return minutes < 60 ? `${minutes}m old` : `${Math.floor(minutes / 60)}h old`;
 }
+function observationAvailable(observation) {
+  if (!(observation?.status === 'available' && observation?.identity && observation?.scope
+    && observation?.freshness?.status === 'fresh' && observation?.data)) return false;
+  const observedAt = Date.parse(observation.observed_at);
+  const responseAt = Date.parse(S?.generated_at);
+  if (!Number.isFinite(observedAt) || !Number.isFinite(responseAt)) return false;
+  const observedAge = (Date.now() - observedAt) / 1000;
+  const responseElapsed = Math.max(0, (Date.now() - responseAt) / 1000);
+  if (observedAge < -60 || observedAge > 60) return false;
+  const maximum = observation.freshness.max_age_seconds;
+  return maximum === null
+    || observation.freshness.age_seconds + responseElapsed <= maximum;
+}
+function responseCurrent(state) {
+  const generated = Date.parse(state?.generated_at);
+  if (!Number.isFinite(generated)) return false;
+  const age = Date.now() - generated;
+  return age >= -60000 && age <= 30000;
+}
+const repoData = () => observationAvailable(S?.repo) ? S.repo.data : null;
+const stateData = () => observationAvailable(S?.state) ? S.state.data : null;
+const adrData = () => observationAvailable(S?.adrs) ? S.adrs.data : null;
+const dbData = () => observationAvailable(S?.runtime?.db) && S.runtime.db.data.complete === true
+  ? S.runtime.db.data : null;
+function artifactCount(type) {
+  const data = dbData();
+  if (!data) return null;
+  const row = data.by_type.find(item => item.type === type);
+  return row ? row.n : 0; // available zero requires complete source evidence
+}
+function observationSummary(label, observation) {
+  if (!observationAvailable(observation)) {
+    const status = observation?.status === 'available' ? 'stale' : observation?.status || 'unavailable';
+    const reason = observation?.status === 'available'
+      ? 'client freshness expired'
+      : observation?.reason || 'no verified observation';
+    return `${label} ${status} · ${reason}`;
+  }
+  const identity = observation.identity;
+  const identityText = identity.database_name
+    ? `${identity.environment}/${identity.database_name} · ${identity.identity_sha256}`
+    : identity.commit
+      ? `commit ${identity.commit} · tree ${identity.tree}`
+      : identity.files
+        ? identity.files.map(item => `${item.path}:${item.sha256.slice(0, 18)}…`).join(' · ')
+        : `${identity.path || 'source'}:${identity.sha256 || identity.repository_commit || 'bound'}`;
+  const scopeText = observation.scope.kind || observation.scope.parser
+    || observation.scope.test_count_kind || 'declared scope';
+  return `${label} available · ${freshness(observation.observed_at)} · ${identityText} · ${scopeText}`;
+}
+const observationDisplayStatus = observation => observationAvailable(observation)
+  ? 'available'
+  : observation?.status === 'available' ? 'stale' : observation?.status || 'unavailable';
 
 function chart(id, cfg) {
   const el = document.getElementById(id);
@@ -423,16 +497,16 @@ const TITLES = {
   queue:     ['Action Queue', 'Non-crediting prepared requests awaiting separate validation'],
 };
 
-function renderAll() {
+function renderChrome() {
   renderHealth();
-  ({ overview: vOverview, architecture: vArchitecture, pipeline: vPipeline, features: vFeatures,
-     quality: vQuality, security: vSecurity, catalog: vCatalog, launch: vLaunch,
-     growth: vGrowth, analytics: vAnalytics, queue: vQueue })[VIEW]();
   const [t, s] = TITLES[VIEW];
   $('#page-title').textContent = t;
-  $('#page-sub').textContent = `${s} · state generated ${S.generated_at}`;
+  $('#page-sub').textContent = `${s} · response generated ${S.generated_at}; fresh envelope does not refresh operational observations`;
+  $('#transport-status').className = 'source-banner available';
+  const transportText = 'Response available. Repository, state, ADR and database freshness are evaluated independently.';
+  if ($('#transport-status').textContent !== transportText) $('#transport-status').textContent = transportText;
   $('#n-features').textContent = S.model.features.length;
-  $('#n-tests').textContent = S.repo.total_tests;
+  $('#n-tests').textContent = repoData()?.total_tests ?? '—';
   $('#n-attacks').textContent = S.redteam.status === 'unavailable' ? '—' : S.redteam.corpus.length;
   const snapshot = canonicalSnapshot();
   $('#n-published').textContent = snapshot ? snapshot.funnel.published : '—';
@@ -440,15 +514,29 @@ function renderAll() {
   syncMutationControls();
 }
 
+function renderAll() {
+  ({ overview: vOverview, architecture: vArchitecture, pipeline: vPipeline, features: vFeatures,
+     quality: vQuality, security: vSecurity, catalog: vCatalog, launch: vLaunch,
+     growth: vGrowth, analytics: vAnalytics, queue: vQueue })[VIEW]();
+  renderChrome();
+}
+
 function renderHealth() {
-  const r = S.runtime;
-  const pill = (label, ok, detail) =>
-    `<span class="badge ${ok ? 'up' : 'down'}" title="${esc(detail || '')}"><span class="dot ${ok ? 'pulse' : ''}"></span>${label}</span>`;
+  const pill = (source, label, status, detail) => {
+    const description = `${label} ${status}. ${detail || 'No verified source detail.'}`;
+    return `<span class="badge ${status === 'available' ? 'up' : status === 'stale' ? 'warn' : 'down'}" data-health-source="${esc(source)}" tabindex="0" aria-label="${esc(description)}" title="${esc(detail || '')}"><span class="dot ${status === 'available' ? 'pulse' : ''}"></span>${esc(label)} ${esc(status)}</span>`;
+  };
+  const repo = repoData();
+  const repoStatus = observationDisplayStatus(S.repo);
   $('#health').innerHTML =
-    pill('Postgres', r.db.status === 'up', r.db.detail) +
-    pill('Scoreboard', S.scoreboard.status === 'available', S.scoreboard.reason) +
-    pill('Migrations', S.migration?.status === 'verified', S.migration?.reason) +
-    `<span class="badge ${S.repo.dirty ? 'warn' : 'muted'}">git ${esc(S.repo.branch)} · ${S.repo.dirty} dirty</span>`;
+    pill('postgres', 'Postgres', observationDisplayStatus(S.runtime.db), observationSummary('database', S.runtime.db)) +
+    pill('scoreboard', 'Scoreboard', S.scoreboard.status, S.scoreboard.reason) +
+    pill('migrations', 'Migrations', S.migration?.status === 'verified' ? 'available' : 'unavailable', S.migration?.reason) +
+    pill('state', 'State', observationDisplayStatus(S.state), observationSummary('state files', S.state)) +
+    pill('adrs', 'ADRs', observationDisplayStatus(S.adrs), observationSummary('ADR register', S.adrs)) +
+    (repo
+      ? `<span class="badge ${repo.dirty ? 'warn' : 'muted'}" data-health-source="git" tabindex="0" aria-label="${esc(observationSummary('repository', S.repo))}">git ${esc(repo.branch)} · ${repo.dirty} dirty</span>`
+      : pill('git', 'git', repoStatus, observationSummary('repository', S.repo)));
 }
 
 /* ── overview ─────────────────────────────────────────────────────────────── */
@@ -463,16 +551,19 @@ function vOverview() {
   const f = S.model.features, R = readiness();
   const snapshot = canonicalSnapshot();
   const redteam = S.redteam;
+  const repo = repoData(), project = stateData();
   const done = f.filter(x => x.declared_status === 'done').length;
   const gaps = f.filter(x => x.declared_status === 'gap').length;
   const partial = f.filter(x => x.declared_status === 'partial').length;
-  const phaseMatch = String(S.state.phase || '').match(/Phase\s+[A-Z0-9-]+/);
+  const phaseMatch = String(project?.phase || '').match(/Phase\s+[A-Z0-9-]+/);
   const phaseLabel = phaseMatch ? phaseMatch[0] : 'unavailable';
 
   $('#view-overview').innerHTML = `
     <div class="grid g6">
-      ${kpi('Current phase', phaseLabel, 'derived from the active project state', { color: hsl('--primary') })}
-      ${kpi('Test functions', S.repo.total_tests, `${S.repo.tests.length} files · static source inventory only; no current pass result`)}
+      ${kpi('Current phase', phaseLabel, project ? 'derived from fresh, hash-bound project state' : 'project-state evidence unavailable or stale', { color: project ? hsl('--primary') : '' })}
+      ${kpi('Test functions', repo ? repo.total_tests : '—', repo
+            ? `${repo.tests.length} files · static source inventory only; no current pass result`
+            : `repository unavailable · ${esc(S.repo.reason || 'no verified observation')}`)}
       ${kpi('Curated feature claims', `${done}/${f.length} declared done`, `${partial} partial · ${gaps} gaps · non-crediting planning register`)}
       ${kpi('Red-team escapes', '—', redteam.status === 'not_executed'
             ? `${redteam.corpus.length} corpus inputs · not executed`
@@ -485,10 +576,14 @@ function vOverview() {
 
     <div class="section-head"><h2>Where the build stands</h2><p class="muted">From MEMORY.md / STATUS.md — the actual project state files</p></div>
     <div class="grid g3">
-      ${card('Right now', S.state.phase, `<div style="font-size:12.5px;line-height:1.65">${esc(S.state.right_now).replace(/\n/g, ' ')}</div>`, { cls: 'span2' })}
-      ${card('Open blockers', 'BLOCKERS.md', S.state.blockers.length
-        ? S.state.blockers.map(b => `<div class="row"><div class="g"><div class="h">${esc(b)}</div></div></div>`).join('')
-        : `<div style="text-align:center;padding:16px 0"><div style="font-size:30px;font-weight:700;color:${hsl('--success')}">0</div><div class="muted" style="font-size:12px">no active blockers</div></div>`)}
+      ${card('Right now', esc(observationSummary('project state', S.state)), project
+        ? `<div style="font-size:12.5px;line-height:1.65">${esc(project.active_step).replace(/\n/g, ' ')}</div>`
+        : `<div class="empty">${esc(observationSummary('State files', S.state))}; no current-step claim is shown.</div>`, { cls: 'span2' })}
+      ${card('Open blockers', esc(observationSummary('BLOCKERS.md', S.state)), project
+        ? (project.blockers.length
+          ? project.blockers.map(b => `<div class="row"><div class="g"><div class="h">${esc(b.id)} · ${esc(b.title)}</div></div></div>`).join('')
+          : `<div style="text-align:center;padding:16px 0"><div style="font-size:30px;font-weight:700;color:${hsl('--success')}">0</div><div class="muted" style="font-size:12px">no active blockers in the fresh, hash-bound register</div></div>`)
+        : `<div class="empty">Blocker evidence unavailable; this is not interpreted as zero.</div>`)}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
@@ -520,12 +615,14 @@ function vOverview() {
       }).join('')}
     </div>
 
-    <div class="section-head"><h2>Commit history</h2><p class="muted">${S.repo.commits.length} commits · branch ${esc(S.repo.branch)}</p></div>
-    ${card('Recent commits', '', `<div class="tbl-wrap"><table><thead><tr><th>SHA</th><th>When</th><th>Subject</th></tr></thead><tbody>
-      ${S.repo.commits.slice(0, 18).map(c => `<tr><td class="mono muted">${esc(c.sha)}</td>
-        <td class="muted">${esc(c.date.slice(0, 16).replace('T', ' '))}</td>
-        <td>${badge(c.kind, c.kind === 'rotate' ? 'info' : c.kind === 'feat' ? 'done' : 'muted')} ${esc(c.subject)}</td></tr>`).join('')}
-    </tbody></table></div>`, { tight: true })}
+    <div class="section-head"><h2>Commit history</h2><p class="muted">${repo ? `${repo.commits.length} commits · branch ${esc(repo.branch)}` : esc(observationSummary('repository', S.repo))}</p></div>
+    ${card('Recent commits', repo ? `commit ${esc(S.repo.identity.commit)} · tree ${esc(S.repo.identity.tree)} · ${freshness(S.repo.observed_at)}` : 'Repository history unavailable', repo
+      ? `<div class="tbl-wrap"><table><thead><tr><th>SHA</th><th>When</th><th>Subject</th></tr></thead><tbody>
+        ${repo.commits.slice(0, 18).map(c => `<tr><td class="mono muted">${esc(c.sha)}</td>
+          <td class="muted">${esc(c.date.slice(0, 16).replace('T', ' '))}</td>
+          <td>${badge(c.kind, c.kind === 'rotate' ? 'info' : c.kind === 'feat' ? 'done' : 'muted')} ${esc(c.subject)}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : `<div class="empty">No empty history is substituted for an unavailable repository probe.</div>`, { tight: true })}
   `;
 
   if (snapshot) chart('c-funnel', {
@@ -556,8 +653,11 @@ function vOverview() {
 /* ── architecture ─────────────────────────────────────────────────────────── */
 function vArchitecture() {
   const L = S.model.layers;
+  const repo = repoData(), modules = repo ? repo.modules : [];
+  const decisions = adrData();
+  const database = dbData();
   const loc = {};
-  S.repo.modules.forEach(m => { loc[m.layer] = (loc[m.layer] || 0) + m.loc; });
+  modules.forEach(m => { loc[m.layer] = (loc[m.layer] || 0) + m.loc; });
 
   const layerBox = (l, i) => {
     const y = 18 + i * 62;
@@ -565,7 +665,7 @@ function vArchitecture() {
       <rect x="26" y="${y}" width="300" height="50" rx="9" class="box" fill="${hsl('--card')}" stroke="${l.color}55"/>
       <rect x="26" y="${y}" width="4" height="50" rx="2" fill="${l.color}"/>
       <text x="42" y="${y + 21}" class="lbl">${l.id} · ${esc(l.name)}</text>
-      <text x="42" y="${y + 38}" class="sub">${esc(l.modules.join(' '))} · ${loc[l.id] || 0} LOC</text>
+      <text x="42" y="${y + 38}" class="sub">${esc(l.modules.join(' '))} · ${repo ? (loc[l.id] || 0) : '—'} LOC</text>
       <text x="316" y="${y + 30}" class="sub" text-anchor="end">${S.model.features.filter(f => f.layer === l.id).length} features</text>
       ${i < 5 ? `<path d="M176 ${y + 50} L176 ${y + 62}" class="flow"/>` : ''}
     </g>`;
@@ -573,12 +673,13 @@ function vArchitecture() {
 
   const tree = () => {
     const byDir = {};
-    S.repo.modules.forEach(m => {
+    if (!repo) return `<div class="empty">Repository module inventory unavailable (${esc(S.repo.reason || 'unavailable')}).</div>`;
+    modules.forEach(m => {
       const parts = m.path.split('/');
       const dir = parts.length > 2 ? parts[1] : 'root';
       (byDir[dir] = byDir[dir] || []).push(m);
     });
-    const max = Math.max(...S.repo.modules.map(m => m.loc));
+    const max = Math.max(...modules.map(m => m.loc));
     return Object.entries(byDir).sort((a, b) => b[1].reduce((s, m) => s + m.loc, 0) - a[1].reduce((s, m) => s + m.loc, 0))
       .map(([dir, ms]) => `<div class="n grp lvl1">📁 ${esc(dir)} <span class="muted">(${ms.reduce((s, m) => s + m.loc, 0)} LOC)</span></div>` +
         ms.sort((a, b) => b.loc - a.loc).map(m => `<div class="n lvl2">
@@ -611,20 +712,26 @@ function vArchitecture() {
           <text x="396" y="302" class="sub">Captured → Analyzed → Proposed</text>
           <text x="396" y="318" class="sub">→ Executed → Observed</text>
           <text x="396" y="342" class="sub">append-only · corrections never edits</text>
-          <text x="396" y="362" class="sub">${S.runtime.db.status === 'up' ? (S.runtime.db.artifacts + ' raw artifact rows · inventory only') : 'artifact inventory unavailable'}</text>
+          <text x="396" y="362" class="sub">${database ? (database.artifacts + ' raw artifact rows · inventory only') : 'artifact inventory unavailable'}</text>
         </svg>`, { action: 'A-13' })}
       <div class="grid" style="gap:14px;align-content:start">
-        ${card('Code distribution by layer', `${S.repo.total_loc} LOC across ${S.repo.modules.length} modules`,
-          `<div class="chart-box short"><canvas id="c-loc"></canvas></div>`)}
-        ${card('Module tree', 'Live from the repo', `<div class="tree" style="max-height:300px;overflow:auto">${tree()}</div>`, { tight: true })}
+        ${card('Code distribution by layer', repo
+          ? `${repo.total_loc} LOC across ${modules.length} modules · ${freshness(S.repo.observed_at)}`
+          : esc(observationSummary('repository', S.repo)), repo
+          ? `<div class="chart-box short"><canvas id="c-loc"></canvas></div>`
+          : `<div class="empty">No zero-LOC chart is drawn for an unavailable source.</div>`)}
+        ${card('Module tree', repo ? `Hash-bound repository inventory · ${esc(S.repo.identity.inventory_sha256)}` : 'Repository unavailable', `<div class="tree" style="max-height:300px;overflow:auto">${tree()}</div>`, { tight: true })}
       </div>
     </div>
 
     <div class="section-head"><h2>Architecture decisions</h2><p class="muted">DECISIONS.md — append-only ADRs</p></div>
-    ${card('ADR register', `${S.adrs.length} decisions recorded`,
-      `<table><thead><tr><th style="width:90px">ID</th><th>Decision</th></tr></thead><tbody>
-      ${S.adrs.map(a => `<tr><td class="mono">${esc(a.id)}</td><td>${esc(a.title)}</td></tr>`).join('')}
-      </tbody></table>`, { tight: true, action: 'A-32' })}
+    ${card('ADR register', decisions
+      ? `${decisions.count} decisions recorded · ${freshness(S.adrs.observed_at)} · ${esc(S.adrs.identity.sha256)}`
+      : esc(observationSummary('DECISIONS.md', S.adrs)), decisions
+      ? `<div class="tbl-wrap"><table><thead><tr><th style="width:90px">ID</th><th>Decision</th></tr></thead><tbody>
+        ${decisions.items.map(a => `<tr><td class="mono">${esc(a.id)}</td><td>${esc(a.title)}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : `<div class="empty">ADR evidence unavailable; zero decisions is not inferred.</div>`, { tight: true, action: 'A-32' })}
 
     <div class="section-head"><h2>Canonical artifact schema</h2><p class="muted">Imported from the running schema module; presentation code does not duplicate its fields or vocabularies</p></div>
     ${card('Artifact fields', esc(S.artifact_schema.source),
@@ -634,8 +741,8 @@ function vArchitecture() {
     </div>
   `;
 
-  const ids = [...new Set(S.repo.modules.map(m => m.layer))];
-  chart('c-loc', {
+  const ids = [...new Set(modules.map(m => m.layer))];
+  if (repo) chart('c-loc', {
     type: 'doughnut',
     data: { labels: ids, datasets: [{ data: ids.map(i => loc[i] || 0), backgroundColor: PALETTE(), borderColor: hsl('--card'), borderWidth: 2 }] },
     options: { cutout: '62%', plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 7, padding: 10 } } } }
@@ -645,6 +752,7 @@ function vArchitecture() {
 /* ── pipeline ─────────────────────────────────────────────────────────────── */
 function vPipeline() {
   const st = S.model.pipeline_stages;
+  const database = dbData();
   const w = 128, gap = 14;
   const stageBox = (s, i) => {
     const x = 14 + i * (w + gap);
@@ -691,11 +799,11 @@ function vPipeline() {
 
     <div class="grid g2" style="margin-top:14px">
       ${card('Curated stage source/adapter map', 'Declared source references and adapter gaps; not run evidence. A prepared request validates one candidate.',
-        `<table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Declared status</th></tr></thead><tbody>
+        `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Declared status</th></tr></thead><tbody>
         ${st.map(s => `<tr><td class="mono muted">${s.n}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:11px">${esc(s.detail)}</div></td>
           <td>${badge(s.kind, s.kind === 'deterministic' ? 'info' : 'muted')}</td>
           <td>${badge(s.declared_state, s.declared_state === 'source-present' ? 'info' : 'partial')}</td></tr>`).join('')}
-        </tbody></table>`, { tight: true, action: 'A-33' })}
+        </tbody></table></div>`, { tight: true, action: 'A-33' })}
       <div class="grid" style="gap:14px;align-content:start">
         ${card('Lifecycle state machine', 'State is derived from artifacts, never stored — so it cannot be forged',
           `<svg viewBox="0 0 380 150" style="width:100%;height:150px">
@@ -709,16 +817,17 @@ function vPipeline() {
                   : `<path d="M${x + 108} ${y + 19} L${x + 124} ${y + 19}" class="flow"/>`) : ''}</g>`;
             }).join('')}
           </svg>`)}
-        ${card('Scan artifacts by type', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Raw artifact data unavailable while Postgres is offline',
-          S.runtime.db.status === 'up'
+        ${card('Scan artifacts by type', database
+          ? `${esc(S.runtime.db.identity.environment)}/${esc(S.runtime.db.identity.database_name)} · ${freshness(S.runtime.db.observed_at)} · database-wide raw inventory; no catalog credit`
+          : esc(observationSummary('database inventory', S.runtime.db)), database
             ? `<div class="chart-box short"><canvas id="c-arts"></canvas></div>`
-            : `<div class="empty">No live connection.<br><button type="button" class="btn primary xs" data-action-id="A-31" style="margin-top:10px">⌘ Queue DB investigation</button></div>`)}
+            : `<div class="empty">No complete, identity-bound inventory is available.<br><button type="button" class="btn primary xs" data-action-id="A-31" style="margin-top:10px">⌘ Queue DB investigation</button></div>`)}
       </div>
     </div>
   `;
 
-  if (S.runtime.db.status === 'up') {
-    const bt = S.runtime.db.by_type || [];
+  if (database) {
+    const bt = database.by_type;
     chart('c-arts', {
       type: 'bar',
       data: { labels: bt.map(b => b.type), datasets: [{ data: bt.map(b => b.n), backgroundColor: hsl('--chart-2', .8), borderRadius: 4 }] },
@@ -751,6 +860,8 @@ function updateFeatureFilterResults() {
 }
 function vFeatures() {
   const f = S.model.features;
+  const repository = repoData();
+  const tests = repository ? repository.tests : [];
   const layers = [...new Set(f.map(x => x.layer))];
   const rows = filteredFeatures(f);
 
@@ -764,7 +875,11 @@ function vFeatures() {
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Static test-function inventory', 'Repository-wide source definitions by suite; not mapped feature evidence or a pass result', `<div class="chart-box"><canvas id="c-evidence"></canvas></div>`)}
+      ${card('Static test-function inventory', repository
+        ? `Repository-wide source definitions · ${freshness(S.repo.observed_at)}; not mapped feature evidence or a pass result`
+        : esc(observationSummary('repository', S.repo)), repository
+        ? `<div class="chart-box"><canvas id="c-evidence"></canvas></div>`
+        : `<div class="empty">Static test inventory unavailable; zero definitions is not inferred.</div>`)}
       ${card('Curated gap candidates', 'Planning hypotheses; one prepared request selects a candidate for independent validation', `<div class="list" style="max-height:240px;overflow:auto">
         ${f.filter(x => x.declared_status !== 'done' && x.declared_status !== 'by-design-off').map(x => `<div class="row">
           <div class="g"><div class="h">${esc(x.name)} ${badge(x.declared_status, x.declared_status === 'gap' ? 'warn' : 'partial')}</div><div class="p">${esc(x.note)}</div></div>
@@ -786,30 +901,37 @@ function vFeatures() {
   $('#f-layer').onchange = e => { fFilter.layer = e.target.value; updateFeatureFilterResults(); };
   $('#f-status').onchange = e => { fFilter.status = e.target.value; updateFeatureFilterResults(); };
 
-  const groups = [...new Set(S.repo.tests.map(t => t.group))];
-  chart('c-evidence', {
+  const groups = [...new Set(tests.map(t => t.group))];
+  if (repository) chart('c-evidence', {
     type: 'bar',
-    data: { labels: groups, datasets: [{ label: 'test functions', data: groups.map(g => S.repo.tests.filter(t => t.group === g).reduce((a, t) => a + t.count, 0)), backgroundColor: hsl('--chart-1', .8), borderRadius: 4 }] },
+    data: { labels: groups, datasets: [{ label: 'test functions', data: groups.map(g => tests.filter(t => t.group === g).reduce((a, t) => a + t.count, 0)), backgroundColor: hsl('--chart-1', .8), borderRadius: 4 }] },
     options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: gridOpts() }
   });
 }
 
 /* ── quality ──────────────────────────────────────────────────────────────── */
 function vQuality() {
-  const t = S.repo.tests, groups = [...new Set(t.map(x => x.group))];
+  const repository = repoData();
+  const t = repository ? repository.tests : [], groups = [...new Set(t.map(x => x.group))];
   const risks = S.model.risks;
 
   $('#view-quality').innerHTML = `
     <div class="grid g4">
-      ${kpi('Test functions', S.repo.total_tests, `${t.length} files · ${groups.length} suites · static source inventory`)}
+      ${kpi('Test functions', repository ? repository.total_tests : '—', repository
+        ? `${t.length} files · ${groups.length} suites · static source inventory · ${freshness(S.repo.observed_at)}`
+        : `repository ${esc(S.repo.status)} · ${esc(S.repo.reason || 'unavailable')}`)}
       ${kpi('Last verified suite', 'not evidenced', 'No current commit/tree/database-bound run artifact is configured')}
       ${kpi('Curated risks', risks.length, `${risks.filter(r => r.severity_hypothesis === 'critical' || r.severity_hypothesis === 'high').length} critical/high hypotheses; not an issue tracker`)}
-      ${kpi('Uncommitted', S.repo.dirty, S.repo.dirty ? 'working tree is dirty' : 'working tree clean',
-        { color: S.repo.dirty ? hsl('--warning') : hsl('--success') })}
+      ${kpi('Uncommitted', repository ? repository.dirty : '—', repository
+        ? (repository.dirty ? 'working tree is dirty' : 'working tree clean; exact Git probe available')
+        : 'Git status unavailable; cleanliness is not inferred',
+        { color: repository ? (repository.dirty ? hsl('--warning') : hsl('--success')) : '' })}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Test-function distribution', 'Static source inventory only; it is not collection or a pass result', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
+      ${card('Test-function distribution', repository ? 'Static source inventory only; it is not collection or a pass result' : esc(observationSummary('repository', S.repo)), repository
+        ? `<div class="chart-box"><canvas id="c-tests"></canvas></div>`
+        : `<div class="empty">No empty chart is substituted for an unavailable repository.</div>`,
         { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue isolated suite</button>` })}
       ${card('Curated risk register', 'Planning register, not observed defect evidence; a prepared request selects one candidate for independent validation',
         `<div class="list" style="max-height:260px;overflow:auto">${risks.map(r => `<div class="row">
@@ -822,12 +944,14 @@ function vQuality() {
     ${card('Full-suite result', 'Authoritative run source not configured', `<div class="empty">No result is credited. Queue an isolated suite request; a later worker must attach immutable evidence before this view changes.</div>`, { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue request</button>` })}
 
     <div class="section-head"><h2>Test inventory</h2></div>
-    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>Suite</th><th>File</th><th class="num">Tests</th></tr></thead><tbody>
-      ${t.slice().sort((a, b) => b.count - a.count).map(x => `<tr><td>${badge(x.group, 'muted')}</td><td class="mono muted">${esc(x.path)}</td><td class="num">${x.count}</td></tr>`).join('')}
-    </tbody></table></div>`, { tight: true })}
+    ${card('', esc(observationSummary('repository', S.repo)), repository
+      ? `<div class="tbl-wrap"><table><thead><tr><th>Suite</th><th>File</th><th class="num">Tests</th></tr></thead><tbody>
+        ${t.slice().sort((a, b) => b.count - a.count).map(x => `<tr><td>${badge(x.group, 'muted')}</td><td class="mono muted">${esc(x.path)}</td><td class="num">${x.count}</td></tr>`).join('')}
+        </tbody></table></div>`
+      : `<div class="empty">Test-file evidence unavailable.</div>`, { tight: true })}
   `;
 
-  chart('c-tests', {
+  if (repository) chart('c-tests', {
     type: 'bar',
     data: { labels: groups, datasets: [{ data: groups.map(g => t.filter(x => x.group === g).reduce((a, x) => a + x.count, 0)), backgroundColor: PALETTE(), borderRadius: 4 }] },
     options: { plugins: { legend: { display: false } }, scales: gridOpts() }
@@ -937,12 +1061,21 @@ function vCatalog() {
   const progress = S.progress.status === 'available' ? S.progress.snapshot : null;
   const workers = progress ? progress.workers : null;
   const stateRows = Object.entries(snapshot.exclusive_states);
+  const matrixLabel = (role, level) => {
+    const matching = cells.filter(x => x.role === role && x.level === level);
+    const published = matching.filter(x => x.stage_flags.published).length;
+    return `${role}, ${level}: ${published} published of ${matching.length} registered`;
+  };
   const matrixCell = (role, level) => {
     const matching = cells.filter(x => x.role === role && x.level === level);
     const published = matching.filter(x => x.stage_flags.published).length;
-    const label = `${role}, ${level}: ${published} published of ${matching.length} registered`;
-    return `<button type="button" class="cell ${published ? 'on' : ''}" aria-label="${esc(label)}" title="${esc(label)}">${published}/${matching.length}</button>`;
+    const label = matrixLabel(role, level);
+    return `<button type="button" class="cell ${published ? 'on' : ''}" data-matrix-role="${esc(role)}" data-matrix-level="${esc(level)}" aria-label="${esc(label)}" title="${esc(label)}">${published}/${matching.length}</button>`;
   };
+  const selectedMatrixDetail = MATRIX_SELECTION
+    && roles.includes(MATRIX_SELECTION.role) && levels.includes(MATRIX_SELECTION.level)
+    ? matrixLabel(MATRIX_SELECTION.role, MATRIX_SELECTION.level)
+    : 'Activate a coverage cell to show its role, level and exact published/registered count.';
   const workerRows = workers === null
     ? `<div class="empty">Live worker progress unavailable (${esc(S.progress.reason || 'unavailable')}).</div>`
     : workers.length === 0
@@ -955,17 +1088,19 @@ function vCatalog() {
       ${kpi('Published', snapshot.funnel.published, `of ${snapshot.registry.active} active · ${snapshot.registry.declined} declined provenance`)}
       ${kpi('Recheck ready', snapshot.funnel.recheck_ready, `${snapshot.funnel.reviewed} independently reviewed`)}
       ${kpi('Roles at target', snapshot.roles.filter(x => x.meets_target).length, `of ${snapshot.registry.roles} roles · target ${snapshot.scope.target_per_role}`)}
-      ${kpi('Reuse events', S.runtime.db.status === 'up' ? (S.runtime.db.by_type.find(b => b.type === 'reuse_event')?.n ?? 0) : '–',
-        'measured artifact count; never estimated')}
+      ${kpi('Reuse events', artifactCount('reuse_event') ?? '—', dbData()
+        ? `complete raw-artifact inventory · ${esc(S.runtime.db.identity.environment)}/${esc(S.runtime.db.identity.database_name)} · never estimated`
+        : `unavailable · ${esc(S.runtime.db.reason || 'no complete database observation')}`)}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
       ${card('Role × level coverage', 'Each cell is published / registered; zero combinations remain visible',
-        `<div class="matrix" style="grid-template-columns:150px repeat(${levels.length},1fr)">
+        `<div class="matrix-scroll"><div class="matrix" style="grid-template-columns:150px repeat(${levels.length},minmax(52px,1fr));min-width:${150 + levels.length * 56}px">
           <div class="hdr"></div>${levels.map(l => `<div class="hdr">${esc(l)}</div>`).join('')}
           ${roles.map(r => `<div class="hdr" style="text-align:left">${esc(r)}</div>` +
             levels.map(l => matrixCell(r, l)).join('')).join('')}
-        </div>
+        </div></div>
+        <div id="matrix-detail" role="status" aria-live="polite" class="muted" style="font-size:11.5px;margin-top:10px">${esc(selectedMatrixDetail)}</div>
         <div class="muted" style="font-size:11.5px;margin-top:10px">${snapshot.funnel.published} published skills across ${cells.length} active registry entries. Missing combinations are retained as 0/0 cells.</div>`,
         { action: 'A-06' })}
       ${card('Canonical state distribution', 'Exclusive states conserve all active registry entries',
@@ -1102,12 +1237,12 @@ function vGrowth() {
     </div>
 
     <div class="section-head"><h2>Unvalidated channel hypotheses</h2></div>
-    ${card('Curated channel register', 'Non-crediting estimates; a prepared request may draft the next experiment', `<table><thead><tr><th>Channel</th><th>Type</th><th>Effort hypothesis</th><th>Impact hypothesis</th><th>Rationale / scope</th></tr></thead><tbody>
+    ${card('Curated channel register', 'Non-crediting estimates; a prepared request may draft the next experiment', `<div class="tbl-wrap"><table><thead><tr><th>Channel</th><th>Type</th><th>Effort hypothesis</th><th>Impact hypothesis</th><th>Rationale / scope</th></tr></thead><tbody>
       ${g.channels.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${badge(c.type, c.type === 'internal' ? 'info' : 'muted')}</td>
         <td>${badge(c.effort_hypothesis, 'info')}</td>
         <td>${badge(c.impact_hypothesis, 'info')}</td>
         <td class="muted">${esc(c.rationale_hypothesis)}${c.deferred_scope_id ? `<div>${badge('deferred · ' + c.deferred_scope_id, 'muted')}</div>` : ''}</td></tr>`).join('')}
-    </tbody></table>`, { tight: true, action: 'A-36' })}
+    </tbody></table></div>`, { tight: true, action: 'A-36' })}
 
     <div class="section-head"><h2>Unvalidated packaging hypotheses — not an offer</h2><p class="muted">All prices and bundles are undecided, unavailable, and non-crediting</p></div>
     <div class="grid g4">
@@ -1159,13 +1294,16 @@ function vGrowth() {
 /* ── analytics ────────────────────────────────────────────────────────────── */
 function vAnalytics() {
   const m = S.model.gtm.metrics;
+  const database = dbData();
   const targetLabel = t => `${{ less_than: '<', greater_than_or_equal: '≥', equal: '=' }[t.comparator] || t.comparator} ${t.value} ${t.unit}`;
 
   $('#view-analytics').innerHTML = `
     <div class="grid g4">
       ${kpi('Metric definitions', m.length, 'curated hypotheses; no measurement credit')}
       ${kpi('Measured observations', `0/${m.length}`, 'authoritative observation provider not configured')}
-      ${kpi('Raw artifact rows', S.runtime.db.status === 'up' ? S.runtime.db.artifacts : '—', S.runtime.db.status === 'up' ? 'database-wide inventory only; not an adoption metric' : 'inventory unavailable')}
+      ${kpi('Raw artifact rows', database ? database.artifacts : '—', database
+        ? `${esc(S.runtime.db.identity.environment)}/${esc(S.runtime.db.identity.database_name)} · database-wide inventory only; not an adoption metric`
+        : `inventory unavailable · ${esc(S.runtime.db.reason || 'no complete observation')}`)}
       ${kpi('Observation authority', 'separate', 'requires environment, database, scope, window, freshness and evidence binding')}
     </div>
 
@@ -1178,9 +1316,11 @@ function vAnalytics() {
           <td class="muted mono" style="font-size:11px">${esc(x.source_definition)}</td></tr>`).join('')}
         </tbody></table></div>`, { tight: true, action: 'A-15' })}
       <div class="grid" style="gap:14px;align-content:start">
-        ${card('Artifact mix', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Raw artifact data unavailable while Postgres is offline',
-          S.runtime.db.status === 'up' ? `<div class="chart-box short"><canvas id="c-mix"></canvas></div>`
-            : `<div class="empty">No live connection.<br><button type="button" class="btn primary xs" data-action-id="A-31" style="margin-top:10px">⌘ Queue DB investigation</button></div>`)}
+        ${card('Artifact mix', database
+          ? `Available raw inventory · ${freshness(S.runtime.db.observed_at)} · ${esc(S.runtime.db.identity.identity_sha256)}`
+          : esc(observationSummary('database inventory', S.runtime.db)), database
+          ? `<div class="chart-box short"><canvas id="c-mix"></canvas></div>`
+          : `<div class="empty">No complete, identity-bound inventory.<br><button type="button" class="btn primary xs" data-action-id="A-31" style="margin-top:10px">⌘ Queue DB investigation</button></div>`)}
         ${card('Weekly business review', 'Queue a hash-bound schema-v1 request; a governed worker must validate it',
           `<div class="list">
             <div class="row"><div class="g"><div class="h">Weekly metrics report</div><div class="p">submissions, blocks, publishes, reuse, time-to-publish, cost</div></div>
@@ -1192,8 +1332,8 @@ function vAnalytics() {
     </div>
   `;
 
-  if (S.runtime.db.status === 'up') {
-    const bt = S.runtime.db.by_type || [];
+  if (database) {
+    const bt = database.by_type;
     chart('c-mix', {
       type: 'doughnut',
       data: { labels: bt.map(b => b.type), datasets: [{ data: bt.map(b => b.n), backgroundColor: PALETTE(), borderColor: hsl('--card'), borderWidth: 2 }] },
@@ -1262,7 +1402,9 @@ function vQueue() {
     archive.textContent = 'Archiving…';
     const requestId = PENDING_ARCHIVE_ID || crypto.randomUUID();
     PENDING_ARCHIVE_ID = requestId;
+    ARCHIVE_IN_FLIGHT = true;
     persistPendingRequests();
+    syncMutationControls();
     let receipt = null;
     try {
       receipt = await mutate('/api/inbox/archive', {
@@ -1270,6 +1412,7 @@ function vQueue() {
         request_id: requestId,
       });
     } catch (error) {
+      ARCHIVE_IN_FLIGHT = false;
       if (definitiveRejection(error.status)) {
         PENDING_ARCHIVE_ID = null;
         persistPendingRequests();
@@ -1283,6 +1426,7 @@ function vQueue() {
       syncMutationControls();
       return;
     }
+    ARCHIVE_IN_FLIGHT = false;
     PENDING_ARCHIVE_ID = null;
     persistPendingRequests();
     LAST_ARCHIVE = receipt;
@@ -1292,7 +1436,7 @@ function vQueue() {
     } catch (error) {
       toast('Archive accepted; list refresh delayed', `Recovery ${receipt.recovery_ref} remains authoritative.`);
     }
-    vQueue();
+    if (S && VIEW === 'queue') vQueue();
   };
 }
 
@@ -1322,18 +1466,25 @@ async function establishSession() {
 }
 
 async function refreshInbox() {
+  if (!S) throw new Error('command-centre state unavailable');
   const listing = await api('/api/inbox');
+  if (!S) throw new Error('command-centre state became unavailable');
   S.inbox = listing.inbox;
   $('#n-queue').textContent = S.inbox.filter(item => item.status === 'queued').length;
 }
 
 async function queue(templateId) {
+  if (!S) throw new Error('command-centre state unavailable');
   const template = S.model.actions.find(item => item.id === templateId);
   if (!template) throw new Error('unknown request template');
-  const pendingKey = `${templateId}:${VIEW}`;
+  const requestContext = VIEW;
+  const templateLabel = template.label;
+  const pendingKey = `${templateId}:${requestContext}`;
   const requestId = PENDING_REQUESTS.get(pendingKey) || crypto.randomUUID();
   PENDING_REQUESTS.set(pendingKey, requestId);
+  IN_FLIGHT_REQUESTS.add(pendingKey);
   persistPendingRequests();
+  syncMutationControls();
   let receipt;
   try {
     receipt = await mutate('/api/action', {
@@ -1341,7 +1492,7 @@ async function queue(templateId) {
       request_type: 'prepared',
       template_id: templateId,
       priority: 'normal',
-      context: VIEW,
+      context: requestContext,
       request_id: requestId,
     });
   } catch (error) {
@@ -1350,19 +1501,28 @@ async function queue(templateId) {
       persistPendingRequests();
     }
     throw error;
+  } finally {
+    IN_FLIGHT_REQUESTS.delete(pendingKey);
+    syncMutationControls();
   }
+  LAST_RECEIPT = receipt;
   PENDING_REQUESTS.delete(pendingKey);
   persistPendingRequests();
-  LAST_RECEIPT = receipt;
-  S.inbox.push({ ...receipt, title: template.label, context: VIEW, credit: 'none' });
-  $('#n-queue').textContent = S.inbox.filter(item => item.status === 'queued').length;
-  toast('Request queued', `${template.label} · receipt ${receipt.receipt_id}`);
-  try {
-    await refreshInbox();
-  } catch (error) {
-    toast('Request accepted; list refresh delayed', `Receipt ${receipt.receipt_id} remains authoritative.`);
+  if (S) {
+    S.inbox.push({ ...receipt, title: templateLabel, context: requestContext, credit: 'none' });
+    $('#n-queue').textContent = S.inbox.filter(item => item.status === 'queued').length;
   }
-  if (VIEW === 'queue') vQueue();
+  toast('Request queued', `${templateLabel} · receipt ${receipt.receipt_id}`);
+  if (S) {
+    try {
+      await refreshInbox();
+    } catch (error) {
+      toast('Request accepted; list refresh delayed', `Receipt ${receipt.receipt_id} remains authoritative.`);
+    }
+  } else {
+    toast('Request accepted; state refresh required', `Receipt ${receipt.receipt_id} remains authoritative.`);
+  }
+  if (S && VIEW === 'queue') vQueue();
   return receipt;
 }
 
@@ -1379,11 +1539,28 @@ document.addEventListener('click', async ev => {
     VIEW = nav.dataset.view;
     document.getElementById('view-' + VIEW).classList.add('active');
     if (S) renderAll();
+    else {
+      const [title] = TITLES[VIEW];
+      $('#page-title').textContent = title;
+      $('#page-sub').textContent = 'State unavailable · refresh required';
+    }
     window.scrollTo({ top: 0 });
+    return;
+  }
+  const matrix = ev.target.closest('[data-matrix-role][data-matrix-level]');
+  if (matrix) {
+    const detail = matrix.getAttribute('aria-label') || 'Coverage detail unavailable.';
+    MATRIX_SELECTION = {
+      role: matrix.dataset.matrixRole, level: matrix.dataset.matrixLevel,
+    };
+    const disclosure = $('#matrix-detail');
+    if (disclosure) disclosure.textContent = detail;
+    toast('Coverage detail', detail);
     return;
   }
   const act = ev.target.closest('[data-action-id]');
   if (act) {
+    if (!S) return;
     const a = S.model.actions.find(x => x.id === act.dataset.actionId);
     if (a) {
       act.disabled = true;
@@ -1412,17 +1589,105 @@ document.addEventListener('click', async ev => {
 });
 
 /* ═══════════════════════════ boot ════════════════════════════════════════ */
+function stableStateFingerprint(state) {
+  const normalized = JSON.parse(JSON.stringify(state));
+  delete normalized.generated_at;
+  if (normalized.runtime) delete normalized.runtime.checked_at;
+  return JSON.stringify(normalized);
+}
+
+function captureUiState() {
+  const active = document.activeElement;
+  const focus = active?.id ? { kind: 'id', value: active.id }
+    : active?.dataset?.actionId ? { kind: 'action', value: active.dataset.actionId }
+      : active?.dataset?.view ? { kind: 'view', value: active.dataset.view }
+        : active?.dataset?.matrixRole ? {
+          kind: 'matrix', role: active.dataset.matrixRole, level: active.dataset.matrixLevel,
+        } : active?.dataset?.healthSource
+          ? { kind: 'health', value: active.dataset.healthSource } : null;
+  const selection = active && Number.isInteger(active.selectionStart)
+    ? [active.selectionStart, active.selectionEnd] : null;
+  return {
+    focus, selection, view: VIEW, interactionEpoch: UI_INTERACTION_EPOCH,
+    x: window.scrollX, y: window.scrollY,
+    nested: [...document.querySelectorAll('.tbl-wrap,.matrix-scroll')]
+      .map(element => [element.scrollLeft, element.scrollTop]),
+  };
+}
+
+function restoreUiState(saved) {
+  if (!saved || VIEW !== saved.view || UI_INTERACTION_EPOCH !== saved.interactionEpoch) return;
+  [...document.querySelectorAll('.tbl-wrap,.matrix-scroll')].forEach((element, index) => {
+    const position = saved.nested[index];
+    if (position) [element.scrollLeft, element.scrollTop] = position;
+  });
+  let target = null;
+  if (saved.focus?.kind === 'id') target = document.getElementById(saved.focus.value);
+  if (saved.focus?.kind === 'action') target = document.querySelector(`[data-action-id="${saved.focus.value}"]`);
+  if (saved.focus?.kind === 'view') target = document.querySelector(`[data-view="${saved.focus.value}"]`);
+  if (saved.focus?.kind === 'matrix') target = [...document.querySelectorAll('[data-matrix-role][data-matrix-level]')]
+    .find(element => element.dataset.matrixRole === saved.focus.role
+      && element.dataset.matrixLevel === saved.focus.level);
+  if (saved.focus?.kind === 'health') target = [...document.querySelectorAll('[data-health-source]')]
+    .find(element => element.dataset.healthSource === saved.focus.value);
+  if (target) {
+    target.focus({ preventScroll: true });
+    if (saved.selection && typeof target.setSelectionRange === 'function') {
+      target.setSelectionRange(saved.selection[0], saved.selection[1]);
+    }
+  }
+  window.scrollTo({ left: saved.x, top: saved.y });
+}
+
+function invalidateState(error) {
+  S = null;
+  Object.values(CHARTS).forEach(instance => {
+    try { instance.destroy(); } catch (chartError) { /* stale UI invalidation must continue */ }
+  });
+  CHARTS = {};
+  const message = esc(String(error || 'state unavailable').slice(0, 200));
+  $('#transport-status').className = 'source-banner unavailable';
+  $('#transport-status').textContent = 'Command-centre transport unavailable. Prior observations were invalidated and are not displayed as current.';
+  $('#page-sub').textContent = 'State unavailable · prior data invalidated';
+  $('#health').innerHTML = '<span class="badge down" tabindex="0" aria-label="All sources unavailable. Refresh to retry."><span class="dot"></span>all sources unavailable</span>';
+  ['#n-features', '#n-tests', '#n-attacks', '#n-published', '#n-queue'].forEach(selector => {
+    $(selector).textContent = '—';
+  });
+  const unavailable = `<div class="card"><div class="card-content">
+    <h2 style="margin-bottom:8px">Command centre state is unavailable</h2>
+    <p class="muted" style="font-size:13px">The last response has been cleared across every view. Missing transport or source evidence is never shown as zero, clean, green or current.</p>
+    <pre class="out" style="margin-top:10px">python dashboard/server.py</pre>
+    <p class="muted" style="font-size:12px;margin-top:8px">Reload after the server is available. Error: ${message}</p>
+  </div></div>`;
+  document.querySelectorAll('.view').forEach(view => { view.innerHTML = unavailable; });
+  syncMutationControls();
+  if (document.visibilityState === 'visible') $('#btn-refresh').focus({ preventScroll: true });
+}
+
 async function refresh() {
+  const epoch = ++REFRESH_EPOCH;
+  if (REFRESH_CONTROLLER) REFRESH_CONTROLLER.abort();
+  const controller = new AbortController();
+  REFRESH_CONTROLLER = controller;
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  if (S && !responseCurrent(S)) invalidateState('response freshness expired');
+  const previousFingerprint = S ? stableStateFingerprint(S) : null;
   try {
-    S = await api('/api/state');
-    renderAll();
+    const next = await api('/api/state', { signal: controller.signal });
+    if (epoch !== REFRESH_EPOCH) return;
+    if (!responseCurrent(next)) throw new Error('response freshness invalid');
+    const uiState = S ? captureUiState() : null;
+    S = next;
+    if (previousFingerprint === stableStateFingerprint(next)) renderChrome();
+    else renderAll();
+    if (uiState) uiState.interactionEpoch = UI_INTERACTION_EPOCH;
+    restoreUiState(uiState);
   } catch (e) {
-    $('#view-overview').innerHTML = `<div class="card"><div class="card-content">
-      <h2 style="margin-bottom:8px">Command centre state is unavailable</h2>
-      <p class="muted" style="font-size:13px">This dashboard could not read or render live repository, database and queue state. If the local server is stopped, start it:</p>
-      <pre class="out" style="margin-top:10px">python dashboard/server.py</pre>
-      <p class="muted" style="font-size:12px;margin-top:8px">Then reload this page. Error: ${esc(String(e).slice(0, 200))}</p>
-    </div></div>`;
+    if (epoch !== REFRESH_EPOCH) return;
+    invalidateState(e);
+  } finally {
+    clearTimeout(timeout);
+    if (epoch === REFRESH_EPOCH) REFRESH_CONTROLLER = null;
   }
 }
 $('#btn-refresh').onclick = async () => {
@@ -1448,6 +1713,19 @@ async function boot() {
   await refresh();
 }
 boot();
+['pointerdown', 'keydown', 'input', 'change', 'scroll', 'wheel', 'touchmove'].forEach(eventName => {
+  document.addEventListener(eventName, () => { UI_INTERACTION_EPOCH += 1; }, { capture: true });
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') {
+    REFRESH_EPOCH += 1;
+    if (REFRESH_CONTROLLER) REFRESH_CONTROLLER.abort();
+    REFRESH_CONTROLLER = null;
+    invalidateState('page hidden; observations require a fresh response');
+    return;
+  }
+  refresh();
+});
 setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 15000);
 </script>
 </body>

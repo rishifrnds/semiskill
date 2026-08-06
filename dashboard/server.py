@@ -113,10 +113,306 @@ class DashboardSnapshotRejected(RuntimeError):
         self.reason = reason
 
 
+class OperationalProbeUnavailable(RuntimeError):
+    """Expected operational-source failure with a closed, non-secret reason code."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 # ---------------------------------------------------------------- helpers
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+_OPERATIONAL_OBSERVATION_KEYS = {
+    "status", "reason", "observed_at", "identity", "scope", "freshness", "data",
+}
+
+
+def _sha256_bytes(value: bytes) -> str:
+    return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def _canonical_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")
+    return _sha256_bytes(encoded)
+
+
+def _unavailable_observation(reason: str, *, observed_at: str | None = None) -> dict:
+    return {
+        "status": "unavailable",
+        "reason": reason,
+        "observed_at": observed_at or _now(),
+        "identity": None,
+        "scope": None,
+        "freshness": None,
+        "data": None,
+    }
+
+
+def _available_observation(
+    *, identity: dict, scope: dict, data: dict, observed_at: str | None = None,
+    freshness: dict | None = None, status: str = "available", reason: str | None = None,
+) -> dict:
+    return {
+        "status": status,
+        "reason": reason,
+        "observed_at": observed_at or _now(),
+        "identity": identity,
+        "scope": scope,
+        "freshness": freshness or {
+            "status": "fresh", "age_seconds": 0, "max_age_seconds": None,
+        },
+        "data": data,
+    }
+
+
+def _validated_observation(value: object) -> dict:
+    if not isinstance(value, dict) or set(value) != _OPERATIONAL_OBSERVATION_KEYS:
+        raise ValueError("invalid operational observation")
+    status = value.get("status")
+    if status not in {"available", "stale", "unavailable"}:
+        raise ValueError("invalid operational status")
+    observed = _timestamp(value.get("observed_at"))
+    source_age = (_timestamp(_now()) - observed).total_seconds()
+    if source_age < -_MAX_FUTURE_SKEW_SECONDS or source_age > 60:
+        raise ValueError("operational observation is not current")
+    if status == "unavailable":
+        if not isinstance(value.get("reason"), str) or not value["reason"]:
+            raise ValueError("unavailable reason missing")
+        if any(value.get(key) is not None for key in ("identity", "scope", "freshness", "data")):
+            raise ValueError("unavailable observation contains data")
+        return value
+    if not all(isinstance(value.get(key), dict) for key in ("identity", "scope", "freshness", "data")):
+        raise ValueError("available observation metadata missing")
+    if status == "available" and value.get("reason") is not None:
+        raise ValueError("available observation has reason")
+    if status == "stale" and (not isinstance(value.get("reason"), str) or not value["reason"]):
+        raise ValueError("stale observation reason missing")
+    expected_freshness = "fresh" if status == "available" else "stale"
+    freshness = value["freshness"]
+    if set(freshness) != {"status", "age_seconds", "max_age_seconds"}:
+        raise ValueError("freshness shape mismatch")
+    age_seconds, max_age_seconds = freshness["age_seconds"], freshness["max_age_seconds"]
+    if (
+        freshness.get("status") != expected_freshness
+        or isinstance(age_seconds, bool) or not isinstance(age_seconds, int) or age_seconds < 0
+        or (
+            max_age_seconds is not None
+            and (isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, int)
+                 or max_age_seconds < 15)
+        )
+        or (status == "stale" and (max_age_seconds is None or age_seconds <= max_age_seconds))
+        or (status == "available" and max_age_seconds is not None and age_seconds > max_age_seconds)
+    ):
+        raise ValueError("freshness status mismatch")
+    return value
+
+
+def _valid_object_id(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value) is not None
+
+
+def _validate_repo_observation(value: dict) -> None:
+    if value["status"] == "unavailable":
+        return
+    identity, scope, data = value["identity"], value["scope"], value["data"]
+    if (
+        set(identity) != {"root", "commit", "tree", "inventory_sha256"}
+        or identity.get("root") != ROOT.resolve().as_posix()
+        or not _valid_object_id(identity.get("commit")) or not _valid_object_id(identity.get("tree"))
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(identity.get("inventory_sha256", ""))) is None
+        or scope != {
+            "history_limit": 80, "module_root": "semiskill", "test_root": "tests",
+            "test_glob": "test_*.py", "test_count_kind": "static_function_definitions",
+        }
+    ):
+        raise ValueError("invalid repository identity")
+    required = {
+        "commits", "branch", "dirty", "dirty_files", "dirty_files_truncated",
+        "modules", "tests", "total_tests", "total_loc",
+    }
+    if (
+        set(data) != required or not isinstance(data["branch"], str) or not data["branch"]
+        or not data["commits"] or not data["modules"] or not data["tests"]
+    ):
+        raise ValueError("invalid repository data")
+    for key in ("dirty", "total_tests", "total_loc"):
+        if isinstance(data[key], bool) or not isinstance(data[key], int) or data[key] < 0:
+            raise ValueError("invalid repository count")
+    if not all(isinstance(data[key], list) for key in ("commits", "dirty_files", "modules", "tests")):
+        raise ValueError("invalid repository collection")
+    if (
+        not isinstance(data["dirty_files_truncated"], bool)
+        or len(data["dirty_files"]) != min(data["dirty"], 20)
+        or data["dirty_files_truncated"] != (data["dirty"] > 20)
+    ):
+        raise ValueError("invalid repository dirty state")
+    if (
+        not all(isinstance(item, str) and item for item in data["dirty_files"])
+        or not all(
+            isinstance(item, dict) and set(item) == {"sha", "date", "subject", "kind", "phase"}
+            and isinstance(item["sha"], str) and isinstance(item["date"], str)
+            and isinstance(item["subject"], str) and isinstance(item["kind"], str)
+            and isinstance(item["phase"], str)
+            for item in data["commits"]
+        )
+        or not all(
+            isinstance(item, dict) and set(item) == {"path", "count", "group"}
+            and isinstance(item["path"], str) and isinstance(item["group"], str)
+            and not isinstance(item["count"], bool) and isinstance(item["count"], int)
+            and item["count"] > 0
+            for item in data["tests"]
+        )
+        or not all(
+            isinstance(item, dict) and set(item) == {"path", "loc", "layer"}
+            and isinstance(item["path"], str) and isinstance(item["layer"], str)
+            and not isinstance(item["loc"], bool) and isinstance(item["loc"], int)
+            and item["loc"] > 0
+            for item in data["modules"]
+        )
+    ):
+        raise ValueError("invalid repository inventory row")
+    if sum(item.get("count", -1) for item in data["tests"]) != data["total_tests"]:
+        raise ValueError("invalid repository test total")
+    if sum(item.get("loc", -1) for item in data["modules"]) != data["total_loc"]:
+        raise ValueError("invalid repository LOC total")
+    for item in data["commits"]:
+        if (
+            re.fullmatch(r"[0-9a-f]{4,64}", item["sha"]) is None
+            or item["kind"] not in {"wip", "feat", "rotate"}
+            or (item["phase"] and re.fullmatch(r"[A-Z0-9-]+", item["phase"]) is None)
+        ):
+            raise ValueError("invalid repository commit row")
+        _timestamp(item["date"])
+    for item in data["tests"]:
+        path = PurePosixPath(item["path"])
+        if (
+            path.is_absolute() or ".." in path.parts or not item["path"].startswith("tests/")
+            or not item["group"]
+        ):
+            raise ValueError("invalid repository test row")
+    for item in data["modules"]:
+        path = PurePosixPath(item["path"])
+        if (
+            path.is_absolute() or ".." in path.parts or not item["path"].startswith("semiskill/")
+            or item["layer"] not in {"L1", "L2", "L3", "L4", "L5", "L6", "core"}
+        ):
+            raise ValueError("invalid repository module row")
+
+
+def _validate_state_observation(value: dict, *, repository_commit: str | None = None) -> None:
+    if value["status"] == "unavailable":
+        return
+    identity, scope, data = value["identity"], value["scope"], value["data"]
+    files = identity.get("files")
+    if (
+        set(identity) != {"repository_commit", "files"}
+        or not _valid_object_id(identity.get("repository_commit"))
+        or (repository_commit is not None and identity.get("repository_commit") != repository_commit)
+        or scope != {
+            "required_files": ["STATUS.md", "MEMORY.md", "BLOCKERS.md"],
+            "parser": "project-state/v1",
+        }
+        or not isinstance(files, list) or len(files) != 3
+        or {item.get("path") for item in files if isinstance(item, dict)}
+        != {"STATUS.md", "MEMORY.md", "BLOCKERS.md"}
+        or any(
+            not isinstance(item, dict) or set(item) != {"path", "sha256"}
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", str(item.get("sha256", ""))) is None
+            for item in files
+        )
+    ):
+        raise ValueError("invalid state identity")
+    blockers = data.get("blockers")
+    if (
+        set(data) != {
+            "phase", "active_step", "right_now", "gaps", "steps", "blockers",
+            "blocker_count", "status_updated_at",
+        }
+        or not isinstance(data.get("phase"), str) or not data["phase"]
+        or not isinstance(data.get("active_step"), str) or not data["active_step"]
+        or data.get("right_now") != data.get("active_step")
+        or not isinstance(data.get("gaps"), list) or not isinstance(data.get("steps"), list)
+        or not isinstance(blockers, list) or isinstance(data.get("blocker_count"), bool)
+        or data.get("blocker_count") != len(blockers)
+    ):
+        raise ValueError("invalid project state")
+    blocker_ids = []
+    for blocker in blockers:
+        if (
+            not isinstance(blocker, dict) or set(blocker) != {"id", "title"}
+            or re.fullmatch(r"BLK-\d{3}", str(blocker.get("id", ""))) is None
+            or not isinstance(blocker.get("title"), str) or not blocker["title"]
+        ):
+            raise ValueError("invalid blocker row")
+        blocker_ids.append(blocker["id"])
+    if len(set(blocker_ids)) != len(blocker_ids):
+        raise ValueError("duplicate blocker row")
+    if not all(isinstance(item, str) and item for item in data["gaps"]):
+        raise ValueError("invalid state gap")
+    for step in data["steps"]:
+        if (
+            not isinstance(step, dict) or set(step) != {"id", "ts", "status", "what"}
+            or not all(isinstance(step.get(key), str) and step[key]
+                       for key in ("id", "ts", "status", "what"))
+        ):
+            raise ValueError("invalid state step")
+        _timestamp(step["ts"])
+    updated = _timestamp(data.get("status_updated_at"))
+    actual_age = int((_timestamp(_now()) - updated).total_seconds())
+    if actual_age < -_MAX_FUTURE_SKEW_SECONDS:
+        raise ValueError("invalid state timestamp")
+    if abs(max(0, actual_age) - value["freshness"]["age_seconds"]) > 2:
+        raise ValueError("state freshness is detached from status timestamp")
+
+
+def _validate_adr_observation(value: dict, *, repository_commit: str | None = None) -> None:
+    if value["status"] == "unavailable":
+        return
+    identity, scope, data = value["identity"], value["scope"], value["data"]
+    items = data.get("items")
+    if (
+        set(identity) != {"repository_commit", "path", "sha256"}
+        or not _valid_object_id(identity.get("repository_commit"))
+        or (repository_commit is not None and identity.get("repository_commit") != repository_commit)
+        or identity.get("path") != "DECISIONS.md"
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(identity.get("sha256", ""))) is None
+        or scope != {"parser": "adr-heading/v1", "heading": "## [ADR-NNN] title"}
+        or set(data) != {"items", "count"} or not isinstance(items, list) or not items
+        or isinstance(data.get("count"), bool) or data.get("count") != len(items)
+    ):
+        raise ValueError("invalid ADR observation")
+    ids = [item.get("id") for item in items if isinstance(item, dict)]
+    numbers = [int(item.split("-", 1)[1]) for item in ids
+               if isinstance(item, str) and re.fullmatch(r"ADR-\d{3}", item)]
+    if (
+        len(ids) != len(items) or len(set(ids)) != len(ids) or len(numbers) != len(ids)
+        or numbers != sorted(numbers)
+        or any(
+            set(item) != {"id", "title"} or not isinstance(item.get("title"), str)
+            or not item["title"]
+            for item in items if isinstance(item, dict)
+        )
+    ):
+        raise ValueError("invalid ADR items")
+
+
+def _collect_observation(collector, validator=None) -> dict:
+    try:
+        value = _validated_observation(collector())
+        if validator is not None:
+            validator(value)
+        return value
+    except OperationalProbeUnavailable as exc:
+        return _unavailable_observation(exc.reason)
+    except Exception:  # noqa: BLE001 - one bad source must not hide the verified scoreboard
+        return _unavailable_observation("probe_unavailable")
 
 
 def _sh(args: list[str], timeout: int = 20) -> tuple[int, str]:
@@ -320,46 +616,130 @@ def _live_snapshot_validation(snapshot: dict, *, migration: dict | None = None) 
 
 # ---------------------------------------------------------------- signals
 
+def _required_git(args: list[str]) -> str:
+    rc, output = _sh(["git", *args])
+    if rc != 0:
+        raise OperationalProbeUnavailable("git_unavailable")
+    return output
+
+
+def _read_inventory_file(path: Path) -> tuple[str, str]:
+    if path.is_symlink() or not path.is_file():
+        raise OperationalProbeUnavailable("source_inventory_unavailable")
+    try:
+        path.resolve().relative_to(ROOT.resolve())
+        raw = path.read_bytes()
+        text = raw.decode("utf-8", errors="strict")
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise OperationalProbeUnavailable("source_inventory_unavailable") from exc
+    return text, _sha256_bytes(raw)
+
+
 def repo_signals() -> dict:
-    rc, log = _sh(["git", "log", "--format=%h|%aI|%s", "-n", "80"])
-    commits = []
-    if rc == 0:
+    observed_at = _now()
+    try:
+        top_level = _required_git(["rev-parse", "--show-toplevel"]).strip()
+        if not top_level or Path(top_level).resolve() != ROOT.resolve():
+            raise OperationalProbeUnavailable("repository_identity_mismatch")
+        commit = _required_git(["rev-parse", "HEAD"]).strip().lower()
+        tree = _required_git(["rev-parse", "HEAD^{tree}"]).strip().lower()
+        object_id = r"[0-9a-f]{40}|[0-9a-f]{64}"
+        if not re.fullmatch(object_id, commit) or not re.fullmatch(object_id, tree):
+            raise OperationalProbeUnavailable("repository_identity_invalid")
+        log = _required_git(["log", "--format=%h|%aI|%s", "-n", "80"])
+        status = _required_git(["status", "--porcelain=v1", "--untracked-files=all"])
+        branch = _required_git(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
+        if not branch:
+            raise OperationalProbeUnavailable("repository_identity_invalid")
+
+        commits = []
         for line in log.splitlines():
             parts = line.split("|", 2)
-            if len(parts) == 3:
-                sha, iso, subject = parts
-                kind = "rotate" if subject.startswith("rotate:") else (
-                    "feat" if subject.startswith(("feat:", "fix:")) else "wip")
-                phase = ""
-                m = re.search(r"\b([A-G]|P0|G)-(\d{3})\b", subject)
-                if m:
-                    phase = m.group(1)
-                commits.append({"sha": sha, "date": iso, "subject": subject,
-                                "kind": kind, "phase": phase})
+            if len(parts) != 3 or not parts[0] or not parts[1]:
+                raise OperationalProbeUnavailable("git_history_invalid")
+            sha, iso, subject = parts
+            _timestamp(iso)
+            kind = "rotate" if subject.startswith("rotate:") else (
+                "feat" if subject.startswith(("feat:", "fix:")) else "wip")
+            phase = ""
+            match = re.search(r"\b([A-G]|P0|G)-(\d{3})\b", subject)
+            if match:
+                phase = match.group(1)
+            commits.append({
+                "sha": sha, "date": iso, "subject": subject, "kind": kind, "phase": phase,
+            })
+        if not commits:
+            raise OperationalProbeUnavailable("git_history_invalid")
 
-    rc, status = _sh(["git", "status", "--porcelain"])
-    dirty = [line for line in status.splitlines() if line.strip()] if rc == 0 else []
-    rc, branch = _sh(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-
-    modules, tests = [], []
-    for p in sorted((ROOT / "semiskill").rglob("*.py")):
-        loc = sum(1 for _ in p.open(encoding="utf-8", errors="replace"))
-        if loc:
-            modules.append({"path": p.relative_to(ROOT).as_posix(), "loc": loc,
-                            "layer": _layer_of(p.relative_to(ROOT).as_posix())})
-    test_re = re.compile(r"^\s*(?:async\s+)?def\s+test_", re.M)
-    for p in sorted((ROOT / "tests").rglob("test_*.py")):
-        txt = p.read_text(encoding="utf-8", errors="replace")
-        n = len(test_re.findall(txt))
-        if n:
-            rel = p.relative_to(ROOT).as_posix()
-            tests.append({"path": rel, "count": n, "group": rel.split("/")[1]})
-
-    return {"commits": commits, "branch": branch.strip(), "dirty": len(dirty),
-            "dirty_files": dirty[:20], "modules": modules, "tests": tests,
-            "total_tests": sum(t["count"] for t in tests),
-            "test_count_kind": "static_function_definitions",
-            "total_loc": sum(m["loc"] for m in modules)}
+        module_root = ROOT / "semiskill"
+        test_root = ROOT / "tests"
+        if not module_root.is_dir() or not test_root.is_dir():
+            raise OperationalProbeUnavailable("source_inventory_unavailable")
+        modules, tests, inventory = [], [], []
+        for path in sorted(module_root.rglob("*.py")):
+            text, digest = _read_inventory_file(path)
+            relative = path.relative_to(ROOT).as_posix()
+            inventory.append({"path": relative, "sha256": digest})
+            loc = len(text.splitlines())
+            if loc:
+                modules.append({"path": relative, "loc": loc, "layer": _layer_of(relative)})
+        test_re = re.compile(r"^\s*(?:async\s+)?def\s+test_", re.M)
+        for path in sorted(test_root.rglob("test_*.py")):
+            text, digest = _read_inventory_file(path)
+            relative = path.relative_to(ROOT).as_posix()
+            inventory.append({"path": relative, "sha256": digest})
+            count = len(test_re.findall(text))
+            if count:
+                parts = relative.split("/")
+                tests.append({
+                    "path": relative, "count": count,
+                    "group": parts[1] if len(parts) > 2 else "root",
+                })
+        if not modules or not tests:
+            raise OperationalProbeUnavailable("source_inventory_unavailable")
+        final_commit = _required_git(["rev-parse", "HEAD"]).strip().lower()
+        final_tree = _required_git(["rev-parse", "HEAD^{tree}"]).strip().lower()
+        final_status = _required_git(
+            ["status", "--porcelain=v1", "--untracked-files=all"]
+        )
+        final_branch = _required_git(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
+        if (
+            final_commit != commit or final_tree != tree or final_status != status
+            or final_branch != branch
+        ):
+            raise OperationalProbeUnavailable("source_changed_during_observation")
+        dirty_files = [line for line in status.splitlines() if line.strip()]
+        return _available_observation(
+            observed_at=observed_at,
+            identity={
+                "root": ROOT.resolve().as_posix(),
+                "commit": commit,
+                "tree": tree,
+                "inventory_sha256": _canonical_sha256(inventory),
+            },
+            scope={
+                "history_limit": 80,
+                "module_root": "semiskill",
+                "test_root": "tests",
+                "test_glob": "test_*.py",
+                "test_count_kind": "static_function_definitions",
+            },
+            data={
+                "commits": commits,
+                "branch": branch,
+                "dirty": len(dirty_files),
+                "dirty_files": dirty_files[:20],
+                "dirty_files_truncated": len(dirty_files) > 20,
+                "modules": modules,
+                "tests": tests,
+                "total_tests": sum(item["count"] for item in tests),
+                "total_loc": sum(item["loc"] for item in modules),
+            },
+        )
+    except OperationalProbeUnavailable as exc:
+        return _unavailable_observation(exc.reason, observed_at=observed_at)
+    except Exception:  # noqa: BLE001
+        return _unavailable_observation("source_inventory_unavailable", observed_at=observed_at)
 
 
 _LAYER_MAP = [
@@ -380,56 +760,254 @@ def _layer_of(path: str) -> str:
     return "core"
 
 
-def state_files() -> dict:
-    out = {}
-    for name in ("STATUS.md", "MEMORY.md", "BLOCKERS.md"):
-        p = ROOT / name
-        out[name] = p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
+def _markdown_section(value: str, heading: str) -> str | None:
+    matches = re.findall(
+        rf"^## {re.escape(heading)}\s*\n(.*?)(?=^##\s|\Z)", value, flags=re.M | re.S,
+    )
+    if len(matches) != 1 or not matches[0].strip():
+        return None
+    return matches[0].strip()
 
-    status = out["STATUS.md"]
-    memory = out["MEMORY.md"]
-    phase = ""
-    m = re.search(r"^## Current Phase\s*\n(.+)$", memory, re.M)
-    if m:
-        phase = m.group(1).strip()
-    right_now = ""
-    m = re.search(r"^## Right now\s*\n((?:.+\n?)+?)(?:\n##|\Z)", status, re.M)
-    if m:
-        right_now = m.group(1).strip()
-    gaps = re.findall(r"^- (Stage.+|pgvector.+|SharePoint.+|Phase G.+)$", status, re.M)
-    steps = re.findall(r"^- \[([^\]]+)\]\s+(\S+)\s+status:\s*(\w+)\s*\n\s+what:\s*(.+)$",
-                       memory, re.M)
-    # strip HTML comments first — BLOCKERS.md keeps its entry template commented out
-    live_blockers = re.sub(r"<!--.*?-->", "", out["BLOCKERS.md"], flags=re.S)
-    blockers = [
-        line.strip() for line in live_blockers.splitlines() if line.startswith("## [BLK-")
-    ]
-    return {"phase": phase, "right_now": right_now, "gaps": gaps,
-            "steps": [{"id": a, "ts": b, "status": c, "what": d} for a, b, c, d in steps],
-            "blockers": blockers}
+
+def _repository_commit(repository: dict | None) -> str | None:
+    if not isinstance(repository, dict) or repository.get("status") != "available":
+        return None
+    identity = repository.get("identity")
+    commit = identity.get("commit") if isinstance(identity, dict) else None
+    return commit if isinstance(commit, str) else None
+
+
+def state_files(*, repository: dict | None = None) -> dict:
+    observed_at = _now()
+    commit = _repository_commit(repository)
+    if commit is None:
+        return _unavailable_observation("repository_unavailable", observed_at=observed_at)
+    try:
+        contents, file_identity = {}, []
+        for name in ("STATUS.md", "MEMORY.md", "BLOCKERS.md"):
+            path = ROOT / name
+            if path.is_symlink() or not path.is_file():
+                raise OperationalProbeUnavailable("required_file_unavailable")
+            raw = path.read_bytes()
+            contents[name] = raw.decode("utf-8", errors="strict")
+            file_identity.append({"path": name, "sha256": _sha256_bytes(raw)})
+
+        status = contents["STATUS.md"]
+        memory = contents["MEMORY.md"]
+        phase = _markdown_section(memory, "Current Phase")
+        active_step = _markdown_section(status, "Active step")
+        updated_matches = re.findall(r"^_Last updated:\s*([^_]+)_\r?$", status, re.M)
+        if phase is None or active_step is None or len(updated_matches) != 1:
+            raise OperationalProbeUnavailable("state_contract_invalid")
+        status_updated_at = updated_matches[0].strip()
+        now = _timestamp(observed_at)
+        updated = _timestamp(status_updated_at)
+        age_seconds = int((now - updated).total_seconds())
+        if age_seconds < -_MAX_FUTURE_SKEW_SECONDS:
+            raise OperationalProbeUnavailable("state_clock_skew")
+        age_seconds = max(0, age_seconds)
+        max_age_seconds = _max_age_seconds("SEMISKILL_STATE_MAX_AGE_SECONDS", 900)
+
+        steps = re.findall(
+            r"^- \[([^\]]+)\]\s+(\S+)\s+status:\s*(\w+)\s*\n\s+what:\s*(.+)$",
+            memory,
+            re.M,
+        )
+        live_blockers = re.sub(r"<!--.*?-->", "", contents["BLOCKERS.md"], flags=re.S)
+        candidate_lines = [
+            line.strip() for line in live_blockers.splitlines()
+            if re.match(r"^#{1,6}\s+\[BLK", line.strip())
+        ]
+        parsed_blockers = []
+        blocker_ids = set()
+        for line in candidate_lines:
+            match = re.fullmatch(r"## \[(BLK-\d{3})\]\s+(.+)", line)
+            if match is None or match.group(1) in blocker_ids:
+                raise OperationalProbeUnavailable("blocker_register_invalid")
+            blocker_ids.add(match.group(1))
+            parsed_blockers.append({"id": match.group(1), "title": match.group(2).strip()})
+        data = {
+            "phase": phase,
+            "active_step": active_step,
+            "right_now": active_step,
+            "gaps": re.findall(
+                r"^- (Stage.+|pgvector.+|SharePoint.+|Phase G.+)$", status, re.M,
+            ),
+            "steps": [
+                {"id": item_id, "ts": timestamp, "status": step_status, "what": what}
+                for item_id, timestamp, step_status, what in steps
+            ],
+            "blockers": parsed_blockers,
+            "blocker_count": len(parsed_blockers),
+            "status_updated_at": status_updated_at,
+        }
+        freshness = {
+            "status": "fresh" if age_seconds <= max_age_seconds else "stale",
+            "age_seconds": age_seconds,
+            "max_age_seconds": max_age_seconds,
+        }
+        return _available_observation(
+            observed_at=observed_at,
+            identity={"repository_commit": commit, "files": file_identity},
+            scope={
+                "required_files": ["STATUS.md", "MEMORY.md", "BLOCKERS.md"],
+                "parser": "project-state/v1",
+            },
+            data=data,
+            freshness=freshness,
+            status="available" if freshness["status"] == "fresh" else "stale",
+            reason=None if freshness["status"] == "fresh" else "status_expired",
+        )
+    except OperationalProbeUnavailable as exc:
+        return _unavailable_observation(exc.reason, observed_at=observed_at)
+    except DashboardSnapshotRejected as exc:
+        return _unavailable_observation(exc.reason, observed_at=observed_at)
+    except (OSError, UnicodeDecodeError):
+        return _unavailable_observation("required_file_unavailable", observed_at=observed_at)
+    except Exception:  # noqa: BLE001
+        return _unavailable_observation("state_contract_invalid", observed_at=observed_at)
+
+
+def _runtime_probe() -> tuple[dict, dict, dict]:
+    """Return a read-only inventory bound to a non-secret database identity."""
+    try:
+        import psycopg  # noqa: PLC0415
+        from psycopg.conninfo import conninfo_to_dict  # noqa: PLC0415
+        from semiskill.config import Config  # noqa: PLC0415
+    except ImportError as exc:
+        raise OperationalProbeUnavailable("driver_unavailable") from exc
+    try:
+        dsn = Config.from_env().database_url
+        parameters = conninfo_to_dict(dsn)
+        expected_database = parameters.get("dbname")
+        environment = os.environ.get("SEMISKILL_ENVIRONMENT", "development")
+        if (
+            not isinstance(expected_database, str) or not expected_database
+            or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", environment)
+            or (environment != "development" and not os.environ.get("DATABASE_URL"))
+        ):
+            raise ValueError("invalid database identity")
+    except Exception as exc:
+        raise OperationalProbeUnavailable("configuration_invalid") from exc
+    try:
+        conn = psycopg.connect(dsn, connect_timeout=2)
+    except Exception as exc:
+        raise OperationalProbeUnavailable("connection_unavailable") from exc
+    try:
+        with conn:
+            conn.execute("SET TRANSACTION READ ONLY")
+            conn.execute("SET LOCAL statement_timeout = '2000ms'")
+            conn.execute("SET LOCAL lock_timeout = '1000ms'")
+            with conn.cursor() as cursor:
+                cursor.execute("select current_database(), current_user")
+                identity_row = cursor.fetchone()
+                cursor.execute("select count(*) from public.artifacts")
+                total_row = cursor.fetchone()
+                cursor.execute(
+                    "select artifact_type, count(*) from public.artifacts group by 1 order by 1"
+                )
+                type_rows = cursor.fetchall()
+    except Exception as exc:
+        raise OperationalProbeUnavailable("query_unavailable") from exc
+    if (
+        not isinstance(identity_row, (tuple, list)) or len(identity_row) != 2
+        or identity_row[0] != expected_database
+    ):
+        raise OperationalProbeUnavailable("identity_mismatch")
+    try:
+        total = int(total_row[0])
+        by_type = [{"type": str(kind), "n": int(count)} for kind, count in type_rows]
+    except (TypeError, ValueError, IndexError) as exc:
+        raise OperationalProbeUnavailable("query_unavailable") from exc
+    if (
+        total < 0 or any(item["n"] < 0 or not item["type"] for item in by_type)
+        or len({item["type"] for item in by_type}) != len(by_type)
+        or sum(item["n"] for item in by_type) != total
+    ):
+        raise OperationalProbeUnavailable("query_unavailable")
+    fingerprint = {
+        "engine": "postgresql",
+        "environment": environment,
+        "database_name": expected_database,
+        "host": parameters.get("host", ""),
+        "port": str(parameters.get("port", "")),
+        "configured_user": parameters.get("user", ""),
+        "session_user": str(identity_row[1]),
+    }
+    identity = {
+        "engine": "postgresql",
+        "environment": environment,
+        "database_name": expected_database,
+        "identity_sha256": _canonical_sha256(fingerprint),
+    }
+    scope = {
+        "kind": "database-wide-raw-artifact-inventory",
+        "relation": "public.artifacts",
+        "transaction": "read-only",
+        "catalog_binding": "none",
+        "credit": "none",
+    }
+    return identity, scope, {"artifacts": total, "by_type": by_type, "complete": True}
+
+
+def _validate_runtime_payload(identity: object, scope: object, data: object) -> None:
+    if not isinstance(identity, dict) or set(identity) != {
+        "engine", "environment", "database_name", "identity_sha256",
+    }:
+        raise OperationalProbeUnavailable("invalid_observation")
+    if (
+        identity.get("engine") != "postgresql"
+        or not isinstance(identity.get("environment"), str) or not identity["environment"]
+        or not isinstance(identity.get("database_name"), str) or not identity["database_name"]
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(identity.get("identity_sha256", "")))
+    ):
+        raise OperationalProbeUnavailable("invalid_observation")
+    if not isinstance(scope, dict) or scope != {
+        "kind": "database-wide-raw-artifact-inventory",
+        "relation": "public.artifacts",
+        "transaction": "read-only",
+        "catalog_binding": "none",
+        "credit": "none",
+    }:
+        raise OperationalProbeUnavailable("invalid_observation")
+    if not isinstance(data, dict) or set(data) != {"artifacts", "by_type", "complete"}:
+        raise OperationalProbeUnavailable("invalid_observation")
+    total, by_type = data["artifacts"], data["by_type"]
+    if (
+        isinstance(total, bool) or not isinstance(total, int) or total < 0
+        or data["complete"] is not True or not isinstance(by_type, list)
+    ):
+        raise OperationalProbeUnavailable("invalid_observation")
+    seen, counted = set(), 0
+    for item in by_type:
+        if not isinstance(item, dict) or set(item) != {"type", "n"}:
+            raise OperationalProbeUnavailable("invalid_observation")
+        count = item["n"]
+        if (
+            not isinstance(item["type"], str) or not item["type"] or item["type"] in seen
+            or isinstance(count, bool) or not isinstance(count, int) or count < 0
+        ):
+            raise OperationalProbeUnavailable("invalid_observation")
+        seen.add(item["type"])
+        counted += count
+    if counted != total:
+        raise OperationalProbeUnavailable("invalid_observation")
 
 
 def runtime_signals() -> dict:
-    """Read-only database liveness; this probe starts no process or HTTP request."""
-    out = {"checked_at": _now()}
-
-    db = {"status": "down", "detail": ""}
+    """Typed read-only database inventory; this probe starts no process or HTTP request."""
+    observed_at = _now()
     try:
-        import psycopg                                        # noqa: PLC0415
-        from semiskill.config import Config                   # noqa: PLC0415
-        dsn = Config.from_env().database_url
-        with psycopg.connect(dsn, connect_timeout=2) as conn:
-            conn.execute("SET TRANSACTION READ ONLY")
-            with conn.cursor() as cur:
-                cur.execute("select count(*) from artifacts")
-                total = cur.fetchone()[0]
-                cur.execute("select artifact_type, count(*) from artifacts group by 1 order by 2 desc")
-                by_type = [{"type": t, "n": n} for t, n in cur.fetchall()]
-        db = {"status": "up", "detail": "", "artifacts": total, "by_type": by_type}
-    except Exception:                                         # noqa: BLE001
-        db["detail"] = "database probe unavailable"
-    out["db"] = db
-    return out
+        identity, scope, data = _runtime_probe()
+        _validate_runtime_payload(identity, scope, data)
+        db = _available_observation(
+            observed_at=observed_at, identity=identity, scope=scope, data=data,
+        )
+    except OperationalProbeUnavailable as exc:
+        db = _unavailable_observation(exc.reason, observed_at=observed_at)
+    except Exception:  # noqa: BLE001
+        db = _unavailable_observation("probe_unavailable", observed_at=observed_at)
+    return {"checked_at": observed_at, "db": db}
 
 
 def canonical_snapshot_signals(*, migration: dict | None = None) -> dict:
@@ -540,6 +1118,8 @@ def _read_migration_database_state(dsn: str, *, connect=None) -> dict:
 
     with connect(dsn, connect_timeout=3) as conn:
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        conn.execute("SET LOCAL statement_timeout = '3000ms'")
+        conn.execute("SET LOCAL lock_timeout = '1000ms'")
         database_name = conn.execute("SELECT current_database()").fetchone()[0]
         tracker_rows = [
             {"filename": filename, "sha256": checksum}
@@ -816,12 +1396,47 @@ def _remove_unexecuted_redteam_credit(model: dict, redteam: dict) -> None:
             }
 
 
-def adrs() -> list[dict]:
-    p = ROOT / "DECISIONS.md"
-    if not p.exists():
-        return []
-    return [{"id": i, "title": t.strip()} for i, t in
-            re.findall(r"^## \[(ADR-\d+)\]\s*(.+)$", p.read_text(encoding="utf-8"), re.M)]
+def adrs(*, repository: dict | None = None) -> dict:
+    observed_at = _now()
+    commit = _repository_commit(repository)
+    if commit is None:
+        return _unavailable_observation("repository_unavailable", observed_at=observed_at)
+    path = ROOT / "DECISIONS.md"
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise OperationalProbeUnavailable("required_file_unavailable")
+        raw = path.read_bytes()
+        text = raw.decode("utf-8", errors="strict")
+        active = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+        candidate_lines = [
+            line.strip() for line in active.splitlines()
+            if re.match(r"^#{1,6}\s+\[ADR", line.strip())
+        ]
+        items, numbers = [], []
+        for line in candidate_lines:
+            match = re.fullmatch(r"## \[(ADR-(\d{3}))\]\s+(.+)", line)
+            if match is None:
+                raise OperationalProbeUnavailable("adr_register_invalid")
+            items.append({"id": match.group(1), "title": match.group(3).strip()})
+            numbers.append(int(match.group(2)))
+        if not items or len(set(numbers)) != len(numbers) or numbers != sorted(numbers):
+            raise OperationalProbeUnavailable("adr_register_invalid")
+        return _available_observation(
+            observed_at=observed_at,
+            identity={
+                "repository_commit": commit,
+                "path": "DECISIONS.md",
+                "sha256": _sha256_bytes(raw),
+            },
+            scope={"parser": "adr-heading/v1", "heading": "## [ADR-NNN] title"},
+            data={"items": items, "count": len(items)},
+        )
+    except OperationalProbeUnavailable as exc:
+        return _unavailable_observation(exc.reason, observed_at=observed_at)
+    except (OSError, UnicodeDecodeError):
+        return _unavailable_observation("required_file_unavailable", observed_at=observed_at)
+    except Exception:  # noqa: BLE001
+        return _unavailable_observation("adr_register_invalid", observed_at=observed_at)
 
 
 def read_inbox() -> list[dict]:
@@ -874,6 +1489,30 @@ def artifact_schema_signal() -> dict:
     }
 
 
+def _collect_runtime_signals() -> dict:
+    try:
+        runtime = runtime_signals()
+        if not isinstance(runtime, dict) or set(runtime) != {"checked_at", "db"}:
+            raise ValueError("invalid runtime observation")
+        _timestamp(runtime["checked_at"])
+        runtime["db"] = _validated_observation(runtime["db"])
+        if runtime["db"]["status"] != "unavailable":
+            _validate_runtime_payload(
+                runtime["db"]["identity"], runtime["db"]["scope"], runtime["db"]["data"],
+            )
+        return runtime
+    except OperationalProbeUnavailable as exc:
+        observed_at = _now()
+        return {"checked_at": observed_at, "db": _unavailable_observation(
+            exc.reason, observed_at=observed_at,
+        )}
+    except Exception:  # noqa: BLE001
+        observed_at = _now()
+        return {"checked_at": observed_at, "db": _unavailable_observation(
+            "probe_unavailable", observed_at=observed_at,
+        )}
+
+
 def build_state(state_reader=None, model_reader=None) -> dict:
     if model_reader is None:
         model, inbox = (state_reader or read_state_inputs)()
@@ -890,18 +1529,32 @@ def build_state(state_reader=None, model_reader=None) -> dict:
     canonical = canonical_snapshot_signals(migration=migration)
     redteam = redteam_signal()
     _remove_unexecuted_redteam_credit(model, redteam)
+    repository = _collect_observation(repo_signals, _validate_repo_observation)
+    repository_commit = _repository_commit(repository)
+    project_state = _collect_observation(
+        lambda: state_files(repository=repository),
+        lambda value: _validate_state_observation(
+            value, repository_commit=repository_commit,
+        ),
+    )
+    decision_register = _collect_observation(
+        lambda: adrs(repository=repository),
+        lambda value: _validate_adr_observation(
+            value, repository_commit=repository_commit,
+        ),
+    )
     return {
         "generated_at": _now(),
         "artifact_schema": artifact_schema_signal(),
         "model": model,
-        "repo": repo_signals(),
-        "state": state_files(),
-        "runtime": runtime_signals(),
+        "repo": repository,
+        "state": project_state,
+        "runtime": _collect_runtime_signals(),
         "scoreboard": canonical["scoreboard"],
         "progress": canonical["progress"],
         "migration": migration,
         "redteam": redteam,
-        "adrs": adrs(),
+        "adrs": decision_register,
         "inbox": inbox,
     }
 

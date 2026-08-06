@@ -2,6 +2,7 @@ import copy
 import hashlib
 import inspect
 import json
+import re
 import uuid
 from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
@@ -436,7 +437,7 @@ def test_migration_database_reads_one_repeatable_read_snapshot(monkeypatch):
 
         def execute(self, sql, *_args):
             self.statements.append(sql)
-            if sql.startswith("SET TRANSACTION"):
+            if sql.startswith(("SET TRANSACTION", "SET LOCAL")):
                 return Result()
             if "current_database" in sql:
                 return Result(one=("semiskill_dev",))
@@ -464,6 +465,8 @@ def test_migration_database_reads_one_repeatable_read_snapshot(monkeypatch):
     assert connection.statements[0] == (
         "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
     )
+    assert "SET LOCAL statement_timeout = '3000ms'" in connection.statements
+    assert "SET LOCAL lock_timeout = '1000ms'" in connection.statements
     assert connection.rolled_back is True
     assert state["tracker_rows"] == rows
 
@@ -877,7 +880,7 @@ def test_dashboard_navigation_filters_and_overview_evidence_are_truthful_and_acc
     assert "updateFeatureFilterResults()" in html
     assert "$('#f-results').textContent" in html
     assert "vFeatures(); $('#f-q').focus()" not in html
-    assert "derived from the active project state" in html
+    assert "derived from fresh, hash-bound project state" in html
     assert "Canonical 84-skill funnel" in html
     for stale_claim in (
         "all planned phases complete",
@@ -901,19 +904,19 @@ def test_dashboard_queue_readme_names_direct_writer_acl_boundary():
 
 def test_repo_inventory_never_executes_pytest(monkeypatch):
     commands = []
+    real_sh = server._sh
 
     def fake_sh(cmd, **_kwargs):
         commands.append(cmd)
-        if cmd[-2:] == ["--abbrev-ref", "HEAD"]:
-            return 0, "main\n"
-        return 0, ""
+        return real_sh(cmd, **_kwargs)
 
     monkeypatch.setattr(server, "_sh", fake_sh)
     signals = server.repo_signals()
 
-    assert signals["test_count_kind"] == "static_function_definitions"
-    assert signals["total_tests"] > 0
-    assert "collected_tests" not in signals
+    assert signals["status"] == "available"
+    assert signals["scope"]["test_count_kind"] == "static_function_definitions"
+    assert signals["data"]["total_tests"] > 0
+    assert "collected_tests" not in signals["data"]
     assert not any("pytest" in part for command in commands for part in command)
 
     source = Path("dashboard/server.py").read_text(encoding="utf-8")
@@ -922,11 +925,483 @@ def test_repo_inventory_never_executes_pytest(monkeypatch):
     assert "collected_tests" not in source and "collected_tests" not in html
     assert "static source inventory only; no current pass result" in html
 
-    runtime_source = inspect.getsource(server.runtime_signals)
+    runtime_source = inspect.getsource(server.runtime_signals) + inspect.getsource(server._runtime_probe)
     assert "docker" not in runtime_source.lower()
     assert "urllib" not in runtime_source.lower()
     assert "SET TRANSACTION READ ONLY" in runtime_source
+    assert "public.artifacts" in runtime_source
+    assert "statement_timeout" in runtime_source and "lock_timeout" in runtime_source
     assert "pill('Docker'" not in html and "pill('Read API'" not in html
+
+
+def _available_observation(*, data=None, identity=None, scope=None):
+    return {
+        "status": "available",
+        "reason": None,
+        "observed_at": "2026-08-06T10:00:00Z",
+        "identity": identity or {"source": "test"},
+        "scope": scope or {"kind": "test"},
+        "freshness": {"status": "fresh", "age_seconds": 0, "max_age_seconds": None},
+        "data": data or {},
+    }
+
+
+def _repo_observation(commit="a" * 40):
+    return _available_observation(
+        identity={
+            "root": ".",
+            "commit": commit,
+            "tree": "b" * 40,
+            "inventory_sha256": "sha256:" + "c" * 64,
+        },
+        scope={
+            "history_limit": 80,
+            "module_root": "semiskill",
+            "test_root": "tests",
+            "test_glob": "test_*.py",
+            "test_count_kind": "static_function_definitions",
+        },
+        data={
+            "branch": "main", "commits": [], "dirty": 0, "dirty_files": [],
+            "dirty_files_truncated": False, "modules": [], "tests": [],
+            "total_tests": 0, "total_loc": 0,
+        },
+    )
+
+
+def test_repo_command_failure_is_unavailable_not_clean_zero(monkeypatch):
+    monkeypatch.setattr(server, "_sh", lambda *_args, **_kwargs: (1, "failed"))
+
+    signal = server.repo_signals()
+
+    assert signal["status"] == "unavailable"
+    assert signal["reason"] == "git_unavailable"
+    assert signal["identity"] is None and signal["scope"] is None
+    assert signal["data"] is None
+    assert "dirty" not in signal and "total_tests" not in signal
+
+
+def test_repo_observation_binds_commit_tree_scope_and_inventory():
+    signal = server.repo_signals()
+
+    assert signal["status"] == "available"
+    assert re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", signal["identity"]["commit"])
+    assert re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", signal["identity"]["tree"])
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", signal["identity"]["inventory_sha256"])
+    assert signal["scope"]["test_count_kind"] == "static_function_definitions"
+    assert signal["data"]["total_tests"] > 0
+
+
+def test_repo_observation_rechecks_head_tree_branch_and_status(monkeypatch):
+    real_sh = server._sh
+    status_reads = 0
+
+    def drifting_sh(command, **kwargs):
+        nonlocal status_reads
+        result = real_sh(command, **kwargs)
+        if command[1:3] == ["status", "--porcelain=v1"]:
+            status_reads += 1
+            if status_reads == 2:
+                return result[0], result[1] + "?? changed-during-probe\n"
+        return result
+
+    monkeypatch.setattr(server, "_sh", drifting_sh)
+
+    signal = server.repo_signals()
+
+    assert status_reads == 2
+    assert signal["status"] == "unavailable"
+    assert signal["reason"] == "source_changed_during_observation"
+
+
+def test_state_files_missing_never_means_no_blockers(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+
+    signal = server.state_files(repository=_repo_observation())
+
+    assert signal["status"] == "unavailable"
+    assert signal["reason"] == "required_file_unavailable"
+    assert signal["data"] is None
+
+
+def test_state_current_format_extracts_active_step_and_valid_zero_blockers(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    (tmp_path / "STATUS.md").write_text(
+        "# STATUS\n_Last updated: 2026-08-06T09:59:30Z_\n\n"
+        "## Active step\n- J-010b3e: prove operational truth.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "MEMORY.md").write_text(
+        "# MEMORY\n\n## Current Phase\nPhase J: ship the catalog.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "BLOCKERS.md").write_text(
+        "# BLOCKERS\n\n<!-- ## [BLK-999] template only -->\n",
+        encoding="utf-8",
+    )
+
+    signal = server.state_files(repository=_repo_observation())
+
+    assert signal["status"] == "available"
+    assert signal["data"]["active_step"] == "- J-010b3e: prove operational truth."
+    assert signal["data"]["blockers"] == []
+    assert signal["data"]["blocker_count"] == 0
+    assert {item["path"] for item in signal["identity"]["files"]} == {
+        "STATUS.md", "MEMORY.md", "BLOCKERS.md",
+    }
+    assert all(re.fullmatch(r"sha256:[0-9a-f]{64}", item["sha256"])
+               for item in signal["identity"]["files"])
+
+
+def test_parser_drifted_blocker_heading_is_unavailable_not_zero(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    (tmp_path / "STATUS.md").write_text(
+        "# STATUS\n_Last updated: 2026-08-06T09:59:30Z_\n\n## Active step\n- Work.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "MEMORY.md").write_text(
+        "# MEMORY\n\n## Current Phase\nPhase J.\n", encoding="utf-8",
+    )
+    (tmp_path / "BLOCKERS.md").write_text(
+        "### [BLK-001] Hidden by heading drift\n", encoding="utf-8",
+    )
+
+    signal = server.state_files(repository=_repo_observation())
+
+    assert signal["status"] == "unavailable"
+    assert signal["reason"] == "blocker_register_invalid"
+    assert signal["data"] is None
+
+
+@pytest.mark.parametrize("duplicate", ["timestamp", "active_step", "phase"])
+def test_duplicate_state_markers_are_ambiguous_and_unavailable(tmp_path, monkeypatch, duplicate):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    timestamp = "_Last updated: 2026-08-06T09:59:30Z_\n"
+    active = "## Active step\n- Work.\n"
+    phase = "## Current Phase\nPhase J.\n"
+    (tmp_path / "STATUS.md").write_text(
+        "# STATUS\n" + timestamp + (timestamp if duplicate == "timestamp" else "")
+        + "\n" + active + ("\n" + active if duplicate == "active_step" else ""),
+        encoding="utf-8",
+    )
+    (tmp_path / "MEMORY.md").write_text(
+        "# MEMORY\n\n" + phase + ("\n" + phase if duplicate == "phase" else ""),
+        encoding="utf-8",
+    )
+    (tmp_path / "BLOCKERS.md").write_text("# BLOCKERS\n", encoding="utf-8")
+
+    signal = server.state_files(repository=_repo_observation())
+
+    assert signal["status"] == "unavailable"
+    assert signal["reason"] == "state_contract_invalid"
+
+
+def test_adr_register_missing_duplicate_or_nonmonotonic_is_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    repository = _repo_observation()
+    assert server.adrs(repository=repository)["status"] == "unavailable"
+
+    (tmp_path / "DECISIONS.md").write_text(
+        "## [ADR-002] Later\n## [ADR-001] Earlier\n", encoding="utf-8",
+    )
+    assert server.adrs(repository=repository)["status"] == "unavailable"
+
+    (tmp_path / "DECISIONS.md").write_text(
+        "## [ADR-001] First\n## [ADR-001] Duplicate\n", encoding="utf-8",
+    )
+    assert server.adrs(repository=repository)["status"] == "unavailable"
+
+    (tmp_path / "DECISIONS.md").write_text(
+        "## [ADR-001] First\n### [ADR-002] Hidden by heading drift\n", encoding="utf-8",
+    )
+    assert server.adrs(repository=repository)["status"] == "unavailable"
+
+
+def test_adr_register_available_has_identity_scope_and_count(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    (tmp_path / "DECISIONS.md").write_text(
+        "## [ADR-001] First\n## [ADR-003] Third\n", encoding="utf-8",
+    )
+
+    signal = server.adrs(repository=_repo_observation())
+
+    assert signal["status"] == "available"
+    assert signal["data"]["count"] == 2
+    assert [item["id"] for item in signal["data"]["items"]] == ["ADR-001", "ADR-003"]
+    assert signal["identity"]["path"] == "DECISIONS.md"
+    assert signal["scope"]["parser"] == "adr-heading/v1"
+
+
+def test_runtime_probe_failure_is_unavailable_not_down_or_zero(monkeypatch):
+    def unavailable():
+        raise server.OperationalProbeUnavailable("connection_unavailable")
+
+    monkeypatch.setattr(server, "_runtime_probe", unavailable)
+
+    db = server.runtime_signals()["db"]
+
+    assert db["status"] == "unavailable"
+    assert db["reason"] == "connection_unavailable"
+    assert db["data"] is None
+    assert "artifacts" not in db and "by_type" not in db
+
+
+def test_runtime_available_requires_identity_scope_and_complete_counts(monkeypatch):
+    monkeypatch.setattr(server, "_runtime_probe", lambda: (
+        {
+            "engine": "postgresql", "environment": "development",
+            "database_name": "semiskill", "identity_sha256": "sha256:" + "d" * 64,
+        },
+        {
+            "kind": "database-wide-raw-artifact-inventory", "relation": "public.artifacts",
+            "transaction": "read-only", "catalog_binding": "none", "credit": "none",
+        },
+        {"artifacts": 2, "by_type": [{"type": "review", "n": 2}], "complete": True},
+    ))
+
+    db = server.runtime_signals()["db"]
+
+    assert db["status"] == "available"
+    assert db["identity"]["database_name"] == "semiskill"
+    assert db["scope"]["credit"] == "none"
+    assert db["data"] == {
+        "artifacts": 2, "by_type": [{"type": "review", "n": 2}], "complete": True,
+    }
+
+
+def test_runtime_nondevelopment_never_uses_local_development_fallback(monkeypatch):
+    monkeypatch.setenv("SEMISKILL_ENVIRONMENT", "production")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    db = server.runtime_signals()["db"]
+
+    assert db["status"] == "unavailable"
+    assert db["reason"] == "configuration_invalid"
+    assert db["identity"] is None and db["data"] is None
+
+
+def test_runtime_incomplete_or_nonconserving_counts_are_unavailable(monkeypatch):
+    identity = {
+        "engine": "postgresql", "environment": "development",
+        "database_name": "semiskill", "identity_sha256": "sha256:" + "d" * 64,
+    }
+    scope = {
+        "kind": "database-wide-raw-artifact-inventory", "relation": "public.artifacts",
+        "transaction": "read-only", "catalog_binding": "none", "credit": "none",
+    }
+    monkeypatch.setattr(server, "_runtime_probe", lambda: (
+        identity, scope, {"artifacts": 2, "by_type": [{"type": "review", "n": 1}],
+                          "complete": True},
+    ))
+
+    db = server.runtime_signals()["db"]
+
+    assert db["status"] == "unavailable"
+    assert db["reason"] == "invalid_observation"
+    assert db["data"] is None
+
+
+def test_generic_observation_rejects_stale_timestamp_and_malformed_freshness(monkeypatch):
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:02:00Z")
+    ancient = _available_observation()
+    malformed = _available_observation()
+    malformed["observed_at"] = "2026-08-06T10:02:00Z"
+    malformed["freshness"] = {"status": "fresh", "age_seconds": -1,
+                              "max_age_seconds": "never"}
+
+    assert server._collect_observation(lambda: ancient)["status"] == "unavailable"
+    assert server._collect_observation(lambda: malformed)["status"] == "unavailable"
+
+
+def test_source_specific_validators_reject_semantically_forged_available_rows():
+    repository = server.repo_signals()
+    assert repository["status"] == "available"
+    forged_repo = copy.deepcopy(repository)
+    forged_repo["data"]["commits"][0]["date"] = "not-a-timestamp"
+    assert server._collect_observation(
+        lambda: forged_repo, server._validate_repo_observation,
+    )["status"] == "unavailable"
+    forged_clean = copy.deepcopy(repository)
+    forged_clean["data"].update(dirty=0, dirty_files=[], dirty_files_truncated=True)
+    assert server._collect_observation(
+        lambda: forged_clean, server._validate_repo_observation,
+    )["status"] == "unavailable"
+
+    project_state = server.state_files(repository=repository)
+    assert project_state["status"] in {"available", "stale"}
+    forged_state = copy.deepcopy(project_state)
+    forged_state["data"]["status_updated_at"] = "2020-01-01T00:00:00Z"
+    assert server._collect_observation(
+        lambda: forged_state, server._validate_state_observation,
+    )["status"] == "unavailable"
+    wrong_state_lineage = copy.deepcopy(project_state)
+    wrong_state_lineage["identity"]["repository_commit"] = "b" * 40
+    assert server._collect_observation(
+        lambda: wrong_state_lineage,
+        lambda value: server._validate_state_observation(
+            value, repository_commit=repository["identity"]["commit"],
+        ),
+    )["status"] == "unavailable"
+
+    decisions = server.adrs(repository=repository)
+    assert decisions["status"] == "available"
+    forged_adrs = copy.deepcopy(decisions)
+    forged_adrs["data"]["items"][0].pop("title")
+    assert server._collect_observation(
+        lambda: forged_adrs, server._validate_adr_observation,
+    )["status"] == "unavailable"
+    wrong_adr_lineage = copy.deepcopy(decisions)
+    wrong_adr_lineage["identity"]["repository_commit"] = "b" * 40
+    assert server._collect_observation(
+        lambda: wrong_adr_lineage,
+        lambda value: server._validate_adr_observation(
+            value, repository_commit=repository["identity"]["commit"],
+        ),
+    )["status"] == "unavailable"
+
+
+def test_build_state_fault_isolates_operational_sources_from_scoreboard(monkeypatch):
+    scoreboard = {"status": "available", "snapshot": {"snapshot_id": "fixed"}}
+    monkeypatch.setattr(server, "migration_witness_signal", lambda: {"status": "unavailable"})
+    monkeypatch.setattr(server, "canonical_snapshot_signals", lambda **_kwargs: {
+        "scoreboard": scoreboard, "progress": {"status": "unavailable"},
+    })
+    monkeypatch.setattr(server, "redteam_signal", lambda: {
+        "status": "unavailable", "execution": None, "corpus": [],
+    })
+    monkeypatch.setattr(server, "repo_signals", lambda: (_ for _ in ()).throw(OSError("git")))
+    monkeypatch.setattr(server, "state_files", lambda **_kwargs: _available_observation())
+    monkeypatch.setattr(server, "runtime_signals", lambda: {"checked_at": server._now(), "db": _available_observation()})
+    monkeypatch.setattr(server, "adrs", lambda **_kwargs: _available_observation())
+    model = server.read_public_model()
+
+    state = server.build_state(state_reader=lambda: (model, []))
+
+    assert state["scoreboard"] == scoreboard
+    assert state["repo"]["status"] == "unavailable"
+    assert state["repo"]["reason"] == "probe_unavailable"
+
+
+def test_build_state_rejects_malformed_available_operational_observation(monkeypatch):
+    scoreboard = {"status": "available", "snapshot": {"snapshot_id": "fixed"}}
+    monkeypatch.setattr(server, "migration_witness_signal", lambda: {"status": "unavailable"})
+    monkeypatch.setattr(server, "canonical_snapshot_signals", lambda **_kwargs: {
+        "scoreboard": scoreboard, "progress": {"status": "unavailable"},
+    })
+    monkeypatch.setattr(server, "redteam_signal", lambda: {
+        "status": "unavailable", "execution": None, "corpus": [],
+    })
+    monkeypatch.setattr(server, "repo_signals", lambda: _available_observation())
+    monkeypatch.setattr(server, "runtime_signals", lambda: {
+        "checked_at": server._now(), "db": _available_observation(),
+    })
+    model = server.read_public_model()
+
+    state = server.build_state(state_reader=lambda: (model, []))
+
+    assert state["scoreboard"] == scoreboard
+    assert state["repo"]["status"] == "unavailable"
+    assert state["repo"]["reason"] == "probe_unavailable"
+    assert state["runtime"]["db"]["status"] == "unavailable"
+
+
+@pytest.mark.parametrize("failed_source", ["repo", "state", "runtime", "adrs"])
+def test_operational_failure_never_changes_full_canonical_funnel_or_release_gate(
+    monkeypatch, failed_source,
+):
+    snapshot = _snapshot()
+    scoreboard = {
+        "status": "available", "reason": None, "snapshot": snapshot,
+        "validation": {"status": "verified"},
+    }
+    repository = server.repo_signals()
+    project_state = server.state_files(repository=repository)
+    decisions = server.adrs(repository=repository)
+    runtime = server.runtime_signals()
+    assert repository["status"] == "available"
+    monkeypatch.setattr(server, "migration_witness_signal", lambda: {"status": "unavailable"})
+    monkeypatch.setattr(server, "canonical_snapshot_signals", lambda **_kwargs: {
+        "scoreboard": copy.deepcopy(scoreboard), "progress": {"status": "unavailable"},
+    })
+    monkeypatch.setattr(server, "redteam_signal", lambda: {
+        "status": "unavailable", "execution": None, "corpus": [],
+    })
+    monkeypatch.setattr(server, "repo_signals", lambda: copy.deepcopy(repository))
+    monkeypatch.setattr(server, "state_files", lambda **_kwargs: copy.deepcopy(project_state))
+    monkeypatch.setattr(server, "runtime_signals", lambda: copy.deepcopy(runtime))
+    monkeypatch.setattr(server, "adrs", lambda **_kwargs: copy.deepcopy(decisions))
+    if failed_source == "repo":
+        monkeypatch.setattr(server, "repo_signals", lambda: (_ for _ in ()).throw(OSError()))
+    elif failed_source == "state":
+        monkeypatch.setattr(server, "state_files", lambda **_kwargs: (_ for _ in ()).throw(OSError()))
+    elif failed_source == "runtime":
+        monkeypatch.setattr(server, "runtime_signals", lambda: (_ for _ in ()).throw(OSError()))
+    else:
+        monkeypatch.setattr(server, "adrs", lambda **_kwargs: (_ for _ in ()).throw(OSError()))
+
+    state = server.build_state(state_reader=lambda: (server.read_public_model(), []))
+
+    assert state["scoreboard"] == scoreboard
+    assert state["scoreboard"]["snapshot"]["registry"] == snapshot["registry"]
+    assert state["scoreboard"]["snapshot"]["funnel"] == snapshot["funnel"]
+    assert state["scoreboard"]["snapshot"]["exclusive_states"] == snapshot["exclusive_states"]
+    assert state["scoreboard"]["snapshot"]["release_gate"] == snapshot["release_gate"]
+
+
+def test_operational_ui_never_converts_unavailable_or_refresh_failure_to_clean_zero():
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+
+    assert "function observationAvailable" in html
+    assert "function invalidateState" in html
+    assert "S = null" in html[html.index("function invalidateState"):]
+    assert "document.querySelectorAll('.view').forEach" in html[html.index("function invalidateState"):]
+    assert "try { instance.destroy(); } catch" in html[html.index("function invalidateState"):]
+    assert "REFRESH_EPOCH" in html and "new AbortController()" in html
+    assert "epoch !== REFRESH_EPOCH" in html
+    assert "responseCurrent(next)" in html
+    assert "visibilitychange" in html and "page hidden; observations require a fresh response" in html
+    assert "stableStateFingerprint" in html and "restoreUiState" in html
+    assert "UI_INTERACTION_EPOCH" in html and "interactionEpoch" in html
+    assert "VIEW !== saved.view" in html
+    refresh_fragment = html[
+        html.index("async function refresh() {"):html.index("$('#btn-refresh').onclick")
+    ]
+    assert refresh_fragment.index("await api('/api/state'") < refresh_fragment.index("captureUiState()")
+    assert "if (uiState) uiState.interactionEpoch = UI_INTERACTION_EPOCH" in refresh_fragment
+    assert refresh_fragment.count("restoreUiState(uiState)") == 1
+    assert "delete normalized.generated_at" in html
+    assert "observed_at', 'checked_at'" not in html
+    assert "available zero requires complete source evidence" in html
+    assert "fresh envelope does not refresh operational observations" in html
+
+
+def test_dashboard_responsive_and_inflight_controls_preserve_access_and_idempotency():
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+
+    assert ".section-head{display:flex" in html and "flex-wrap:wrap" in html
+    assert ".matrix-scroll{overflow-x:auto" in html
+    assert "data-matrix-role" in html and 'id="matrix-detail"' in html
+    assert "Coverage detail" in html
+    assert "MATRIX_SELECTION" in html and "selectedMatrixDetail" in html
+    assert "kind: 'matrix'" in html
+    assert "data-health-source" in html and "kind: 'health'" in html
+    assert "'scroll', 'wheel', 'touchmove'" in html
+    assert 'class="badge ${status' in html and 'tabindex="0" aria-label=' in html
+    assert "$('#btn-refresh').focus({ preventScroll: true })" in html
+    assert "cursor:pointer;user-select:none;white-space:nowrap" not in html
+    assert "thead th:hover" not in html
+    assert "State files are ${esc(S.state.status)}" not in html
+    assert html.count('<div class="tbl-wrap"><table>') >= 8
+    assert "IN_FLIGHT_REQUESTS" in html and "ARCHIVE_IN_FLIGHT" in html
+    assert "const requestContext = VIEW" in html
+    queue_fragment = html[html.index("async function queue"):html.index("document.addEventListener('click'")]
+    assert queue_fragment.index("LAST_RECEIPT = receipt") < queue_fragment.rindex(
+        "PENDING_REQUESTS.delete(pendingKey)"
+    )
+    assert "if (S && VIEW === 'queue') vQueue()" in html
 
 
 def test_artifact_schema_view_is_projected_from_canonical_source():
