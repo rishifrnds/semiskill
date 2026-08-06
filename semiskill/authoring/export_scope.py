@@ -15,6 +15,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Mapping
 
 from semiskill.artifacts.schema import Artifact, ArtifactType, PERMISSIONS_LABELS
@@ -104,6 +105,7 @@ class ExportScope:
     scoreboard_snapshot_id: str
     scoreboard_generated_at: str
     source_commit: str
+    source_skills_root: str
     source_tree_sha256: str
     database_environment: str
     database_name: str
@@ -133,6 +135,14 @@ class ExportScope:
             self.source_commit == "unknown"
         ):
             raise ValueError("export source commit is required")
+        root = PurePosixPath(self.source_skills_root)
+        if (
+            not self.source_skills_root
+            or root.is_absolute()
+            or ".." in root.parts
+            or "\\" in self.source_skills_root
+        ):
+            raise ValueError("export skills root must be a safe repository-relative path")
         for value, field in (
             (self.scoreboard_snapshot_id, "scoreboard snapshot ID"),
             (self.source_tree_sha256, "source tree hash"),
@@ -174,6 +184,7 @@ class ExportScope:
             "scoreboard_snapshot_id": self.scoreboard_snapshot_id,
             "scoreboard_generated_at": self.scoreboard_generated_at,
             "source_commit": self.source_commit,
+            "source_skills_root": self.source_skills_root,
             "source_tree_sha256": self.source_tree_sha256,
             "database": {
                 "environment": self.database_environment,
@@ -234,6 +245,24 @@ def _repository_identity(repo_root: Path) -> tuple[str, bool]:
     return head, bool(status.strip())
 
 
+def _skills_tree_sha256(root: Path) -> str:
+    """Recompute the canonical source material used by the scoreboard tree identity."""
+    from semiskill.capture.intake import build_skill_version, load_skill_dir
+
+    rows: dict[str, str] = {}
+    for skill_path in sorted(root.rglob("SKILL.md")):
+        skill_md, files = load_skill_dir(skill_path.parent)
+        payload = build_skill_version(
+            skill_md=skill_md, actor="export-scope-tree", files=files,
+        ).payload
+        slug = payload["slug"]
+        if slug in rows:
+            raise ExportRefused(f"duplicate source slug while binding export tree: {slug}")
+        rows[slug] = payload_fingerprint(payload)
+    material = "\n".join(f"{slug}:{rows[slug]}" for slug in sorted(rows)).encode("utf-8")
+    return "sha256:" + hashlib.sha256(material).hexdigest()
+
+
 def make_export_scope(
     *,
     principal: ResolvedPrincipal,
@@ -253,6 +282,10 @@ def make_export_scope(
     except Exception as exc:  # validation details may disclose internal snapshot state
         raise ExportRefused("canonical scoreboard snapshot is invalid") from exc
 
+    snapshot_environment = snapshot.get("sources", {}).get("database", {}).get("environment")
+    if snapshot_environment == "production" and principal.provider != "entra_oidc":
+        raise ExportRefused("production exports require an Entra/OIDC resolved principal")
+
     sources = snapshot["sources"]
     repository = sources["repository"]
     skills = sources.get("skills") if isinstance(sources, dict) else None
@@ -267,6 +300,22 @@ def make_export_scope(
     )
     if not _sha256(source_tree):
         raise ExportRefused("scoreboard source tree hash is unavailable")
+    skills_root = skills.get("root") if isinstance(skills, dict) else None
+    try:
+        relative_root = PurePosixPath(skills_root)
+    except TypeError as exc:
+        raise ExportRefused("scoreboard skills root is unavailable") from exc
+    if (
+        not skills_root or relative_root.is_absolute() or ".." in relative_root.parts
+        or "\\" in skills_root
+    ):
+        raise ExportRefused("scoreboard skills root is unsafe")
+    try:
+        observed_tree = _skills_tree_sha256(Path(repo_root).resolve() / Path(*relative_root.parts))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ExportRefused("scoreboard skills tree cannot be recomputed safely") from exc
+    if observed_tree != source_tree:
+        raise ExportRefused("offline export source tree no longer matches the scoreboard snapshot")
     if any(snapshot["anomalies"].values()):
         raise ExportRefused("scoreboard contains publication anomalies")
     try:
@@ -329,6 +378,7 @@ def make_export_scope(
             scoreboard_snapshot_id=snapshot["snapshot_id"],
             scoreboard_generated_at=snapshot["generated_at"],
             source_commit=repository["commit"],
+            source_skills_root=skills_root,
             source_tree_sha256=source_tree,
             database_environment=database["environment"],
             database_name=database["database_name"],
@@ -377,6 +427,15 @@ def load_scoped_publications(store, scope: ExportScope) -> tuple[ScopedPublicati
         raise ExportRefused("scoped publication read failed") from exc
     if not isinstance(bundle, ScopedPublicationBundle):
         raise ExportRefused("scoped publication reader returned a malformed bundle")
+    if any(not hasattr(head, "slug") for head in bundle.heads) or any(
+        not isinstance(artifact, Artifact) for artifact in bundle.artifacts
+    ):
+        raise ExportRefused("scoped publication bundle contains malformed rows")
+    artifact_ids = [artifact.artifact_id for artifact in bundle.artifacts]
+    if len(artifact_ids) != len(set(artifact_ids)):
+        raise ExportRefused("scoped publication bundle contains duplicate artifact IDs")
+    if len(bundle.artifacts) > 7100:
+        raise ExportRefused("scoped publication bundle exceeds its evidence bound")
     if any(
         artifact.permissions_label != scope.permission_label for artifact in bundle.artifacts
     ):
@@ -400,6 +459,36 @@ def load_scoped_publications(store, scope: ExportScope) -> tuple[ScopedPublicati
         raise ExportRefused("active publication heads no longer match the export snapshot")
 
     subset = _ArtifactSubset(bundle.artifacts)
+    reachable: set[uuid.UUID] = set()
+    for ref in scope.publications:
+        if len(ref.scan_artifact_ids) != len(set(ref.scan_artifact_ids)):
+            raise ExportRefused(f"{ref.slug}: export snapshot has duplicate scan IDs")
+        reachable.update((
+            ref.approval_id, ref.skill_version_id, ref.automated_review_id,
+            ref.content_review_id, *ref.scan_artifact_ids,
+        ))
+        review_id = ref.content_review_id
+        visited: set[uuid.UUID] = set()
+        for _depth in range(64):
+            if review_id in visited:
+                raise ExportRefused(f"{ref.slug}: content-review lineage contains a cycle")
+            visited.add(review_id)
+            review = subset.get(review_id)
+            if review is None or review.artifact_type is not ArtifactType.REVIEW:
+                break
+            prior_ref = review.payload.get("prior_review_ref") if isinstance(
+                review.payload, dict
+            ) else None
+            if prior_ref is None:
+                break
+            if len(review.input_refs) != 2:
+                raise ExportRefused(f"{ref.slug}: content-review lineage is malformed")
+            review_id = review.input_refs[1]
+            reachable.add(review_id)
+        else:
+            raise ExportRefused(f"{ref.slug}: content-review lineage exceeds 64 attempts")
+    if set(artifact_ids) != reachable:
+        raise ExportRefused("scoped publication bundle contains missing or unrelated evidence")
     rows: list[ScopedPublication] = []
     for ref in scope.publications:
         skill = subset.get(ref.skill_version_id)

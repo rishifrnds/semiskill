@@ -27,7 +27,16 @@ from pathlib import Path
 
 from semiskill.artifacts.store import ArtifactStore
 from semiskill.authoring import facets as facet_vocab
-from semiskill.authoring.catalog_page import CatalogEntry, collect, render_csv, render_markdown as render_catalog_md
+from semiskill.authoring.catalog_page import (
+    CatalogEntry,
+    ScopedCatalog,
+    _install_prompt,
+    collect,
+    render_csv,
+    render_markdown as render_catalog_md,
+)
+from semiskill.authoring.export_files import atomic_build_tree, scope_stamp
+from semiskill.authoring.export_scope import ExportScope
 from semiskill.authoring.markdown import render_markdown, strip_markdown
 
 E = html.escape
@@ -42,6 +51,8 @@ class SiteResult:
     root: Path
     pages: tuple[str, ...]
     entries: tuple[CatalogEntry, ...]
+    scope_id: str
+    manifest_path: Path
 
 
 def _rank_key(e: CatalogEntry):
@@ -52,40 +63,24 @@ def _rank_key(e: CatalogEntry):
     return (first, e.role, LEVEL_ORDER.index(e.level) if e.level in LEVEL_ORDER else 99, e.slug)
 
 
-def _install_prompt(e: CatalogEntry) -> str:
-    return (f"Create the file .cursor/skills/{e.slug}/SKILL.md in this workspace, creating "
-            f"directories as needed. Write exactly the content between the markers - do not "
-            f"summarise, reformat or \"improve\" it.\n"
-            f"----- BEGIN SKILL.md -----\n{e.body}\n----- END SKILL.md -----")
-
-
 def _json_block(obj, element_id: str) -> str:
     # `</` is neutralised so an untrusted body cannot terminate its own data block.
     payload = json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
     return f'<script id="{element_id}" type="application/json">{payload}</script>'
 
 
-# A preview build renders skills that have NOT passed the gate, so it must not wear the published
-# site's footer, which promises every field came from a published skill. `build_site(preview=...)`
-# sets this for the duration of the build; the default is the honest published-catalog wording.
-_PREVIEW: str = ""
-
-
-def _shell(*, title: str, depth: int, body: str, generated_at: str, scripts: str = "") -> str:
+def _shell(*, title: str, depth: int, body: str, scope: ExportScope, scripts: str = "") -> str:
     up = "../" * depth
-    banner = (f'<div class="preview-banner"><b>PREVIEW — not the published catalog.</b> '
-              f'{E(_PREVIEW)}</div>' if _PREVIEW else "")
-    footer = (f'PREVIEW build · {E(generated_at)} · These skills have NOT all passed the '
-              f'verification gate. Each card shows its real gate status; scan scores are real, '
-              f'the content review is not complete.'
-              if _PREVIEW else
-              f'Generated from the verified catalog · {E(generated_at)} · Nothing here is estimated '
-              f'or illustrative — every field comes from a published skill and its real scan report.')
+    footer = (f'Generated from the verified catalog · {E(scope_stamp(scope))} · '
+              f'<a href="{up}EXPORT-MANIFEST.json">export manifest</a> · Nothing here is estimated '
+              f'or illustrative — every field comes from an exact published approval chain.')
     return f"""<!doctype html>
 <html lang="en" class="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="semiskill-scope-id" content="{E(scope.scope_id)}">
+<meta name="semiskill-permission-label" content="{E(scope.permission_label)}">
 <title>{E(title)}</title>
 <link rel="stylesheet" href="{up}assets/site.css">
 </head>
@@ -98,7 +93,6 @@ def _shell(*, title: str, depth: int, body: str, generated_at: str, scripts: str
     <a href="{up}install.html">Install</a>
   </nav>
 </header>
-{banner}
 <main>
 {body}
 </main>
@@ -120,7 +114,8 @@ def _badges(e: CatalogEntry, *, depth: int) -> str:
             if e.aggregate_safety is not None else "")
 
 
-def render_index(entries: list[CatalogEntry], *, generated_at: str) -> str:
+def render_index(catalog: ScopedCatalog) -> str:
+    entries = list(catalog.entries)
     rows = []
     for i, e in enumerate(entries, 1):
         rows.append(
@@ -137,7 +132,7 @@ def render_index(entries: list[CatalogEntry], *, generated_at: str) -> str:
     body = f"""
 <section class="hero">
   <h1>DV Agent Skills</h1>
-  <p>{len(entries)} procedures your agent can use, each one a single Markdown file. Install takes
+  <p>{len(entries)} approved skill folders your agent can use. Install takes
      about two minutes and needs no admin rights. Every skill ships generic on purpose — the blanks
      are where your team's specifics go.</p>
   <div class="cmd"><code>~/.cursor/skills/</code><span>drop the pack folder here, reload Cursor, done</span></div>
@@ -178,10 +173,10 @@ q.addEventListener('input', () => {
 });
 </script>"""
     return _shell(title="DV Agent Skills", depth=0, body=body,
-                  generated_at=generated_at, scripts=script)
+                  scope=catalog.scope, scripts=script)
 
 
-def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, generated_at: str) -> str:
+def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, scope: ExportScope) -> str:
     stages = "".join(
         f'<tr><td>stage {s["stage"]}</td>'
         f'<td>{"BLOCKED" if s["hard_fail"] else s["status"].replace("_", " ")} '
@@ -221,6 +216,9 @@ def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, generated_at:
         <button class="btn" id="copy-body">Copy the file</button>
       </div>
       <p class="sub">Working on a remote box over SSH? The prompt path needs no download at all.</p>
+      <details id="install-fallback"><summary>Manual copy fallback</summary>
+        <textarea id="install-prompt-text" readonly>{E(_install_prompt(e))}</textarea>
+      </details>
     </div>
 
     <section class="rendered">{render_markdown(e.body)}</section>
@@ -234,6 +232,10 @@ def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, generated_at:
         <dt>Owner</dt><dd>{E(e.owner or '—')}</dd>
         <dt>Blanks to fill</dt><dd>{e.slots}</dd>
         <dt>Size</dt><dd>{len(e.body.encode('utf-8')):,} bytes</dd>
+        <dt>Permission</dt><dd>{E(e.permissions_label)}</dd>
+        <dt>Payload files</dt><dd>{len(e.files)}</dd>
+        <dt>Approval</dt><dd class="mono">{E(e.approval_id)}</dd>
+        <dt>Payload hash</dt><dd class="mono">{E(e.payload_sha256)}</dd>
       </dl>
     </div>
     <div class="panel">
@@ -252,21 +254,22 @@ def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, generated_at:
   </aside>
 </div>
 """
-    script = _json_block({"prompt": _install_prompt(e), "body": e.body}, "skill-data") + """
+    script = _json_block({"prompt": _install_prompt(e), "skill_md": e.skill_md}, "skill-data") + """
 <script>
 const D = JSON.parse(document.getElementById('skill-data').textContent);
 function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;
   document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
-function copy(t,m){navigator.clipboard.writeText(t).then(()=>toast(m),
-  ()=>toast('Copy failed — select the text below instead.'));}
+function copy(t,m){navigator.clipboard.writeText(t).then(()=>toast(m),()=>{
+  const d=document.getElementById('install-fallback'), a=document.getElementById('install-prompt-text');
+  d.open=true;a.focus();a.select();toast('Copy failed — the complete prompt is selected below.');});}
 document.getElementById('copy-prompt').onclick=()=>copy(D.prompt,'Install prompt copied — paste it into Cursor Agent chat.');
-document.getElementById('copy-body').onclick=()=>copy(D.body,'SKILL.md copied.');
+document.getElementById('copy-body').onclick=()=>copy(D.skill_md,'SKILL.md copied.');
 </script>"""
     return _shell(title=f"{e.title} · DV Agent Skills", depth=1, body=body,
-                  generated_at=generated_at, scripts=script)
+                  scope=scope, scripts=script)
 
 
-def render_role(role: str, entries: list[CatalogEntry], *, generated_at: str) -> str:
+def render_role(role: str, entries: list[CatalogEntry], *, scope: ExportScope) -> str:
     cards = "".join(
         f'<a class="card" href="../skills/{E(e.slug)}.html">'
         f'<h3>{E(e.title)}</h3><div class="sub mono">/{E(e.slug)}</div>'
@@ -280,10 +283,11 @@ def render_role(role: str, entries: list[CatalogEntry], *, generated_at: str) ->
 <p class="lede">{len(entries)} published skill{'' if len(entries) == 1 else 's'} for this role.</p>
 <div class="grid">{cards}</div>
 """
-    return _shell(title=f"{role} · DV Agent Skills", depth=1, body=body, generated_at=generated_at)
+    return _shell(title=f"{role} · DV Agent Skills", depth=1, body=body, scope=scope)
 
 
-def render_matrix(entries: list[CatalogEntry], *, generated_at: str) -> str:
+def render_matrix(catalog: ScopedCatalog) -> str:
+    entries = list(catalog.entries)
     roles = sorted({e.role for e in entries if e.role})
     levels = [l for l in LEVEL_ORDER if any(e.level == l for e in entries)]
     by: dict[str, list[CatalogEntry]] = {}
@@ -315,13 +319,14 @@ def render_matrix(entries: list[CatalogEntry], *, generated_at: str) -> str:
 </div>
 <p class="sub">{len(entries)} skills · {len(roles)} roles · {len(levels)} levels in use.</p>
 """
-    return _shell(title="Coverage · DV Agent Skills", depth=0, body=body, generated_at=generated_at)
+    return _shell(title="Coverage · DV Agent Skills", depth=0, body=body, scope=catalog.scope)
 
 
-def render_install(entries: list[CatalogEntry], *, generated_at: str) -> str:
+def render_install(catalog: ScopedCatalog) -> str:
+    entries = list(catalog.entries)
     body = f"""
 <h1>Install — about two minutes</h1>
-<p class="lede">{len(entries)} skills, each a single Markdown file. Nothing to run, no admin rights.</p>
+<p class="lede">{len(entries)} approved skill folders. Nothing to run, no admin rights.</p>
 
 <h2>Cursor</h2>
 <p>Put the whole <code>semiskill-dv</code> folder in <b>one</b> of these, then reload Cursor:</p>
@@ -344,8 +349,7 @@ def render_install(entries: list[CatalogEntry], *, generated_at: str) -> str:
 
 <h2>Before they are useful</h2>
 <p>Every skill ships generic on purpose, with <code>[[FILL: …]]</code> blanks where your team's
-   specifics belong. Fill <code>_shared/team-profile.md</code> in once — it holds the facts the whole
-   pack shares — then open any skill and ask the agent to fill the rest from your repo.</p>
+   specifics belong. Open any skill and ask the agent to fill them from your repo.</p>
 <p class="note">A skill with unfilled blanks will stop and ask rather than invent an answer. That is
    deliberate: a confidently invented rerun command costs more than no answer at all.</p>
 
@@ -356,69 +360,50 @@ def render_install(entries: list[CatalogEntry], *, generated_at: str) -> str:
    <code>python tools/lint_body.py &lt;your-skill&gt;/SKILL.md</code>, and send it back. It goes
    through the same scan and human approval as everything here.</p>
 """
-    return _shell(title="Install · DV Agent Skills", depth=0, body=body, generated_at=generated_at)
+    return _shell(title="Install · DV Agent Skills", depth=0, body=body, scope=catalog.scope)
 
 
-def build_site(*, store: ArtifactStore | None = None, out_dir: str | Path,
-               generated_at: str = "unset",
-               entries: list[CatalogEntry] | None = None,
-               preview: str = "") -> SiteResult:
-    """Render the catalog site.
-
-    By default the source is the PUBLISHED catalog, and that invariant is load-bearing — an
-    unpublished skill must never reach the site. `entries` exists for one purpose: a clearly-marked
-    PREVIEW build of authored-but-not-yet-verified skills, which every page then declares in a
-    banner and its footer. Passing `entries` without `preview` is refused, so a preview can never be
-    mistaken for the real catalog by omission.
-    """
-    if entries is not None and not preview:
-        raise ValueError("entries= builds a preview and requires preview=<what it is>; refusing to "
-                         "render unpublished skills in the published site's clothing")
-    global _PREVIEW
-    _PREVIEW = preview
-    try:
-        return _build(store=store, out_dir=out_dir, generated_at=generated_at, entries=entries)
-    finally:
-        _PREVIEW = ""
-
-
-def _build(*, store: ArtifactStore | None, out_dir: str | Path,
-           generated_at: str, entries: list[CatalogEntry] | None) -> SiteResult:
-    if entries is None:
-        if store is None:
-            raise ValueError("build_site needs either a store or an explicit entries list")
-        entries = collect(store)
-    entries = sorted(entries, key=_rank_key)
-    out = Path(out_dir)
-    (out / "skills").mkdir(parents=True, exist_ok=True)
-    (out / "roles").mkdir(parents=True, exist_ok=True)
-    (out / "assets").mkdir(parents=True, exist_ok=True)
-
+def build_site(*, store: ArtifactStore, out_dir: str | Path,
+               scope: ExportScope) -> SiteResult:
+    """Render the shipping site from one exact scoped publication set."""
+    collected = collect(store, scope=scope)
+    entries = tuple(sorted(collected.entries, key=_rank_key))
+    catalog = ScopedCatalog(scope=scope, entries=tuple(sorted(entries, key=lambda e: e.slug)))
     pages: list[str] = []
 
-    def write(rel: str, text: str) -> None:
-        (out / rel).write_text(text, encoding="utf-8")
-        pages.append(rel)
+    def build(out: Path) -> None:
+        (out / "skills").mkdir(parents=True)
+        (out / "roles").mkdir(parents=True)
+        (out / "assets").mkdir(parents=True)
 
-    write("assets/site.css", _CSS)
-    write("index.html", render_index(entries, generated_at=generated_at))
-    write("matrix.html", render_matrix(entries, generated_at=generated_at))
-    write("install.html", render_install(entries, generated_at=generated_at))
+        def write(rel: str, text: str) -> None:
+            (out / rel).write_bytes(text.encode("utf-8"))
+            pages.append(rel)
 
-    by_role: dict[str, list[CatalogEntry]] = {}
-    for e in entries:
-        by_role.setdefault(e.role, []).append(e)
-    for role, items in by_role.items():
-        write(f"roles/{role}.html", render_role(role, items, generated_at=generated_at))
-    for e in entries:
-        siblings = [s for s in by_role.get(e.role, []) if s.slug != e.slug]
-        write(f"skills/{e.slug}.html", render_skill(e, siblings, generated_at=generated_at))
+        ranked_catalog = ScopedCatalog(scope=scope, entries=entries)
+        write("assets/site.css", _CSS)
+        write("index.html", render_index(ranked_catalog))
+        write("matrix.html", render_matrix(catalog))
+        write("install.html", render_install(catalog))
+        by_role: dict[str, list[CatalogEntry]] = {}
+        for entry in entries:
+            by_role.setdefault(entry.role, []).append(entry)
+        for role, items in by_role.items():
+            write(f"roles/{role}.html", render_role(role, items, scope=scope))
+        for entry in entries:
+            siblings = [item for item in by_role.get(entry.role, []) if item.slug != entry.slug]
+            write(f"skills/{entry.slug}.html", render_skill(entry, siblings, scope=scope))
+        write("catalog.md", render_catalog_md(catalog))
+        write("catalog.csv", render_csv(catalog))
 
-    # The SharePoint entry point and the list import travel with the site.
-    write("catalog.md", render_catalog_md(entries, generated_at=generated_at))
-    write("catalog.csv", render_csv(entries))
-
-    return SiteResult(root=out, pages=tuple(pages), entries=tuple(entries))
+    out, _manifest = atomic_build_tree(
+        target=out_dir, export_kind="site", scope=scope, build=build,
+    )
+    pages.append("EXPORT-MANIFEST.json")
+    return SiteResult(
+        root=out, pages=tuple(pages), entries=entries, scope_id=scope.scope_id,
+        manifest_path=out / "EXPORT-MANIFEST.json",
+    )
 
 
 _CSS = """/* shadcn/tweakcn dark tokens — one stylesheet, no build step, no CDN */

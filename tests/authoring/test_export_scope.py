@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from semiskill.artifacts.migrate import apply_migrations
-from semiskill.artifacts.store import PostgresArtifactStore
+from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
+from semiskill.artifacts.store import PostgresArtifactStore, ScopedPublicationBundle
 from semiskill.authoring.export_scope import (
     ExportPublicationRef,
     ExportRefused,
@@ -75,6 +76,7 @@ def test_scope_requires_resolved_principal_and_exact_clearance(pg_store):
             scoreboard_snapshot_id="sha256:" + "1" * 64,
             scoreboard_generated_at="2026-08-06T00:00:00Z",
             source_commit="test-commit",
+            source_skills_root="skills",
             source_tree_sha256="sha256:" + "2" * 64,
             database_environment="test",
             database_name="semiskill_test",
@@ -90,6 +92,7 @@ def test_scope_requires_resolved_principal_and_exact_clearance(pg_store):
             scoreboard_snapshot_id="sha256:" + "1" * 64,
             scoreboard_generated_at="2026-08-06T00:00:00Z",
             source_commit="test-commit",
+            source_skills_root="skills",
             source_tree_sha256="sha256:" + "2" * 64,
             database_environment="production",
             database_name="semiskill_prod",
@@ -105,6 +108,7 @@ def test_scope_requires_resolved_principal_and_exact_clearance(pg_store):
             scoreboard_snapshot_id="sha256:" + "1" * 64,
             scoreboard_generated_at="2026-08-06T00:00:00Z",
             source_commit="test-commit",
+            source_skills_root="skills",
             source_tree_sha256="sha256:" + "2" * 64,
             database_environment="test",
             database_name="semiskill_test",
@@ -149,6 +153,25 @@ def test_make_scope_rejects_dirty_or_repository_mismatched_snapshot(monkeypatch)
             principal=principal, permission_label="public",
             scoreboard=clean, generated_at="2026-08-06T01:00:00Z",
             repo_root=".", store=_ScopeStore(clean),
+        )
+
+
+def test_make_scope_recomputes_the_skills_tree(monkeypatch):
+    snapshot = _empty_snapshot()
+    monkeypatch.setattr(
+        "semiskill.authoring.export_scope._repository_identity",
+        lambda _root: ("test-commit", False),
+    )
+    monkeypatch.setattr(
+        "semiskill.authoring.export_scope._skills_tree_sha256",
+        lambda _root: "sha256:" + "9" * 64,
+    )
+    with pytest.raises(ExportRefused, match="source tree no longer matches"):
+        make_export_scope(
+            principal=resolve_local_public_principal(TEST_IDENTITY),
+            permission_label="public", scoreboard=snapshot,
+            generated_at="2026-08-06T01:00:00Z", repo_root=".",
+            store=_ScopeStore(snapshot),
         )
 
 
@@ -201,3 +224,25 @@ def test_publication_ref_rejects_mixed_label_and_malformed_hash():
     )
     with pytest.raises(ValueError, match="payload hash"):
         ExportPublicationRef(payload_sha256="not-a-hash", **common)
+
+
+def test_duplicate_or_unrelated_bundle_artifacts_are_refused(pg_store):
+    scope = public_export_scope(pg_store, [])
+    extra = Artifact.new(
+        artifact_type=ArtifactType.SKILL_VERSION,
+        source_system=SourceSystem.CLI, actor="unrelated", actor_kind=ActorKind.AGENT,
+        payload={"slug": "unrelated"},
+    )
+
+    class BadStore:
+        def database_identity(self, *, environment):
+            return pg_store.database_identity(environment=environment)
+
+        def export_database_identity(self, *, environment):
+            return pg_store.export_database_identity(environment=environment)
+
+        def scoped_publication_bundle(self, _label):
+            return ScopedPublicationBundle(heads=(), artifacts=(extra, extra))
+
+    with pytest.raises(ExportRefused, match="duplicate artifact IDs"):
+        load_scoped_publications(BadStore(), scope)

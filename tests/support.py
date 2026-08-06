@@ -159,6 +159,7 @@ def public_export_scope(
         scoreboard_snapshot_id="sha256:" + "1" * 64,
         scoreboard_generated_at=generated_at,
         source_commit="test-commit",
+        source_skills_root="skills",
         source_tree_sha256="sha256:" + "2" * 64,
         database_environment="test",
         database_name=database["database_name"],

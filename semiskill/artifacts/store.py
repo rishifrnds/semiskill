@@ -250,9 +250,10 @@ class PostgresArtifactStore:
             raise ValueError("export reader database identity is not configured")
         info = psycopg.conninfo.conninfo_to_dict(self._export_dsn)
         with psycopg.connect(self._export_dsn) as conn:
-            session_user, roles = conn.execute(
+            session_user, roles, has_reader = conn.execute(
                 "SELECT session_user, coalesce(array_agg(granted.rolname) "
                 "FILTER (WHERE granted.rolname LIKE 'semiskill_export_label_%'), ARRAY[]::name[]) "
+                ", pg_has_role(session_user,'semiskill_export_reader','MEMBER') "
                 "FROM pg_roles login LEFT JOIN pg_auth_members membership "
                 "ON membership.member=login.oid LEFT JOIN pg_roles granted "
                 "ON granted.oid=membership.roleid WHERE login.rolname=session_user "
@@ -265,7 +266,7 @@ class PostgresArtifactStore:
             "semiskill_export_label_regulated": "regulated",
         }
         memberships = [role_labels[role] for role in roles if role in role_labels]
-        if len(memberships) != 1:
+        if not has_reader or len(memberships) != 1:
             raise ValueError("export reader must have exactly one permission-label capability")
         safe = {
             "engine": "postgresql",

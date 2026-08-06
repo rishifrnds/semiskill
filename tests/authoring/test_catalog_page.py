@@ -17,7 +17,7 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.catalog_page import build_catalog, collect, render_html, render_markdown
-from tests.support import publish_wave_sources
+from tests.support import public_export_scope, publish_wave_sources
 
 MIG = Path("semiskill/artifacts/migrations")
 BODY = ("# Title\n\nA procedure with enough substance to count as a skill.\n\n"
@@ -51,14 +51,14 @@ def populated(pg_store, pg_dsn, tmp_path):
         d = root / name
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text(skill_md(name, role=role, level=level), encoding="utf-8")
-    publish_wave_sources(pg_store, root)
-    return pg_store, root
+    fixtures = publish_wave_sources(pg_store, root)
+    return pg_store, root, public_export_scope(pg_store, fixtures)
 
 
 @pytest.mark.integration
 def test_collect_returns_published_skills_with_their_real_scan_report(populated):
-    store, _ = populated
-    entries = collect(store)
+    store, _, scope = populated
+    entries = collect(store, scope=scope).entries
     assert {e.slug for e in entries} == {"dv-alpha", "dv-beta"}
     for e in entries:
         assert e.verdict == "approve"
@@ -100,7 +100,8 @@ def test_catalog_badge_is_frozen_to_the_active_approval_chain(pg_store, tmp_path
     )
     pg_store.append(replace(later_review, permissions_label=fixture.skill_version.permissions_label))
 
-    entry = collect(pg_store)[0]
+    scope = public_export_scope(pg_store, [fixture])
+    entry = collect(pg_store, scope=scope).entries[0]
     assert entry.approval_id == str(fixture.approval.artifact_id)
     assert entry.automated_review_id == str(fixture.automated_review.artifact_id)
     assert entry.content_review_id == str(fixture.content_review.artifact_id)
@@ -113,14 +114,15 @@ def test_catalog_badge_is_frozen_to_the_active_approval_chain(pg_store, tmp_path
 @pytest.mark.integration
 def test_an_unpublished_skill_never_appears(populated, pg_store, pg_dsn):
     """ADR-002 carried all the way to the page a human browses."""
-    store, root = populated
+    store, root, scope = populated
     d = root / "dv-blocked"
     d.mkdir()
     (d / "SKILL.md").write_text(skill_md("dv-blocked", tools="Read Bash"), encoding="utf-8")
 
-    entries = collect(store)
+    catalog = collect(store, scope=scope)
+    entries = catalog.entries
     assert "dv-blocked" not in {e.slug for e in entries}
-    html = render_html(entries, generated_at="t")
+    html = render_html(catalog)
     assert "dv-blocked" not in html
 
 
@@ -133,9 +135,9 @@ def test_an_untrusted_body_cannot_break_out_of_the_page(pg_store, pg_dsn, tmp_pa
     d.mkdir(parents=True)
     nasty = BODY + "\nA body containing </script><script>window.pwned=1</script> and \"quotes\".\n"
     (d / "SKILL.md").write_text(skill_md("dv-hostile", body=nasty), encoding="utf-8")
-    publish_wave_sources(pg_store, root)
+    fixtures = publish_wave_sources(pg_store, root)
 
-    html = render_html(collect(pg_store), generated_at="t")
+    html = render_html(collect(pg_store, scope=public_export_scope(pg_store, fixtures)))
     # The HTML parser ends a <script> block on `</script` and nothing else, so that is the sequence
     # that must not survive. A bare `<script>` inside the JSON is inert text.
     assert "</script><script>window.pwned" not in html
@@ -148,8 +150,8 @@ def test_an_untrusted_body_cannot_break_out_of_the_page(pg_store, pg_dsn, tmp_pa
 
 @pytest.mark.integration
 def test_page_states_the_limits_of_the_badge(populated):
-    store, _ = populated
-    html = render_html(collect(store), generated_at="t")
+    store, _, scope = populated
+    html = render_html(collect(store, scope=scope))
     assert "not a runtime guarantee" in html
     assert "does not enforce" in html
 
@@ -158,16 +160,16 @@ def test_page_states_the_limits_of_the_badge(populated):
 def test_page_fabricates_nothing(populated):
     """`ui/catalog-demo.html` invented install counts, star ratings and an approver name. Presenting
     invented adoption numbers to the team deciding whether to trust this is a self-inflicted wound."""
-    store, _ = populated
-    html = render_html(collect(store), generated_at="t").lower()
+    store, _, scope = populated
+    html = render_html(collect(store, scope=scope)).lower()
     for invented in ("installs", "★", "rating", "downloads", "trending", "1.3k"):
         assert invented not in html, f"page contains fabricated metric {invented!r}"
 
 
 @pytest.mark.integration
 def test_markdown_renders_the_catalog_and_the_coverage_matrix(populated):
-    store, _ = populated
-    md = render_markdown(collect(store), generated_at="t")
+    store, _, scope = populated
+    md = render_markdown(collect(store, scope=scope))
     assert "# DV Agent Skills" in md
     assert "/dv-alpha" in md and "/dv-beta" in md
     assert "~/.cursor/skills/" in md
@@ -179,19 +181,19 @@ def test_markdown_renders_the_catalog_and_the_coverage_matrix(populated):
 
 @pytest.mark.integration
 def test_csv_is_loadable_and_has_the_expected_columns(populated, tmp_path):
-    store, _ = populated
-    out, entries = build_catalog(store=store, out_dir=tmp_path / "site", generated_at="t")
+    store, _, scope = populated
+    out, catalog = build_catalog(store=store, out_dir=tmp_path / "site", scope=scope)
     rows = list(csv.DictReader(io.StringIO((out / "catalog.csv").read_text(encoding="utf-8"))))
-    assert len(rows) == len(entries)
+    assert len(rows) == len(catalog.entries)
     assert {"Title", "Slug", "Role", "Level", "Blanks", "Verified", "Safety"} <= set(rows[0])
     assert rows[0]["Verified"] == "approve"
 
 
 @pytest.mark.integration
 def test_build_writes_all_three_artifacts_and_html_is_self_contained(populated, tmp_path):
-    store, _ = populated
-    out, _ = build_catalog(store=store, out_dir=tmp_path / "site", generated_at="t")
-    for f in ("catalog.md", "catalog.csv", "catalog.html"):
+    store, _, scope = populated
+    out, _ = build_catalog(store=store, out_dir=tmp_path / "site", scope=scope)
+    for f in ("catalog.md", "catalog.csv", "catalog.html", "EXPORT-MANIFEST.json"):
         assert (out / f).exists()
     html = (out / "catalog.html").read_text(encoding="utf-8")
     # must work from a USB stick / after a SharePoint download: no CDN, no network at all
@@ -203,8 +205,8 @@ def test_build_writes_all_three_artifacts_and_html_is_self_contained(populated, 
 
 @pytest.mark.integration
 def test_generation_is_deterministic(populated, tmp_path):
-    store, _ = populated
-    a, _ = build_catalog(store=store, out_dir=tmp_path / "a", generated_at="fixed")
-    b, _ = build_catalog(store=store, out_dir=tmp_path / "b", generated_at="fixed")
-    for f in ("catalog.md", "catalog.csv", "catalog.html"):
+    store, _, scope = populated
+    a, _ = build_catalog(store=store, out_dir=tmp_path / "a", scope=scope)
+    b, _ = build_catalog(store=store, out_dir=tmp_path / "b", scope=scope)
+    for f in ("catalog.md", "catalog.csv", "catalog.html", "EXPORT-MANIFEST.json"):
         assert (a / f).read_text(encoding="utf-8") == (b / f).read_text(encoding="utf-8")

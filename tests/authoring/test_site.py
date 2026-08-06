@@ -12,7 +12,7 @@ import pytest
 from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.site import build_site
-from tests.support import publish_wave_sources
+from tests.support import public_export_scope, publish_wave_sources
 
 MIG = Path("semiskill/artifacts/migrations")
 BODY = ("# Title\n\nA procedure with enough substance to be a skill.\n\n"
@@ -48,8 +48,11 @@ def site(pg_store, pg_dsn, tmp_path):
         d = root / name
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text(skill_md(name, role=role, level=level), encoding="utf-8")
-    publish_wave_sources(pg_store, root)
-    return build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="2026-08-05")
+    fixtures = publish_wave_sources(pg_store, root)
+    return build_site(
+        store=pg_store, out_dir=tmp_path / "site",
+        scope=public_export_scope(pg_store, fixtures, generated_at="2026-08-05T00:00:00Z"),
+    )
 
 
 def read(res, rel):
@@ -112,12 +115,15 @@ def test_an_unpublished_skill_never_reaches_the_site(pg_store, pg_dsn, tmp_path)
     allowed = root / "dv-ok"
     allowed.mkdir(parents=True)
     (allowed / "SKILL.md").write_text(skill_md("dv-ok"), encoding="utf-8")
-    publish_wave_sources(pg_store, root)
+    fixtures = publish_wave_sources(pg_store, root)
     blocked = root / "dv-blocked"
     blocked.mkdir()
     (blocked / "SKILL.md").write_text(skill_md("dv-blocked", tools="Read Bash"), encoding="utf-8")
 
-    res = build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="t")
+    res = build_site(
+        store=pg_store, out_dir=tmp_path / "site",
+        scope=public_export_scope(pg_store, fixtures),
+    )
     assert {e.slug for e in res.entries} == {"dv-ok"}
     assert not (res.root / "skills" / "dv-blocked.html").exists()
     assert "dv-blocked" not in (res.root / "index.html").read_text(encoding="utf-8")
@@ -173,9 +179,12 @@ def test_a_hostile_body_stays_inert_on_its_page(pg_store, pg_dsn, tmp_path):
     nasty = BODY + ('\nA body with </script><script>window.pwned=1</script> and '
                     '<img src=x onerror=alert(1)> and [a link](evil.html).\n')
     (d / "SKILL.md").write_text(skill_md("dv-hostile", body=nasty), encoding="utf-8")
-    publish_wave_sources(pg_store, root)
+    fixtures = publish_wave_sources(pg_store, root)
 
-    res = build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="t")
+    res = build_site(
+        store=pg_store, out_dir=tmp_path / "site",
+        scope=public_export_scope(pg_store, fixtures),
+    )
     page = (res.root / "skills" / "dv-hostile.html").read_text(encoding="utf-8")
     # The page owns exactly two script blocks. The body cannot add or close one: `</` is neutralised
     # inside the JSON, and the rendered section escapes every tag.
@@ -187,7 +196,7 @@ def test_a_hostile_body_stays_inert_on_its_page(pg_store, pg_dsn, tmp_path):
     # the embedded JSON block cannot be terminated by the body
     payload = page.split('id="skill-data" type="application/json">')[1].split("</script>")[0]
     assert "</" not in payload
-    assert json.loads(payload.replace("<\\/", "</"))["body"]
+    assert json.loads(payload.replace("<\\/", "</"))["skill_md"]
 
 
 def test_generation_is_deterministic(pg_store, pg_dsn, tmp_path):
@@ -195,10 +204,11 @@ def test_generation_is_deterministic(pg_store, pg_dsn, tmp_path):
     d = root / "dv-a"
     d.mkdir(parents=True)
     (d / "SKILL.md").write_text(skill_md("dv-a"), encoding="utf-8")
-    publish_wave_sources(pg_store, root)
+    fixtures = publish_wave_sources(pg_store, root)
 
-    a = build_site(store=pg_store, out_dir=tmp_path / "s1", generated_at="fixed")
-    b = build_site(store=pg_store, out_dir=tmp_path / "s2", generated_at="fixed")
+    scope = public_export_scope(pg_store, fixtures)
+    a = build_site(store=pg_store, out_dir=tmp_path / "s1", scope=scope)
+    b = build_site(store=pg_store, out_dir=tmp_path / "s2", scope=scope)
     assert a.pages == b.pages
     for page in a.pages:
         assert (a.root / page).read_text(encoding="utf-8") == (b.root / page).read_text(encoding="utf-8")
