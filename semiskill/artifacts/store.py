@@ -1,4 +1,6 @@
 from __future__ import annotations
+import hashlib
+import json
 import uuid
 from typing import Protocol
 import psycopg
@@ -59,6 +61,20 @@ class PostgresArtifactStore:
 
     def __init__(self, dsn: str):
         self._dsn = dsn
+
+    def database_identity(self, *, environment: str) -> dict:
+        """Return a stable non-secret identity for scoreboard provenance."""
+        info = psycopg.conninfo.conninfo_to_dict(self._dsn)
+        safe = {
+            "engine": "postgresql",
+            "environment": environment,
+            "database_name": info.get("dbname") or "",
+            "host": info.get("host") or "",
+            "port": str(info.get("port") or "5432"),
+        }
+        digest_input = json.dumps(safe, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        safe["identity_sha256"] = "sha256:" + hashlib.sha256(digest_input).hexdigest()
+        return safe
 
     def append(self, a: Artifact) -> Artifact:
         with psycopg.connect(self._dsn) as conn:
