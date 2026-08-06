@@ -574,9 +574,18 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a3 bind the pack and CLI, then remove residual unexecuted-fixture KPI claims
 
 
+- [J-010a3] 2026-08-06T11:38:07Z  status: done
+  what: closed export-materializer QA gaps with portable contained paths, exact scope/evidence
+  reconciliation, collision-safe per-file install blocks, clipboard-independent manual fallbacks,
+  scope-complete stamps and deeply reconciled staged/owned-tree manifests
+  artifacts: c47aa6d, semiskill/authoring/catalog_page.py,
+  semiskill/authoring/export_files.py, semiskill/authoring/site.py, 41 focused tests passed
+  next: J-010a4 bind the pack and export CLI to the exact-label capability
+
+
 ## In-Flight Step
-- [J-010a3] bind pack/catalog/site CLI commands to explicit OS/Entra export scopes, make the pack
-  reproduce only approval-bound bytes, and remove residual unexecuted-fixture KPI claims.
+- [J-010a4] bind pack/catalog/site CLI commands to explicit OS/Entra export scopes and make the
+  pack reproduce only approval-bound bytes while refusing unresolved shared dependencies.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

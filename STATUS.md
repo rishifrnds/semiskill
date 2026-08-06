@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T11:37:44Z_
+_Last updated: 2026-08-06T11:38:07Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010a3: bind pack/catalog/site CLI commands to explicit OS/Entra export scopes, make the pack
-  reproduce only approved bytes, and remove residual unexecuted-fixture KPI claims.
+- J-010a4: bind pack/catalog/site CLI commands to explicit OS/Entra export scopes and make the pack
+  reproduce only approved bytes while refusing unresolved shared dependencies.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -40,9 +40,9 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- 1679115 - exact-scope catalog/site materializers, frozen multi-file prompts and transactional
-  owned-tree manifests with rollback and tamper checks.
+- c47aa6d - portable contained export paths, exact scope/evidence witnesses, full-file install
+  blocks and clipboard-independent fallbacks, with staged manifest reconciliation.
 
 ## Last checkpoint commit
-- 1679115: 38 scoped export/materializer tests passed on isolated semiskill_test; canonical
+- c47aa6d: 41 scoped export/materializer tests passed on isolated semiskill_test; canonical
   development counts remain 84/0/0/0/0 authored/reviewed/ready/approved/published.
