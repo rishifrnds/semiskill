@@ -778,8 +778,21 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010b3e3a] execute the fixed full suite on the current clean committed source and exact isolated
-  test database, then verify the dashboard consumes the immutable non-crediting run.
+- [J-010b3e3a] 2026-08-06T21:12:15Z  status: done
+  what: executed the first immutable full suite, preserved its truthful FAIL, traced both failures to
+  unit tests that implicitly consumed the runner's intentionally pinned privileged adapter DSNs, and
+  made those tests explicitly isolate the irrelevant environment before a clean-source rerun
+  artifacts: 814187e, dashboard/runs/full-suite/runs/0d5b5dbb-89e4-4dab-adca-54de4580d8ce.json,
+  sha256:40f0fbd66d6f086449926df0e73f88ef1a6f11c4641a3ff197f73470223f2476,
+  tests/artifacts/test_store.py, tests/authoring/test_snapshot.py; immutable run recorded 987 passed,
+  2 failed, 6 skipped and 1 xpassed; both corrected tests pass under the same pinned environment
+  next: J-010b3e3b rerun the fixed serial suite on the corrected clean committed source and verify the
+  dashboard's exact file-only projection
+
+
+## In-Flight Step
+- [J-010b3e3b] rerun the fixed serial suite on the corrected clean committed source and verify the
+  dashboard's exact file-only projection.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
