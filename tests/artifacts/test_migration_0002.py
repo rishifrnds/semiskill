@@ -5,6 +5,7 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, ActorKind
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.capture.intake import build_skill_version
+from tests.support import publish_test_skill
 
 MIG = Path("semiskill/artifacts/migrations")
 
@@ -21,10 +22,7 @@ def store(pg_dsn):
 
 def _publish(store, sv):
     store.append(sv)
-    store.append(Artifact.new(
-        artifact_type=ArtifactType.APPROVAL, source_system=SourceSystem.WEB,
-        actor="approver", actor_kind=ActorKind.HUMAN, input_refs=[sv.artifact_id],
-        payload={"verdict": "approve", "published": True}))
+    publish_test_skill(store, sv)
 
 
 def _search(dsn, q, labels, f_function=None, f_role=None, f_level=None):

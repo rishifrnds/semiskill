@@ -12,7 +12,7 @@ import pytest
 from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.site import build_site
-from semiskill.wave import load_wave, run_wave
+from tests.support import publish_wave_sources
 
 MIG = Path("semiskill/artifacts/migrations")
 BODY = ("# Title\n\nA procedure with enough substance to be a skill.\n\n"
@@ -48,7 +48,7 @@ def site(pg_store, pg_dsn, tmp_path):
         d = root / name
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text(skill_md(name, role=role, level=level), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
     return build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="2026-08-05")
 
 
@@ -109,11 +109,13 @@ def test_role_page_lists_only_that_role(site):
 
 def test_an_unpublished_skill_never_reaches_the_site(pg_store, pg_dsn, tmp_path):
     root = tmp_path / "skills"
-    for name, tools in (("dv-ok", "Read Grep Glob"), ("dv-blocked", "Read Bash")):
-        d = root / name
-        d.mkdir(parents=True)
-        (d / "SKILL.md").write_text(skill_md(name, tools=tools), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    allowed = root / "dv-ok"
+    allowed.mkdir(parents=True)
+    (allowed / "SKILL.md").write_text(skill_md("dv-ok"), encoding="utf-8")
+    publish_wave_sources(pg_store, root)
+    blocked = root / "dv-blocked"
+    blocked.mkdir()
+    (blocked / "SKILL.md").write_text(skill_md("dv-blocked", tools="Read Bash"), encoding="utf-8")
 
     res = build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="t")
     assert {e.slug for e in res.entries} == {"dv-ok"}
@@ -171,7 +173,7 @@ def test_a_hostile_body_stays_inert_on_its_page(pg_store, pg_dsn, tmp_path):
     nasty = BODY + ('\nA body with </script><script>window.pwned=1</script> and '
                     '<img src=x onerror=alert(1)> and [a link](evil.html).\n')
     (d / "SKILL.md").write_text(skill_md("dv-hostile", body=nasty), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
 
     res = build_site(store=pg_store, out_dir=tmp_path / "site", generated_at="t")
     page = (res.root / "skills" / "dv-hostile.html").read_text(encoding="utf-8")
@@ -193,7 +195,7 @@ def test_generation_is_deterministic(pg_store, pg_dsn, tmp_path):
     d = root / "dv-a"
     d.mkdir(parents=True)
     (d / "SKILL.md").write_text(skill_md("dv-a"), encoding="utf-8")
-    run_wave(store=pg_store, dsn=pg_dsn, items=load_wave(root), allow_ungated=True)
+    publish_wave_sources(pg_store, root)
 
     a = build_site(store=pg_store, out_dir=tmp_path / "s1", generated_at="fixed")
     b = build_site(store=pg_store, out_dir=tmp_path / "s2", generated_at="fixed")
