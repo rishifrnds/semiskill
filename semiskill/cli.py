@@ -420,6 +420,37 @@ def cmd_site(args, store, out) -> int:
     return 0
 
 
+def cmd_verify_full_suite(args, store, out) -> int:
+    """Run the one fixed serial suite and persist non-crediting immutable evidence."""
+    from semiskill.verification.full_suite import FullSuiteRefused, run_full_suite
+
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        print("full-suite verification refused: explicit TEST_DATABASE_URL is required", file=out)
+        return 2
+    try:
+        result = run_full_suite(
+            Path.cwd(), test_database_url=dsn, expected_database=args.expected_database,
+        )
+    except FullSuiteRefused as exc:
+        print(f"full-suite verification refused: {exc.reason}", file=out)
+        return 2
+    counts = result["counts"]
+    print(
+        f"full-suite {result['verdict']} · run {result['run_id']} · "
+        f"{counts['passed']} passed, {counts['failed']} failed, {counts['errors']} errors, "
+        f"{counts['skipped']} skipped, {counts['xfailed']} xfailed, "
+        f"{counts['xpassed']} xpassed",
+        file=out,
+    )
+    print(
+        f"evidence: dashboard/runs/full-suite/runs/{result['run_id']}.json "
+        f"[{result['run_sha256']}]",
+        file=out,
+    )
+    return 0 if result["verdict"] == "pass" else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="semiskill", description="SemiSkill CLI (L1 capture)")
     sub = p.add_subparsers(dest="command", required=True)
@@ -542,6 +573,16 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("--out", default="dist/site")
     add_export_scope_arguments(st)
     st.set_defaults(func=cmd_site, needs_store=False)
+
+    verify = sub.add_parser(
+        "verify-full-suite",
+        help="run the fixed serial test suite against explicit isolated TEST_DATABASE_URL",
+    )
+    verify.add_argument(
+        "--expected-database", required=True,
+        help="exact lowercase *_test database name expected in TEST_DATABASE_URL and at runtime",
+    )
+    verify.set_defaults(func=cmd_verify_full_suite, needs_store=False)
     return p
 
 

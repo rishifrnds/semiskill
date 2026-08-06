@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T20:10:46Z_
+_Last updated: 2026-08-06T20:44:21Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3e2: persist an append-only clean-tree, source-bound isolated full-suite run artifact and
-  expose it through a strict file-only dashboard reader without affecting canonical skill credit.
+- J-010b3e2a: persist the append-only clean-tree, source-bound isolated full-suite run producer;
+  the strict file-only dashboard reader follows as J-010b3e2b.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
