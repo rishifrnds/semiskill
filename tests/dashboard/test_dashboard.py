@@ -928,6 +928,7 @@ def test_curated_registers_never_receive_success_or_verified_styling():
 
 def test_dashboard_navigation_filters_and_overview_evidence_are_truthful_and_accessible():
     html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    assert '<link rel="icon" href="data:image/svg+xml,' in html
     assert 'class="nav-item active" data-view="overview" aria-current="page"' in html
     assert "n.removeAttribute('aria-current')" in html
     assert "nav.setAttribute('aria-current', 'page')" in html

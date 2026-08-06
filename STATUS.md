@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T21:12:15Z_
+_Last updated: 2026-08-06T21:23:38Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3e3b: rerun the fixed serial suite on the corrected clean committed source and verify the
-  dashboard's exact file-only projection.
+- J-010b3e3b: commit the browser-discovered favicon correction, then rerun the fixed serial suite on
+  the final clean source and verify its exact dashboard projection.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
