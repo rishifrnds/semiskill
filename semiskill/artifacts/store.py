@@ -11,7 +11,13 @@ from typing import Protocol
 import psycopg
 import psycopg.rows
 from psycopg.types.json import Jsonb
-from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, ActorKind
+from semiskill.artifacts.schema import (
+    PERMISSIONS_LABELS,
+    Artifact,
+    ArtifactType,
+    SourceSystem,
+    ActorKind,
+)
 
 _COLS = (
     "artifact_id artifact_type source_system actor actor_kind timestamp_start "
@@ -46,6 +52,24 @@ class PublicationReconciliationBundle:
     projections: tuple[PublicationProjectionRow, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class VerifiedPublicationHead:
+    approval_id: uuid.UUID
+    skill_version_id: uuid.UUID
+    automated_review_id: uuid.UUID
+    content_review_id: uuid.UUID
+    slug: str
+    permissions_label: str
+
+
+@dataclass(frozen=True, slots=True)
+class ScopedPublicationBundle:
+    """One repeatable-read view containing only one label's active publication chains."""
+
+    heads: tuple[VerifiedPublicationHead, ...]
+    artifacts: tuple[Artifact, ...]
+
+
 class ArtifactStore(Protocol):
     def append(self, a: Artifact) -> Artifact: ...
     def append_approval(self, a: Artifact) -> Artifact: ...
@@ -57,6 +81,7 @@ class ArtifactStore(Protocol):
     def verified_publication_ids(self) -> set[uuid.UUID]: ...
     def publication_reconciliation_bundle(self) -> PublicationReconciliationBundle: ...
     def publication_registry_entry(self, slug: str) -> dict | None: ...
+    def scoped_publication_bundle(self, permissions_label: str) -> ScopedPublicationBundle: ...
 
 
 class ReconciledArtifactStore:
@@ -167,7 +192,8 @@ class PostgresArtifactStore:
     """Append-only artifact store. INSERT + SELECT only — there is no update path (corrections are
     new rows linked by corrects_ref; the DB trigger blocks UPDATE/DELETE regardless)."""
 
-    def __init__(self, dsn: str, *, approval_dsn: str | None = None):
+    def __init__(self, dsn: str, *, approval_dsn: str | None = None,
+                 export_dsn: str | None = None):
         self._dsn = dsn
         configured_approval_dsn = approval_dsn or os.environ.get(
             "SEMISKILL_APPROVAL_DATABASE_URL"
@@ -185,6 +211,24 @@ class PostgresArtifactStore:
         self._approval_dsn = configured_approval_dsn or (
             dsn if database_name.lower().endswith("_test") else None
         )
+        configured_export_dsn = export_dsn or os.environ.get("SEMISKILL_EXPORT_DATABASE_URL")
+        if configured_export_dsn and not database_name.lower().endswith("_test"):
+            export_info = psycopg.conninfo.conninfo_to_dict(configured_export_dsn)
+            if export_info.get("dbname") != database_name:
+                raise ValueError("export reader must target the catalog database")
+            runtime_user = runtime_info.get("user")
+            export_user = export_info.get("user")
+            if not runtime_user or not export_user or runtime_user == export_user:
+                raise ValueError("export reader requires a distinct database identity")
+            approval_user = (
+                psycopg.conninfo.conninfo_to_dict(configured_approval_dsn).get("user")
+                if configured_approval_dsn else None
+            )
+            if approval_user and export_user == approval_user:
+                raise ValueError("export reader and approval actuator identities must differ")
+        self._export_dsn = configured_export_dsn or (
+            dsn if database_name.lower().endswith("_test") else None
+        )
 
     def database_identity(self, *, environment: str) -> dict:
         """Return a stable non-secret identity for scoreboard provenance."""
@@ -195,6 +239,45 @@ class PostgresArtifactStore:
             "database_name": info.get("dbname") or "",
             "host": info.get("host") or "",
             "port": str(info.get("port") or "5432"),
+        }
+        digest_input = json.dumps(safe, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        safe["identity_sha256"] = "sha256:" + hashlib.sha256(digest_input).hexdigest()
+        return safe
+
+    def export_database_identity(self, *, environment: str) -> dict:
+        """Bind an export scope to the least-privilege reader login without exposing its name."""
+        if self._export_dsn is None:
+            raise ValueError("export reader database identity is not configured")
+        info = psycopg.conninfo.conninfo_to_dict(self._export_dsn)
+        with psycopg.connect(self._export_dsn) as conn:
+            session_user, roles = conn.execute(
+                "SELECT session_user, coalesce(array_agg(granted.rolname) "
+                "FILTER (WHERE granted.rolname LIKE 'semiskill_export_label_%'), ARRAY[]::name[]) "
+                "FROM pg_roles login LEFT JOIN pg_auth_members membership "
+                "ON membership.member=login.oid LEFT JOIN pg_roles granted "
+                "ON granted.oid=membership.roleid WHERE login.rolname=session_user "
+                "GROUP BY session_user"
+            ).fetchone()
+        role_labels = {
+            "semiskill_export_label_public": "public",
+            "semiskill_export_label_team": "team",
+            "semiskill_export_label_need_to_know": "need-to-know",
+            "semiskill_export_label_regulated": "regulated",
+        }
+        memberships = [role_labels[role] for role in roles if role in role_labels]
+        if len(memberships) != 1:
+            raise ValueError("export reader must have exactly one permission-label capability")
+        safe = {
+            "engine": "postgresql",
+            "environment": environment,
+            "database_name": info.get("dbname") or "",
+            "host": info.get("host") or "",
+            "port": str(info.get("port") or "5432"),
+            "required_role": "semiskill_export_reader",
+            "permission_label": memberships[0],
+            "session_user_sha256": "sha256:" + hashlib.sha256(
+                str(session_user).encode("utf-8")
+            ).hexdigest(),
         }
         digest_input = json.dumps(safe, sort_keys=True, separators=(",", ":")).encode("utf-8")
         safe["identity_sha256"] = "sha256:" + hashlib.sha256(digest_input).hexdigest()
@@ -329,3 +412,48 @@ class PostgresArtifactStore:
                 (slug,),
             ).fetchone()
         return dict(row) if row is not None else None
+
+    def scoped_publication_bundle(self, permissions_label: str) -> ScopedPublicationBundle:
+        """Read exactly one label's active heads and frozen dependencies in one snapshot.
+
+        Exporters must not materialize every label and filter afterward: even transiently reading a
+        restricted skill body is an ACL failure.  The SECURITY DEFINER head function has already
+        proved the active actuator chain; this method narrows it before any artifact payload is
+        selected and follows only the immutable IDs named by those heads.
+        """
+        if permissions_label not in PERMISSIONS_LABELS:
+            raise ValueError("unsupported scoped publication permission label")
+        if self._export_dsn is None:
+            raise ValueError("export reader database identity is not configured")
+
+        with psycopg.connect(self._export_dsn, row_factory=psycopg.rows.dict_row) as conn:
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            conn.execute("SET LOCAL ROLE semiskill_export_reader")
+            rows = conn.execute(
+                "SELECT * FROM export_scoped_publication_bundle_v1(%s)",
+                (permissions_label,),
+            ).fetchall()
+            conn.rollback()
+
+        heads_by_slug: dict[str, VerifiedPublicationHead] = {}
+        artifacts: dict[uuid.UUID, Artifact] = {}
+        for row in rows:
+            head = VerifiedPublicationHead(
+                approval_id=row["head_approval_id"],
+                skill_version_id=row["head_skill_version_id"],
+                automated_review_id=row["head_automated_review_id"],
+                content_review_id=row["head_content_review_id"],
+                slug=row["head_slug"],
+                permissions_label=row["head_permissions_label"],
+            )
+            previous_head = heads_by_slug.setdefault(head.slug, head)
+            if previous_head != head:
+                raise ValueError("scoped export reader returned conflicting heads")
+            artifact = _row_to_artifact({key: row[key] for key in _COLS})
+            previous_artifact = artifacts.setdefault(artifact.artifact_id, artifact)
+            if previous_artifact != artifact:
+                raise ValueError("scoped export reader returned conflicting artifacts")
+        return ScopedPublicationBundle(
+            heads=tuple(heads_by_slug[key] for key in sorted(heads_by_slug)),
+            artifacts=tuple(artifacts[key] for key in sorted(artifacts, key=str)),
+        )

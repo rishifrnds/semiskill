@@ -14,6 +14,8 @@ from semiskill.authoring.gate import make_content_review
 from semiskill.capture.intake import payload_fingerprint
 from semiskill.governance.identity import AuthenticatedHuman
 from semiskill.governance.publish import decide_publication
+from semiskill.authoring.export_scope import ExportPublicationRef, ExportScope
+from semiskill.context.acl import resolve_local_public_principal
 
 
 TEST_IDENTITY = AuthenticatedHuman(
@@ -120,3 +122,49 @@ def publish_wave_sources(store, root) -> list[PublishedFixture]:
         ))
         fixtures.append(publish_test_skill(store, skill_version))
     return fixtures
+
+
+def public_export_scope(
+    store,
+    fixtures: list[PublishedFixture] | tuple[PublishedFixture, ...],
+    *,
+    label: str = "public",
+    generated_at: str = "2026-08-06T00:00:00Z",
+) -> ExportScope:
+    """Build an explicit test scope from fixtures that passed the real publication gate.
+
+    Production code derives this object only from a validated canonical scoreboard.  Export tests
+    need a compact fixture because their ad-hoc slugs intentionally are not members of the fixed
+    84-skill registry.
+    """
+    references = []
+    for fixture in fixtures:
+        if fixture.skill_version.permissions_label != label:
+            continue
+        references.append(ExportPublicationRef(
+            slug=fixture.skill_version.payload["slug"],
+            skill_version_id=fixture.skill_version.artifact_id,
+            approval_id=fixture.approval.artifact_id,
+            automated_review_id=fixture.automated_review.artifact_id,
+            content_review_id=fixture.content_review.artifact_id,
+            scan_artifact_ids=tuple(scan.artifact_id for scan in fixture.scans),
+            payload_sha256=payload_fingerprint(fixture.skill_version.payload),
+            permissions_label=label,
+        ))
+    database = store.database_identity(environment="test")
+    return ExportScope(
+        principal=resolve_local_public_principal(TEST_IDENTITY),
+        permission_label=label,
+        generated_at=generated_at,
+        scoreboard_snapshot_id="sha256:" + "1" * 64,
+        scoreboard_generated_at=generated_at,
+        source_commit="test-commit",
+        source_tree_sha256="sha256:" + "2" * 64,
+        database_environment="test",
+        database_name=database["database_name"],
+        database_identity_sha256=database["identity_sha256"],
+        export_reader_identity_sha256=store.export_database_identity(
+            environment="test"
+        )["identity_sha256"],
+        publications=tuple(sorted(references, key=lambda ref: ref.slug)),
+    )

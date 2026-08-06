@@ -22,6 +22,7 @@ def test_runtime_clearance_and_actuator_are_distinct_least_privilege_logins(pg_d
         "runtime": f"ss_runtime_{suffix}",
         "clearance": f"ss_clearance_{suffix}",
         "actuator": f"ss_actuator_{suffix}",
+        "export": f"ss_export_{suffix}",
     }
     with psycopg.connect(pg_dsn, autocommit=True) as admin:
         can_create_roles = admin.execute(
@@ -41,6 +42,12 @@ def test_runtime_clearance_and_actuator_are_distinct_least_privilege_logins(pg_d
         ))
         admin.execute(sql.SQL("GRANT semiskill_approval_actuator TO {}").format(
             sql.Identifier(names["actuator"])
+        ))
+        admin.execute(sql.SQL("GRANT semiskill_export_reader TO {}").format(
+            sql.Identifier(names["export"])
+        ))
+        admin.execute(sql.SQL("GRANT semiskill_export_label_public TO {}").format(
+            sql.Identifier(names["export"])
         ))
 
     dsns = {key: _login_dsn(pg_dsn, value, password) for key, value in names.items()}
@@ -91,6 +98,27 @@ def test_runtime_clearance_and_actuator_are_distinct_least_privilege_logins(pg_d
             ).fetchone()[0] is True
             assert actuator.execute(
                 "SELECT pg_has_role(session_user,'semiskill_acl_reader','MEMBER')"
+            ).fetchone()[0] is False
+
+        with psycopg.connect(dsns["export"]) as export:
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                export.execute("SELECT * FROM artifacts")
+            export.rollback()
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                export.execute("SELECT * FROM verified_active_publication_heads_v1()")
+            export.rollback()
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                export.execute("SELECT * FROM export_scoped_publication_bundle_v1('public')")
+            export.rollback()
+            export.execute("SET ROLE semiskill_export_reader")
+            assert export.execute(
+                "SELECT count(*) FROM export_scoped_publication_bundle_v1('public')"
+            ).fetchone()[0] >= 0
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                export.execute("SELECT * FROM export_scoped_publication_bundle_v1('regulated')")
+            export.rollback()
+            assert export.execute(
+                "SELECT pg_has_role(session_user,'semiskill_approval_actuator','MEMBER')"
             ).fetchone()[0] is False
     finally:
         with psycopg.connect(pg_dsn, autocommit=True) as admin:

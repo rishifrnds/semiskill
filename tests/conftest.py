@@ -67,6 +67,14 @@ def pg_dsn(_migrated_db) -> str:
             .format(sql.Identifier(current_user))
         )
         conn.execute(
+            sql.SQL("GRANT semiskill_export_reader TO {}")
+            .format(sql.Identifier(current_user))
+        )
+        conn.execute(
+            sql.SQL("GRANT semiskill_export_label_public TO {}")
+            .format(sql.Identifier(current_user))
+        )
+        conn.execute(
             "INSERT INTO publication_trust_policy "
             "(policy_id,environment,database_name,policy_version,approve_threshold,enabled,"
             "allow_unregistered_test_fixtures) "

@@ -1,8 +1,18 @@
 from __future__ import annotations
-from dataclasses import dataclass
+import hashlib
+import hmac
+import secrets
+from dataclasses import dataclass, field
 from typing import Iterable, Mapping, Protocol
 
 from semiskill.artifacts.schema import PERMISSIONS_LABELS
+
+_EXPORT_RESOLUTION_KEY = secrets.token_bytes(32)
+
+
+def _export_resolution_proof(subject: str, provider: str, labels: tuple[str, ...]) -> str:
+    material = "\0".join((subject, provider, *labels)).encode("utf-8")
+    return hmac.new(_EXPORT_RESOLUTION_KEY, material, hashlib.sha256).hexdigest()
 
 
 class PrincipalUnauthenticated(RuntimeError):
@@ -18,6 +28,7 @@ class ResolvedPrincipal:
     subject: str
     provider: str
     labels: tuple[str, ...]
+    _export_resolution: str | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         if not isinstance(self.subject, str) or not self.subject.strip():
@@ -26,6 +37,36 @@ class ResolvedPrincipal:
             raise ValueError("resolved principal provider is required")
         normalized = resolve_allowed_labels(self.labels)
         object.__setattr__(self, "labels", normalized)
+
+    @property
+    def trusted_for_export(self) -> bool:
+        if not isinstance(self._export_resolution, str):
+            return False
+        expected = _export_resolution_proof(self.subject, self.provider, self.labels)
+        return hmac.compare_digest(self._export_resolution, expected)
+
+
+def _issued_principal(*, subject: str, provider: str, labels: tuple[str, ...]) -> ResolvedPrincipal:
+    normalized = resolve_allowed_labels(labels)
+    return ResolvedPrincipal(
+        subject=subject,
+        provider=provider,
+        labels=normalized,
+        _export_resolution=_export_resolution_proof(subject, provider, normalized),
+    )
+
+
+def resolve_local_public_principal(identity) -> ResolvedPrincipal:
+    """Issue a public-only export capability from an OS-bound local human identity."""
+    from semiskill.governance.identity import AuthenticatedHuman
+
+    if not isinstance(identity, AuthenticatedHuman) or identity.provider != "local_os":
+        raise PrincipalUnauthenticated("local export requires an OS-authenticated identity")
+    return _issued_principal(
+        subject=identity.subject,
+        provider=identity.provider,
+        labels=("public",),
+    )
 
 
 class OidcClaimsVerifier(Protocol):
@@ -76,7 +117,7 @@ class EntraPrincipalResolver:
         for group in groups:
             if isinstance(group, str):
                 labels.update(self.group_labels.get(group, ()))
-        return ResolvedPrincipal(
+        return _issued_principal(
             subject=subject,
             provider="entra_oidc",
             labels=tuple(sorted(labels)),
