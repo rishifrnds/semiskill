@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T21:04:04Z_
+_Last updated: 2026-08-06T21:04:36Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3e2b: expose immutable full-suite evidence through a strict file-only reader and
-  non-crediting Quality/Launch presentation.
+- J-010b3e3a: execute the fixed full suite on the current clean committed source and exact isolated
+  test database, then verify the dashboard consumes that immutable non-crediting run.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -29,6 +29,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - J-010b3e1: 189 dashboard tests plus 30 targeted pipeline/scoreboard/reconciliation tests; Ruff,
   Python, JavaScript, JSON, model-pin and diff checks pass; exact-byte data and Chrome audits have
   0 P0/P1/P2 across all 11 views at 375px.
+- J-010b3e2: immutable producer plus strict file-only reader/UI; 152 focused tests and independent
+  reader/UI audits have zero P0/P1/P2. No current-commit run has been produced yet.
 - The last v2 snapshot predates commit `e6b6509` and is therefore unavailable for current catalog
   credit; the deterministic release gate remains blocked at 0/84.
 
@@ -48,8 +50,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   remains fail-closed on BLK-001 until distinct identities and tenant configuration exist.
 
 ## Last implementation commit
-- 30ebe79 - fixed serial pytest producer with exact `_test` lease, clean-source binding, bounded
-  process-tree execution and append-only self-hashed evidence; 58 focused tests and zero audit P0/P1.
+- e12f403 - strict fixed-root suite reader plus accessible non-crediting Quality/Launch presentation;
+  152 focused tests, lint/compile/JavaScript/diff checks and zero independent audit P0/P1/P2.
 
 ## Last checkpoint commit
-- 30ebe79: committed the J-010b3e2a implementation with a fresh STATUS witness.
+- e12f403: committed the J-010b3e2b implementation with a fresh STATUS witness.

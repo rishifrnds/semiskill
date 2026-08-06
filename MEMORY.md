@@ -761,8 +761,25 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010b3e2b] expose immutable full-suite evidence through a strict file-only dashboard reader and
-  non-crediting Quality/Launch presentation without affecting any canonical skill count or gate.
+- [J-010b3e2b] 2026-08-06T21:04:36Z  status: done
+  what: added a fixed-root, file-only full-suite reader bound to the separately validated exact clean
+  commit/tree; Quality, Launch and health surfaces now distinguish PASS, FAIL, STALE and UNAVAILABLE,
+  show complete sanitized provenance and remain structurally unable to change canonical skill credit
+  delayed: true, reason: Git-redirection, broken-marker, read-race, freshness, stale-presentation,
+  touch-target and release-boundary audits expanded the adversarial regression matrix beyond the
+  atomic checkpoint ceiling; all findings were fixed before commit
+  artifacts: e12f403, ADR-022, dashboard/server.py, dashboard/index.html,
+  dashboard/README.md, semiskill/verification/evidence.py, tests/dashboard/test_dashboard.py,
+  tests/verification/test_full_suite.py; 152 dashboard/producer/CLI tests passed, 2 platform symlink
+  capability tests skipped; Ruff, Python compilation, JavaScript syntax and diff checks passed;
+  independent reader and UI audits found zero remaining P0/P1/P2
+  next: J-010b3e3a execute the fixed suite on the current clean committed source and exact isolated
+  test database, then verify the dashboard consumes that immutable run
+
+
+## In-Flight Step
+- [J-010b3e3a] execute the fixed full suite on the current clean committed source and exact isolated
+  test database, then verify the dashboard consumes the immutable non-crediting run.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
