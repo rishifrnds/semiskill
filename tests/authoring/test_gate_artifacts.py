@@ -123,6 +123,22 @@ def test_review_for_old_payload_hash_is_stale_after_skill_edit():
     assert "payload hash does not match skill version" in state.errors
 
 
+def test_another_version_review_cannot_shadow_exact_version_readiness():
+    first_version = skill()
+    first_review = review(first_version)
+    second_version = build_skill_version(
+        skill_md=SKILL_MD.replace("semiskill-version: 1.0.0", "semiskill-version: 2.0.0"),
+        actor="author",
+    )
+    malformed_later = review(second_version, attempt=9, run_id="later-version")
+
+    state = readiness_for_version(
+        Store([first_version, first_review, second_version, malformed_later]), first_version,
+    )
+
+    assert state.status == READY and state.review.artifact_id == first_review.artifact_id
+
+
 def test_recheck_reviewer_must_differ_from_fixer():
     sv = skill()
     art = review(sv, reviewer_identity="same-context", fixer_identity="same-context")

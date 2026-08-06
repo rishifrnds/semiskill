@@ -259,14 +259,25 @@ def validate_content_review(
 def readiness_for_version(store: ArtifactStore, skill_version: Artifact) -> Readiness:
     """Compute readiness from the latest canonical content-review round for this skill slug."""
     slug = skill_version.payload.get("slug")
-    candidates = [
+    slug_candidates = [
         artifact
         for artifact in store.by_type(ArtifactType.REVIEW)
         if artifact.payload.get("review_kind") == CONTENT_REVIEW_KIND
         and artifact.payload.get("slug") == slug
     ]
-    if not candidates:
+    if not slug_candidates:
         return Readiness(UNREVIEWED)
+    candidates = [
+        artifact for artifact in slug_candidates
+        if artifact.input_refs and artifact.input_refs[0] == skill_version.artifact_id
+    ]
+    if not candidates:
+        latest = max(slug_candidates, key=lambda artifact: (
+            artifact.timestamp_start, str(artifact.artifact_id),
+        ))
+        return Readiness(
+            STALE, latest, ("no content review references the exact skill version",),
+        )
     candidates.sort(
         key=lambda artifact: (
             artifact.payload.get("attempt")
