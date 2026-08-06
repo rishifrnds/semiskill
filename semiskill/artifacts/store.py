@@ -15,8 +15,20 @@ _COLS = (
 
 class ArtifactStore(Protocol):
     def append(self, a: Artifact) -> Artifact: ...
+    def append_many(self, artifacts: list[Artifact]) -> list[Artifact]: ...
     def get(self, artifact_id: uuid.UUID) -> Artifact | None: ...
     def by_type(self, t: ArtifactType) -> list[Artifact]: ...
+
+
+def _insert_values(a: Artifact) -> tuple:
+    return (
+        a.artifact_id, a.artifact_type.value, a.source_system.value, a.actor,
+        a.actor_kind.value, a.timestamp_start, a.timestamp_end, a.input_refs,
+        a.output_refs, a.permissions_label, a.objective_tag, a.ground_truth_ref,
+        a.eval_score,
+        Jsonb(a.rollback_ref) if a.rollback_ref is not None else None,
+        a.cost_usd, a.corrects_ref, Jsonb(a.payload),
+    )
 
 
 def _row_to_artifact(row: dict) -> Artifact:
@@ -52,17 +64,29 @@ class PostgresArtifactStore:
         with psycopg.connect(self._dsn) as conn:
             conn.execute(
                 f"INSERT INTO artifacts ({','.join(_COLS)}) VALUES ({','.join(['%s'] * len(_COLS))})",
-                (
-                    a.artifact_id, a.artifact_type.value, a.source_system.value, a.actor,
-                    a.actor_kind.value, a.timestamp_start, a.timestamp_end, a.input_refs,
-                    a.output_refs, a.permissions_label, a.objective_tag, a.ground_truth_ref,
-                    a.eval_score,
-                    Jsonb(a.rollback_ref) if a.rollback_ref is not None else None,
-                    a.cost_usd, a.corrects_ref, Jsonb(a.payload),
-                ),
+                _insert_values(a),
             )
             conn.commit()
         return a
+
+    def append_many(self, artifacts: list[Artifact]) -> list[Artifact]:
+        """Append a collector batch in one transaction or append none of it.
+
+        Validation belongs before this boundary, but database constraints still can reject an
+        insert.  The connection context rolls the entire transaction back if any row fails.
+        """
+        rows = list(artifacts)
+        if not rows:
+            return []
+        statement = (
+            f"INSERT INTO artifacts ({','.join(_COLS)}) "
+            f"VALUES ({','.join(['%s'] * len(_COLS))})"
+        )
+        with psycopg.connect(self._dsn) as conn:
+            for artifact in rows:
+                conn.execute(statement, _insert_values(artifact))
+            conn.commit()
+        return rows
 
     def get(self, artifact_id: uuid.UUID) -> Artifact | None:
         with psycopg.connect(self._dsn, row_factory=psycopg.rows.dict_row) as conn:

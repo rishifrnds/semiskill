@@ -5,6 +5,8 @@ artifact payload but never executed or interpreted as instructions. The L4/L6 pi
 scans them, and a human approves, before anything becomes discoverable (ADR-002).
 """
 from __future__ import annotations
+import hashlib
+import json
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -18,6 +20,22 @@ _FENCE = "---"
 # untrusted part of the payload and must be scanned.  New reviews live in the artifact store; this
 # compatibility boundary exists only while legacy REVIEW.json records are migrated.
 _LEGACY_GOVERNANCE_FILES = frozenset({"REVIEW.json"})
+
+# Canonical identity of the installable skill bytes. Governance metadata, artifact IDs, actors,
+# and timestamps are intentionally absent.
+PAYLOAD_FINGERPRINT_FIELDS = (
+    "slug", "name", "description", "version", "function", "role", "level", "tags",
+    "allowed_tools", "body", "files",
+)
+
+
+def payload_fingerprint(payload: dict) -> str:
+    """Return a stable SHA-256 fingerprint of the installable skill payload."""
+    canonical = {key: payload.get(key) for key in PAYLOAD_FINGERPRINT_FIELDS}
+    encoded = json.dumps(
+        canonical, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 @dataclass(frozen=True)

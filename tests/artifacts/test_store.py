@@ -47,3 +47,29 @@ def test_eval_score_and_labels_persist(store):
     store.append(a)
     got = store.get(a.artifact_id)
     assert got.eval_score == 0.95
+
+
+@pytest.mark.integration
+def test_append_many_rolls_back_every_row_when_one_insert_fails(store):
+    assert hasattr(store, "append_many"), "collector requires an explicit transactional batch API"
+    first = Artifact.new(
+        artifact_type=ArtifactType.SKILL_VERSION,
+        source_system=SourceSystem.CLI,
+        actor="collector",
+        actor_kind=ActorKind.SERVICE_ACCOUNT,
+        payload={"slug": "dv-atomic-first"},
+    )
+    duplicate = Artifact.new(
+        artifact_type=ArtifactType.REVIEW,
+        source_system=SourceSystem.CLI,
+        actor="collector",
+        actor_kind=ActorKind.SERVICE_ACCOUNT,
+    )
+    duplicate = Artifact(
+        **{**duplicate.__dict__, "artifact_id": first.artifact_id}
+    )
+
+    with pytest.raises(Exception):
+        store.append_many([first, duplicate])
+
+    assert store.get(first.artifact_id) is None

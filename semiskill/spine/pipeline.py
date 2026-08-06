@@ -62,7 +62,8 @@ def _write_review(store: ArtifactStore, sv: Artifact, scans: list[Artifact], ver
         artifact_type=ArtifactType.REVIEW, source_system=SourceSystem.CLI,
         actor="l5-controller", actor_kind=ActorKind.AGENT,
         input_refs=[sv.artifact_id, *[a.artifact_id for a in scans]],
-        payload={"verdict": verdict, "aggregate_safety": aggregate})
+        payload={"review_kind": "security_aggregate", "schema_version": 1,
+                 "verdict": verdict, "aggregate_safety": aggregate})
     art = replace(art, permissions_label=label).with_eval_score(aggregate)
     return store.append(art)
 

@@ -27,7 +27,6 @@ directly (ADR-002).
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 import uuid
@@ -38,7 +37,7 @@ from typing import Callable, Iterable
 from semiskill.artifacts.schema import Artifact, ArtifactType
 from semiskill.artifacts.store import ArtifactStore
 from semiskill.authoring.gate import READY, REVIEW_FILENAME, gate_status, has_review, read_review_dir
-from semiskill.capture.intake import build_skill_version, load_skill_dir
+from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
 from semiskill.governance.publish import PublishRefused, publish_skill
 from semiskill.governance.rollback import RollbackRefused, unpublish_skill
 from semiskill.spine.pipeline import run_pipeline
@@ -57,13 +56,6 @@ GATE_MISSING = "gate-missing"
 GATE_NOT_READY = "gate-not-ready"
 
 SUCCESS = frozenset({PUBLISHED, SUPERSEDED, SKIPPED_IDENTICAL})
-
-# Fields that define a skill's identity for change detection. Deliberately excludes anything the
-# store adds (ids, timestamps, actor), so the hash is computable identically from a file on disk and
-# from an artifact already in the catalog.
-_HASHED_FIELDS = ("slug", "name", "description", "version", "function", "role", "level",
-                  "tags", "allowed_tools", "body", "files")
-
 
 class WaveAborted(RuntimeError):
     """Infrastructure failed. The remaining items were not attempted."""
@@ -123,11 +115,8 @@ class WaveReport:
 
 
 def payload_hash(payload: dict) -> str:
-    """Stable hash of the fields that define a skill's identity."""
-    subset = {k: payload.get(k) for k in _HASHED_FIELDS}
-    return hashlib.sha256(
-        json.dumps(subset, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
-    ).hexdigest()
+    """Compatibility alias for the canonical installable-payload fingerprint."""
+    return payload_fingerprint(payload)
 
 
 def load_wave(root: str | Path) -> list[WaveItem]:
