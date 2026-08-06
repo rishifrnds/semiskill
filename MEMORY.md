@@ -458,9 +458,20 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008f implement authenticated approval/v1 and make legacy approvals non-authoritative
 
 
+- [J-008f] 2026-08-06T07:21:08Z  status: done
+  what: implemented approval/v1 as the only catalog-authoritative publication decision, binding an
+  explicit approve/reject to exact version/hash, security aggregate and scan IDs, latest canonical
+  content review, reason and authenticated human identity; local CLI uses OS SID/uid, production is
+  Entra-only/fail-closed, legacy callback APIs are tombstones, and unpublish is a correcting v1 row
+  artifacts: 8936e12, semiskill/governance/identity.py, semiskill/governance/publish.py,
+  semiskill/governance/rollback.py, semiskill/artifacts/migrations/0009_approval_contract.sql,
+  semiskill/artifacts/migrations/0010_unpublish_contract.sql, semiskill/cli.py
+  next: J-008g migrate development and reconcile every approval/badge consumer and test
+
+
 ## In-Flight Step
-- [J-008f] implement the explicit authenticated human approval actuator, approval/v1 migration,
-  active correction-chain publication and exact frozen evidence badges.
+- [J-008g] apply the approval read model, eliminate legacy consumer assumptions, freeze exported
+  verification to approval evidence and restore a green full suite on the isolated test DB.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

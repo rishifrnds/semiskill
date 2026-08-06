@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T07:13:08Z_
+_Last updated: 2026-08-06T07:21:08Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-008f: implement authenticated approval/v1 bound to the exact skill/hash, automated scan chain,
-  independent content review, reason, actor and authentication context; legacy approvals go dark.
+- J-008g: apply approval migrations to development, repair consumers/tests around approval/v1,
+  freeze badges/pack/catalog to the approved evidence chain, then run the full isolated suite.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -37,6 +37,6 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- d88e6d2 — wave is queue-only: exact versions and scan chains are reused, no approval or catalog
-  mutation is possible, the ungated flag is a tombstone, embedded review metadata fails closed, and
-  stages 1–5 plus stage-6 aggregate are explicit (stage 5 says not_sampled when skipped).
+- 8936e12 — approval/v1 requires exact skill/hash, frozen automated scans, latest independent
+  content recheck, reason, authenticated OS/Entra identity and explicit decision; production is
+  Entra-only, legacy approvals are non-authoritative, and unpublish is an authenticated correction.
