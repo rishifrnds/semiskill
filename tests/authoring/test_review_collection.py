@@ -168,6 +168,30 @@ def test_followup_round_preserves_prior_review_and_requires_exact_lineage():
         collect(broken_store, [a], [second_result])
 
 
+def test_collector_rejects_duplicate_root_or_branch_without_appending():
+    a = version("dv-a")
+    store = Store([a])
+    first = collect(store, [a], [result(a)])[0]
+    calls = store.append_many_calls
+    with pytest.raises(BatchRejected, match="attempt 1 already exists"):
+        collect(store, [a], [result(
+            a, run_id="duplicate-root", reviewer_identity="reviewer:duplicate",
+        )])
+    assert store.append_many_calls == calls
+
+    second = collect(store, [a], [result(
+        a, attempt=2, run_id="run-2", prior_review_ref=str(first.artifact_id),
+        reviewer_identity="reviewer:round-2", fixer_identity="fixer:round-2",
+    )])[0]
+    calls = store.append_many_calls
+    with pytest.raises(BatchRejected, match="attempt 2 already exists"):
+        collect(store, [a], [result(
+            a, attempt=2, run_id="branch", prior_review_ref=str(first.artifact_id),
+            reviewer_identity="reviewer:branch", fixer_identity="fixer:branch",
+        )])
+    assert store.append_many_calls == calls and store.get(second.artifact_id) is second
+
+
 def test_legacy_import_preserves_raw_record_but_is_non_authoritative(tmp_path):
     source = tmp_path / "skills" / "dv-a" / "REVIEW.json"
     source.parent.mkdir(parents=True)

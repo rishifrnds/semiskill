@@ -158,6 +158,23 @@ def test_recheck_must_reference_prior_attempt_and_increment_without_gaps():
     assert "attempt must increment prior review by exactly one" in state.errors
 
 
+def test_duplicate_or_branched_attempts_fail_closed():
+    sv = skill()
+    first = review(sv)
+    duplicate_root = review(sv, run_id="run-duplicate", reviewer_identity="reviewer-2")
+    state = readiness_for_version(Store([sv, first, duplicate_root]), sv)
+    assert state.status == INVALID
+    assert "content review lineage has duplicate attempt 1" in state.errors
+
+    second = review(sv, attempt=2, run_id="run-2", prior_review=first,
+                    reviewer_identity="reviewer-3")
+    branch = review(sv, attempt=2, run_id="run-branch", prior_review=first,
+                    reviewer_identity="reviewer-4")
+    state = readiness_for_version(Store([sv, first, second, branch]), sv)
+    assert state.status == INVALID
+    assert "content review lineage has duplicate attempt 2" in state.errors
+
+
 def test_slug_version_role_and_level_must_match_skill_version():
     sv = skill()
     art = review(sv)

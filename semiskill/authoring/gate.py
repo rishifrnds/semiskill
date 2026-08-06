@@ -194,10 +194,10 @@ def _review_validation(
         structural.append("attempt must be a positive integer")
     prior_ref = payload.get("prior_review_ref")
     if attempt == 1:
-        if prior_ref is not None or len(artifact.input_refs) > 1:
+        if prior_ref is not None or len(artifact.input_refs) != 1:
             structural.append("first attempt must not reference a prior review")
     elif type(attempt) is int and attempt > 1:
-        if not isinstance(prior_ref, str) or len(artifact.input_refs) < 2:
+        if not isinstance(prior_ref, str) or len(artifact.input_refs) != 2:
             structural.append("recheck attempt must reference the prior attempt")
         elif str(artifact.input_refs[1]) != prior_ref:
             structural.append("prior review payload and input reference disagree")
@@ -278,6 +278,35 @@ def readiness_for_version(store: ArtifactStore, skill_version: Artifact) -> Read
         return Readiness(
             STALE, latest, ("no content review references the exact skill version",),
         )
+    lineage_errors: list[str] = []
+    by_attempt: dict[int, list[Artifact]] = {}
+    for candidate in candidates:
+        attempt = candidate.payload.get("attempt")
+        if type(attempt) is not int or attempt < 1:
+            lineage_errors.append("content review lineage contains an invalid attempt")
+            continue
+        by_attempt.setdefault(attempt, []).append(candidate)
+    for attempt, rows in sorted(by_attempt.items()):
+        if len(rows) != 1:
+            lineage_errors.append(f"content review lineage has duplicate attempt {attempt}")
+    if by_attempt:
+        maximum = max(by_attempt)
+        missing = sorted(set(range(1, maximum + 1)) - set(by_attempt))
+        if missing:
+            lineage_errors.append(
+                "content review lineage has missing attempts: "
+                + ", ".join(str(value) for value in missing)
+            )
+        for attempt in range(2, maximum + 1):
+            current = by_attempt.get(attempt, [])
+            prior = by_attempt.get(attempt - 1, [])
+            if len(current) == 1 and len(prior) == 1 and (
+                len(current[0].input_refs) != 2
+                or current[0].input_refs[1] != prior[0].artifact_id
+            ):
+                lineage_errors.append(
+                    f"content review attempt {attempt} does not reference attempt {attempt - 1}"
+                )
     candidates.sort(
         key=lambda artifact: (
             artifact.payload.get("attempt")
@@ -288,6 +317,11 @@ def readiness_for_version(store: ArtifactStore, skill_version: Artifact) -> Read
         )
     )
     latest = candidates[-1]
+    if lineage_errors:
+        structural, _unmet, _findings = _review_validation(latest, skill_version, store)
+        return Readiness(
+            INVALID, latest, tuple(sorted(set([*lineage_errors, *structural]))),
+        )
     return readiness_for_review(store, skill_version, latest)
 
 

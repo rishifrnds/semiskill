@@ -18,6 +18,7 @@ def _body():
         "sources": {"database": {"database_name": "semiskill"}},
         "registry": {"active": 84, "declined": 20, "roles": 16},
         "funnel": {"authored": 84, "published": 0},
+        "conservation": {"passed": True, "checks": {}},
         "roles": [],
         "cells": [],
         "anomalies": {},
@@ -71,6 +72,21 @@ def test_progress_must_reference_the_loaded_scoreboard(tmp_path):
     assert load_progress(path, snapshot["snapshot_id"])["workers"] == []
     with pytest.raises(SnapshotUnavailable, match="does not match"):
         load_progress(path, "sha256:" + "0" * 64)
+
+
+def test_progress_workers_require_typed_assignment_attempt_and_timestamps(tmp_path):
+    snapshot = finalize_scoreboard(_body(), generated_at="2026-08-06T00:00:00Z")
+    path = tmp_path / "progress.json"
+    write_json_atomic(path, {
+        "schema_version": "semiskill.progress/v1",
+        "scoreboard_snapshot_id": snapshot["snapshot_id"],
+        "generated_at": "2026-08-06T00:00:01Z",
+        "workers": [{"worker_id": "qa-1", "slug": "dv-one", "stage": "recheck",
+                     "attempt": "2", "started_at": "2026-08-06T00:00:00Z",
+                     "updated_at": "2026-08-06T00:00:01Z"}],
+    })
+    with pytest.raises(SnapshotUnavailable, match="attempt"):
+        load_progress(path, snapshot["snapshot_id"])
 
 
 def test_database_identity_is_sanitized_and_stable():

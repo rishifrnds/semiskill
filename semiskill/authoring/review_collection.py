@@ -111,6 +111,29 @@ def collect_review_batch(
             if prior is None:
                 raise BatchRejected(f"{slug}: prior review artifact was not found")
 
+        existing = [
+            artifact for artifact in store.by_type(ArtifactType.REVIEW)
+            if artifact.payload.get("review_kind") == "content_review"
+            and artifact.input_refs
+            and artifact.input_refs[0] == skill_version.artifact_id
+        ]
+        existing_attempts = [artifact.payload.get("attempt") for artifact in existing]
+        if attempt in existing_attempts:
+            raise BatchRejected(f"{slug}: content review attempt {attempt} already exists")
+        if attempt == 1 and existing:
+            raise BatchRejected(f"{slug}: content review lineage already has a first attempt")
+        if attempt > 1:
+            heads = [
+                artifact for artifact in existing
+                if artifact.payload.get("attempt") == attempt - 1
+            ]
+            if len(heads) != 1 or prior is None or prior.artifact_id != heads[0].artifact_id:
+                raise BatchRejected(
+                    f"{slug}: attempt must increment prior review by exactly one unique round"
+                )
+            if sorted(existing_attempts) != list(range(1, attempt)):
+                raise BatchRejected(f"{slug}: existing review lineage is malformed or branched")
+
         artifact = make_content_review(
             skill_version=skill_version,
             phase=result["phase"],

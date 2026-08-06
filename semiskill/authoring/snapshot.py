@@ -50,7 +50,7 @@ def _validate_scoreboard(document: object) -> dict:
     for key, expected in (
         ("snapshot_id", str), ("generated_at", str), ("scope", dict), ("sources", dict),
         ("registry", dict), ("funnel", dict), ("roles", list), ("cells", list),
-        ("anomalies", dict), ("release_gate", dict),
+        ("conservation", dict), ("anomalies", dict), ("release_gate", dict),
     ):
         if not isinstance(document.get(key), expected):
             raise SnapshotUnavailable(f"scoreboard snapshot field {key!r} is missing or invalid")
@@ -58,6 +58,11 @@ def _validate_scoreboard(document: object) -> dict:
     if document["snapshot_id"] != expected_id:
         raise SnapshotUnavailable("scoreboard snapshot_id does not match its canonical content")
     return document
+
+
+def validate_scoreboard_snapshot(document: object) -> dict:
+    """Validate an in-memory provider result before it crosses a read API boundary."""
+    return _validate_scoreboard(deepcopy(document))
 
 
 def write_json_atomic(path: str | Path, document: dict) -> Path:
@@ -91,19 +96,38 @@ def load_scoreboard_snapshot(path: str | Path) -> dict:
     return _validate_scoreboard(document)
 
 
+def validate_progress_snapshot(document: object, snapshot_id: str) -> dict:
+    """Validate ephemeral progress without allowing it to alter canonical scoreboard state."""
+    if not isinstance(document, dict) or document.get("schema_version") != PROGRESS_SCHEMA:
+        raise SnapshotUnavailable("unsupported progress snapshot schema")
+    if document.get("scoreboard_snapshot_id") != snapshot_id:
+        raise SnapshotUnavailable("progress scoreboard_snapshot_id does not match the scoreboard")
+    if not isinstance(document.get("generated_at"), str) or not isinstance(
+        document.get("workers"), list,
+    ):
+        raise SnapshotUnavailable("progress snapshot fields are missing or invalid")
+    worker_ids: set[str] = set()
+    for index, worker in enumerate(document["workers"]):
+        if not isinstance(worker, dict):
+            raise SnapshotUnavailable(f"progress worker {index} must be an object")
+        for field in ("worker_id", "slug", "stage", "started_at", "updated_at"):
+            if not isinstance(worker.get(field), str) or not worker[field].strip():
+                raise SnapshotUnavailable(f"progress worker {index} field {field!r} is invalid")
+        if type(worker.get("attempt")) is not int or worker["attempt"] < 1:
+            raise SnapshotUnavailable(f"progress worker {index} attempt is invalid")
+        if worker["worker_id"] in worker_ids:
+            raise SnapshotUnavailable("progress worker_id values must be unique")
+        worker_ids.add(worker["worker_id"])
+    return deepcopy(document)
+
+
 def load_progress(path: str | Path, snapshot_id: str) -> dict:
     target = Path(path)
     try:
         document = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise SnapshotUnavailable(f"progress snapshot unavailable: {target}") from exc
-    if not isinstance(document, dict) or document.get("schema_version") != PROGRESS_SCHEMA:
-        raise SnapshotUnavailable("unsupported progress snapshot schema")
-    if document.get("scoreboard_snapshot_id") != snapshot_id:
-        raise SnapshotUnavailable("progress scoreboard_snapshot_id does not match the scoreboard")
-    if not isinstance(document.get("generated_at"), str) or not isinstance(document.get("workers"), list):
-        raise SnapshotUnavailable("progress snapshot fields are missing or invalid")
-    return document
+    return validate_progress_snapshot(document, snapshot_id)
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -123,6 +147,26 @@ def _repository_identity(root: Path) -> tuple[str, bool]:
         return commit, dirty
     except (OSError, subprocess.SubprocessError):
         return "unknown", True
+
+
+def _validate_database_environment(database: dict, environment: str) -> None:
+    """Prevent caller-supplied labels from disguising test/dev state as production state."""
+    name = database.get("database_name") if isinstance(database, dict) else None
+    if not isinstance(name, str) or not name:
+        raise SnapshotUnavailable("database identity is missing its database name")
+    is_test = name.lower().endswith("_test")
+    production_name = os.environ.get("SEMISKILL_PRODUCTION_DATABASE_NAME")
+    if environment == "test" and not is_test:
+        raise SnapshotUnavailable("test snapshots require an isolated *_test database")
+    if environment == "development" and (
+        is_test or (production_name is not None and name == production_name)
+    ):
+        raise SnapshotUnavailable("development snapshot database identity is inconsistent")
+    if environment == "production":
+        if not production_name or name != production_name or is_test:
+            raise SnapshotUnavailable("production database identity is not explicitly configured")
+    if environment not in {"development", "test", "production"}:
+        raise SnapshotUnavailable("snapshot environment is invalid")
 
 
 def _security_projection(store, skill_version, reviews, artifacts_by_id, preferred=None) -> dict:
@@ -248,7 +292,6 @@ def build_scoreboard_snapshot(
     repository_dirty: bool | None = None,
     repository_root: str | Path | None = None,
     phase: str = "dv-84",
-    permission_label: str = "public",
 ) -> dict:
     """Derive one complete authoritative snapshot from registry, source tree, and artifacts."""
     from semiskill.artifacts.schema import ArtifactType, ActorKind
@@ -272,7 +315,7 @@ def build_scoreboard_snapshot(
     registry = load_registry(registry_file)
     active_rows = [row for row in registry if not row.get("declined")]
     declined_rows = [row for row in registry if row.get("declined")]
-    target = target_per_role or (
+    target = target_per_role if target_per_role is not None else (
         raw_registry.get("target_per_role", 5) if isinstance(raw_registry, dict) else 5
     )
     if type(target) is not int or target < 1:
@@ -307,42 +350,141 @@ def build_scoreboard_snapshot(
         if approval.actor_kind is ActorKind.HUMAN
         and approval.payload.get("schema_version") == APPROVAL_SCHEMA
     ]
-    corrected = {
-        approval.corrects_ref for approval in authoritative_approvals
-        if approval.corrects_ref is not None
-    }
-    heads = [
-        approval for approval in authoritative_approvals
-        if approval.artifact_id not in corrected
-    ]
+    approval_by_id = {approval.artifact_id: approval for approval in authoritative_approvals}
+
+    def approval_contract_errors(approval) -> list[str]:
+        payload = approval.payload
+        errors: list[str] = []
+        decision = payload.get("decision")
+        if decision not in {"approve", "reject", "unpublish"}:
+            errors.append("decision")
+        if payload.get("published") is not (decision == "approve"):
+            errors.append("published")
+        if not isinstance(payload.get("reason"), str) or not payload["reason"].strip():
+            errors.append("reason")
+        authentication = payload.get("authentication")
+        if not isinstance(authentication, dict) or authentication.get("provider") not in {
+            "local_os", "entra_oidc",
+        } or not isinstance(authentication.get("subject"), str) or not authentication["subject"].strip():
+            errors.append("authentication")
+        if payload.get("environment") not in {"development", "test", "production"}:
+            errors.append("environment")
+        elif payload.get("environment") == "production" and (
+            not isinstance(authentication, dict)
+            or authentication.get("provider") != "entra_oidc"
+        ):
+            errors.append("production_identity")
+        skill = payload.get("skill")
+        evidence = payload.get("evidence")
+        if len(approval.input_refs) != 3 or not isinstance(skill, dict) or not isinstance(evidence, dict):
+            errors.append("references")
+        elif (
+            skill.get("artifact_id") != str(approval.input_refs[0])
+            or evidence.get("automated_review_id") != str(approval.input_refs[1])
+            or evidence.get("content_review_id") != str(approval.input_refs[2])
+        ):
+            errors.append("reference_payload")
+        return errors
+
     valid_publication_candidates: dict[str, list[tuple]] = {}
     invalid_approval_chains: list[str] = []
     active_rejections: set = set()
-    for approval in heads:
-        if not approval.input_refs:
-            invalid_approval_chains.append(str(approval.artifact_id))
+    invalid_ids: set = set()
+    valid_positive: dict = {}
+    for approval in authoritative_approvals:
+        contract_errors = approval_contract_errors(approval)
+        if contract_errors:
+            invalid_ids.add(approval.artifact_id)
+            continue
+        if approval.payload.get("decision") != "approve":
             continue
         skill_version = artifacts_by_id.get(approval.input_refs[0])
         if skill_version is None or skill_version.artifact_type is not ArtifactType.SKILL_VERSION:
-            invalid_approval_chains.append(str(approval.artifact_id))
-            continue
-        if approval.payload.get("decision") == "reject":
-            active_rejections.add(skill_version.artifact_id)
-            continue
-        if approval.payload.get("decision") != "approve" or approval.payload.get("published") is not True:
+            invalid_ids.add(approval.artifact_id)
             continue
         try:
             frozen = resolve_frozen_approval_evidence(
                 store, skill_version=skill_version, approval=approval,
             )
         except ApprovalChainInvalid:
-            invalid_approval_chains.append(str(approval.artifact_id))
+            invalid_ids.add(approval.artifact_id)
             continue
-        slug = skill_version.payload.get("slug")
-        if slug:
-            valid_publication_candidates.setdefault(slug, []).append(
-                (skill_version, approval, frozen)
+        valid_positive[approval.artifact_id] = (skill_version, approval, frozen)
+
+    valid_corrections: set = set()
+    suppressed: set = set()
+    correction_children: dict = {}
+    for correction in authoritative_approvals:
+        if correction.corrects_ref is not None:
+            correction_children.setdefault(correction.corrects_ref, []).append(correction)
+    for children in correction_children.values():
+        if len(children) > 1:
+            invalid_ids.update(child.artifact_id for child in children)
+    for correction in sorted(authoritative_approvals, key=lambda artifact: (
+        artifact.timestamp_start, str(artifact.artifact_id),
+    )):
+        if correction.corrects_ref is None:
+            if correction.payload.get("decision") == "unpublish":
+                invalid_ids.add(correction.artifact_id)
+            continue
+        correction_target = approval_by_id.get(correction.corrects_ref)
+        target_positive = valid_positive.get(correction.corrects_ref)
+        decision = correction.payload.get("decision")
+        target_lineage_valid = bool(
+            target_positive is not None
+            and (
+                correction_target.corrects_ref is None
+                or correction_target.artifact_id in valid_corrections
             )
+        ) if correction_target is not None else False
+        relationship_valid = bool(
+            correction.artifact_id not in invalid_ids
+            and correction_target is not None
+            and target_lineage_valid
+            and correction.permissions_label == correction_target.permissions_label
+            and correction.timestamp_start >= correction_target.timestamp_start
+            and correction.payload.get("skill", {}).get("slug")
+            == correction_target.payload.get("skill", {}).get("slug")
+        )
+        if decision == "approve":
+            relationship_valid = relationship_valid and correction.artifact_id in valid_positive
+        elif decision == "unpublish":
+            relationship_valid = relationship_valid and (
+                correction.input_refs == correction_target.input_refs
+                and correction.payload.get("skill") == correction_target.payload.get("skill")
+                and correction.payload.get("evidence") == correction_target.payload.get("evidence")
+            )
+        else:
+            relationship_valid = False
+        if relationship_valid:
+            valid_corrections.add(correction.artifact_id)
+            suppressed.add(correction_target.artifact_id)
+        else:
+            invalid_ids.add(correction.artifact_id)
+
+    for approval in authoritative_approvals:
+        if approval.payload.get("decision") == "reject" and approval.corrects_ref is None:
+            if approval.artifact_id in invalid_ids:
+                continue
+            skill_version = artifacts_by_id.get(approval.input_refs[0])
+            if skill_version is None or skill_version.artifact_type is not ArtifactType.SKILL_VERSION:
+                invalid_ids.add(approval.artifact_id)
+            else:
+                active_rejections.add(skill_version.artifact_id)
+
+    for approval_id, publication in valid_positive.items():
+        approval = publication[1]
+        if approval_id in suppressed:
+            continue
+        if approval.corrects_ref is not None and approval_id not in valid_corrections:
+            invalid_ids.add(approval_id)
+            continue
+        slug = publication[0].payload.get("slug")
+        if slug:
+            valid_publication_candidates.setdefault(slug, []).append(publication)
+    invalid_approval_chains.extend(str(artifact_id) for artifact_id in sorted(
+        invalid_ids, key=str,
+    ))
     duplicate_active_publications = sorted(
         slug for slug, candidates in valid_publication_candidates.items() if len(candidates) > 1
     )
@@ -357,7 +499,6 @@ def build_scoreboard_snapshot(
         str(approval.artifact_id) for approval in approvals
         if approval.artifact_id not in authoritative_ids
         and approval.payload.get("published") is True
-        and approval.payload.get("verdict") == "approve"
     )
 
     disk_slugs = {path.parent.name for path in root.glob("*/SKILL.md")}
@@ -504,7 +645,12 @@ def build_scoreboard_snapshot(
         content_status = content_state.status if content_state is not None else (
             STALE if content_review is not None else UNREVIEWED
         )
-        reviewed = content_status != UNREVIEWED
+        reviewed = bool(
+            content_review is not None
+            and selected_version is not None
+            and content_review.input_refs
+            and content_review.input_refs[0] == selected_version.artifact_id
+        )
         recheck_ready = content_status == READY
         if content_status == STALE:
             anomalies["stale_review_hashes"].append(slug)
@@ -518,13 +664,16 @@ def build_scoreboard_snapshot(
                 review for review in reviews
                 if review.payload.get("review_kind") == CONTENT_REVIEW_KIND
                 and review.payload.get("slug") == slug
+                and review.input_refs
+                and review.input_refs[0] == published_version.artifact_id
                 and review.timestamp_start > approval.timestamp_start
             ]
-            if any(
-                not readiness_for_review(store, published_version, review).ready
-                for review in later_content
-            ):
-                anomalies["post_approval_blockers"].append(slug)
+            if later_content:
+                current_lineage = readiness_for_version(store, published_version)
+                if not current_lineage.ready:
+                    anomalies["post_approval_blockers"].append(slug)
+                if current_lineage.status == INVALID:
+                    anomalies["invalid_review_lineage"].append(slug)
 
         source_facets = {
             "role": source_payload.get("role") if source_payload else None,
@@ -560,10 +709,16 @@ def build_scoreboard_snapshot(
         if reviewed and not recheck_ready:
             blockers.append({"code": "CONTENT_REVIEW_BLOCKED", "source": "review",
                              "artifact_id": str(content_review.artifact_id) if content_review else None})
+        if publication and not current_publication:
+            blockers.append({"code": "APPROVAL_STALE", "source": "approval",
+                             "artifact_id": str(approval.artifact_id)})
         if facet_drift:
             blockers.append({"code": "FACET_DRIFT", "source": "registry", "artifact_id": None})
 
         rejected = bool(selected_version and selected_version.artifact_id in active_rejections)
+        if rejected:
+            blockers.append({"code": "APPROVAL_REJECTED", "source": "approval",
+                             "artifact_id": None})
         if publication and not current_publication:
             state = "published_stale"
         elif current_publication:
@@ -582,7 +737,7 @@ def build_scoreboard_snapshot(
             state = "security_pending"
         elif security["status"] != "passed":
             state = "security_blocked"
-        elif content_status == UNREVIEWED:
+        elif not reviewed:
             state = "review_pending"
         elif not recheck_ready:
             state = "review_blocked"
@@ -688,7 +843,7 @@ def build_scoreboard_snapshot(
     state_names = (
         "missing", "lint_blocked", "consistency_blocked", "security_pending",
         "security_blocked", "review_pending", "review_blocked", "recheck_ready",
-        "approval_rejected", "approved_not_published", "published", "published_stale", "invalid",
+        "approval_rejected", "published", "published_stale", "invalid",
     )
     exclusive_states = {name: sum(cell["state"] == name for cell in active_cells) for name in state_names}
 
@@ -712,6 +867,22 @@ def build_scoreboard_snapshot(
     if sum(role["published"] for role in roles) != funnel["published"]:
         raise SnapshotUnavailable("role published counts do not conserve the funnel")
 
+    conservation_checks = {
+        "registry_partition": len(registry) == len(active_cells) + len(declined_rows),
+        "active_state_partition": sum(exclusive_states.values()) == len(active_cells),
+        "role_active_partition": sum(role["active"] for role in roles) == len(active_cells),
+        "role_published_partition": (
+            sum(role["published"] for role in roles) == funnel["published"]
+        ),
+        "review_partition": funnel["reviewed"] >= funnel["recheck_ready"],
+        "approval_publication_partition": funnel["approved"] == funnel["published"],
+        "funnel_bounds": all(0 <= funnel[name] <= len(active_cells) for name in flag_names),
+    }
+    conservation = {
+        "passed": all(conservation_checks.values()),
+        "checks": conservation_checks,
+    }
+
     checks = [
         ("REGISTRY_ACTIVE", len(active_cells), expected_active),
         ("REGISTRY_DECLINED", len(declined_rows), expected_declined),
@@ -726,6 +897,7 @@ def build_scoreboard_snapshot(
         ("CONSISTENCY_ERRORS", consistency_errors, 0),
         ("BLOCKERS", funnel["blocked"]["total"], 0),
         ("ANOMALIES", sum(len(values) for values in anomalies.values()), 0),
+        ("CONSERVATION", int(conservation["passed"]), 1),
     ]
     release_checks = [
         {"code": code, "passed": actual == expected, "actual": actual, "expected": expected}
@@ -745,12 +917,16 @@ def build_scoreboard_snapshot(
         store, "database_identity"
     ) else {"engine": "unknown", "environment": environment, "database_name": "unknown",
             "identity_sha256": "sha256:" + "0" * 64}
+    _validate_database_environment(database, environment)
     active_levels = sorted(
         {row["level"] for row in active_rows},
         key=lambda level: (level_order.get(level, 999), level),
     )
     body = {
-        "scope": {"phase": phase, "permission_label": permission_label,
+        "scope": {"phase": phase,
+                  "access_scope": "internal-catalog-operators",
+                  "contains_all_permission_labels": True,
+                  "scoped_export_eligible": False,
                   "expected_active": expected_active, "expected_declined": expected_declined,
                   "expected_roles": expected_roles, "target_per_role": target,
                   "declines_credit_role_target": False},
@@ -771,6 +947,7 @@ def build_scoreboard_snapshot(
                      "levels": active_levels},
         "funnel": funnel,
         "exclusive_states": exclusive_states,
+        "conservation": conservation,
         "roles": roles,
         "cells": cells,
         "anomalies": anomalies,
