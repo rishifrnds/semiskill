@@ -21,6 +21,37 @@ def _default_store():
     return PostgresArtifactStore(Config.from_env().database_url)
 
 
+def _export_scope_from_args(args, store):
+    """Resolve one OS-bound public export scope; production remains Entra-only and unavailable."""
+    from datetime import datetime, timezone
+    from semiskill.authoring.export_scope import ExportRefused, make_export_scope
+    from semiskill.authoring.snapshot import load_scoreboard_snapshot
+    from semiskill.context.acl import resolve_local_public_principal
+    from semiskill.governance.identity import local_os_identity
+
+    if args.environment == "production":
+        raise ExportRefused("production exports require the configured Entra/OIDC adapter")
+    try:
+        scoreboard = load_scoreboard_snapshot(args.scoreboard_snapshot)
+    except Exception as exc:
+        raise ExportRefused("canonical scoreboard snapshot could not be loaded") from exc
+    observed_environment = scoreboard.get("sources", {}).get("database", {}).get("environment")
+    if observed_environment != args.environment:
+        raise ExportRefused("requested environment does not match the scoreboard snapshot")
+    try:
+        principal = resolve_local_public_principal(local_os_identity())
+    except Exception as exc:
+        raise ExportRefused("local OS export identity could not be established") from exc
+    return make_export_scope(
+        principal=principal,
+        permission_label=args.permission_label,
+        scoreboard=scoreboard,
+        generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        repo_root=args.repo_root,
+        store=store,
+    )
+
+
 def cmd_submit(args, store, out) -> int:
     skill_md, files = load_skill_dir(args.path)
     art = build_skill_version(skill_md=skill_md, actor=args.actor,
@@ -191,25 +222,25 @@ def cmd_wave(args, store, out) -> int:
 
 def cmd_pack(args, store, out) -> int:
     """Build the deliverable pack from what the catalog says is published (ADR-008/009)."""
-    from datetime import datetime, timezone
     from semiskill.artifacts.store import PostgresArtifactStore
+    from semiskill.authoring.export_scope import ExportRefused
     from semiskill.authoring.pack import PackRefused, build_pack
 
     dsn = args.dsn or Config.from_env().database_url
     store = store or PostgresArtifactStore(dsn)
     try:
+        scope = _export_scope_from_args(args, store)
         root, manifest = build_pack(
-            store=store, source_root=args.path, out_dir=args.out, pack_name=args.name,
-            generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            store=store, scope=scope, out_dir=args.out, pack_name=args.name,
             make_zip=not args.no_zip)
-    except PackRefused as e:
+    except (ExportRefused, PackRefused) as e:
         print(f"pack refused: {e}", file=out)
-        return 1
+        return 2
     print(f"{manifest.skill_count} skill(s) packed to {root}", file=out)
     for s_ in manifest.skills:
         print(f"  {s_.name:32} {s_.slots} slot(s)  {s_.sha256[:12]}", file=out)
     if not args.no_zip:
-        print(f"\nzip: {Path(args.out) / (args.name + '.zip')}", file=out)
+        print(f"\nzip: {root.parent / (args.name + '.zip')}", file=out)
     print("install: unzip and drop the folder into ~/.cursor/skills/ — see README-INSTALL.md",
           file=out)
     return 0
@@ -219,18 +250,22 @@ def cmd_catalog(args, store, out) -> int:
     """Generate the browsable catalog from what published: catalog.md (SharePoint renders it
     natively), catalog.html (rich, self-contained, download-and-open) and catalog.csv (paste into a
     SharePoint list for grouped browse)."""
-    from datetime import datetime, timezone
     from semiskill.artifacts.store import PostgresArtifactStore
-    from semiskill.authoring.catalog_page import build_catalog
+    from semiskill.authoring.catalog_page import CatalogRefused, build_catalog
+    from semiskill.authoring.export_scope import ExportRefused
 
     dsn = args.dsn or Config.from_env().database_url
     store = store or PostgresArtifactStore(dsn)
-    d, entries = build_catalog(store=store, out_dir=args.out,
-                               generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    if not entries:
-        print("nothing is published yet — run `semiskill wave` first", file=out)
-        return 1
-    print(f"{len(entries)} skill(s) -> {d}", file=out)
+    try:
+        scope = _export_scope_from_args(args, store)
+        if not scope.publications:
+            print("nothing is published in the requested export scope", file=out)
+            return 1
+        d, catalog = build_catalog(store=store, out_dir=args.out, scope=scope)
+    except (ExportRefused, CatalogRefused) as exc:
+        print(f"catalog refused: {exc}", file=out)
+        return 2
+    print(f"{len(catalog.entries)} skill(s) -> {d}", file=out)
     for f in ("catalog.md", "catalog.html", "catalog.csv"):
         print(f"  {d / f}", file=out)
     print("\nSharePoint: upload catalog.md to a document library (it renders in the browser);",
@@ -296,17 +331,21 @@ def cmd_scoreboard(args, store, out) -> int:
 
 def cmd_site(args, store, out) -> int:
     """Generate the browsable multi-page site from the published catalog."""
-    from datetime import datetime, timezone
     from semiskill.artifacts.store import PostgresArtifactStore
+    from semiskill.authoring.export_scope import ExportRefused
     from semiskill.authoring.site import build_site
 
     dsn = args.dsn or Config.from_env().database_url
     store = store or PostgresArtifactStore(dsn)
-    res = build_site(store=store, out_dir=args.out,
-                     generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    if not res.entries:
-        print("nothing is published yet — run `semiskill wave` first", file=out)
-        return 1
+    try:
+        scope = _export_scope_from_args(args, store)
+        if not scope.publications:
+            print("nothing is published in the requested export scope", file=out)
+            return 1
+        res = build_site(store=store, out_dir=args.out, scope=scope)
+    except ExportRefused as exc:
+        print(f"site refused: {exc}", file=out)
+        return 2
     print(f"{len(res.entries)} skill(s) -> {len(res.pages)} pages in {res.root}", file=out)
     print(f"  open {res.root / 'index.html'}", file=out)
     print("  SharePoint: upload catalog.md (it renders in the browser); the .html tree is "
@@ -372,17 +411,28 @@ def build_parser() -> argparse.ArgumentParser:
         w.add_argument("--yes", action="store_true", help="confirm writing to this database")
         w.set_defaults(func=cmd_wave, needs_store=needs_store)
 
-    pk = sub.add_parser("pack", help="build the installable pack from the published catalog")
-    pk.add_argument("path", help="the skill source tree")
+    def add_export_scope_arguments(command):
+        command.add_argument("--scoreboard-snapshot", required=True,
+                             help="validated canonical scoreboard JSON")
+        command.add_argument("--permission-label", required=True, choices=_LABELS,
+                             help="one exact label; local OS exports authorize public only")
+        command.add_argument("--repo-root", default=".",
+                             help="repository root bound by the scoreboard snapshot")
+        command.add_argument("--environment", choices=["development", "test", "production"],
+                             default="development")
+
+    pk = sub.add_parser("pack", help="build an exact scoped installable release")
     pk.add_argument("--dsn", default=None, help="catalog database (defaults to DATABASE_URL)")
     pk.add_argument("--out", default="dist", help="output directory")
     pk.add_argument("--name", default="semiskill-dv", help="pack folder name")
     pk.add_argument("--no-zip", action="store_true")
+    add_export_scope_arguments(pk)
     pk.set_defaults(func=cmd_pack, needs_store=False)
 
     cat = sub.add_parser("catalog", help="generate the browsable catalog page from the published catalog")
     cat.add_argument("--dsn", default=None, help="catalog database (defaults to DATABASE_URL)")
-    cat.add_argument("--out", default="dist/site", help="output directory")
+    cat.add_argument("--out", default="dist/catalog", help="output directory")
+    add_export_scope_arguments(cat)
     cat.set_defaults(func=cmd_catalog, needs_store=False)
 
     sc = sub.add_parser("scoreboard", help="coverage of the planned registry by the published catalog")
@@ -405,6 +455,7 @@ def build_parser() -> argparse.ArgumentParser:
     st = sub.add_parser("site", help="generate the browsable multi-page catalog site")
     st.add_argument("--dsn", default=None)
     st.add_argument("--out", default="dist/site")
+    add_export_scope_arguments(st)
     st.set_defaults(func=cmd_site, needs_store=False)
     return p
 

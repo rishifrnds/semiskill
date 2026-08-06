@@ -1,10 +1,9 @@
-"""Pack-builder tests.
+"""Approval-bound pack materialization tests."""
+from __future__ import annotations
 
-The load-bearing ones are `test_packed_bytes_are_identical_to_the_source` and
-`test_pack_refuses_when_the_source_has_drifted` — together they are the entire integrity claim:
-what an engineer installs is what passed the gate.
-"""
+import hashlib
 import json
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -14,7 +13,8 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.pack import PackRefused, build_pack
-from tests.support import publish_wave_sources
+from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
+from tests.support import public_export_scope, publish_wave_sources
 
 MIG = Path("semiskill/artifacts/migrations")
 BODY = ("# Title\n\nA procedure with enough substance to be a skill.\n\n"
@@ -29,8 +29,8 @@ BODY = ("# Title\n\nA procedure with enough substance to be a skill.\n\n"
 def skill_md(name, *, body=BODY, tools="Read Grep Glob"):
     return (f"---\nname: {name}\ndescription: Does {name}. Use when you need {name}.\n"
             f"allowed-tools: {tools}\nmetadata:\n  semiskill-title: Title of {name}\n"
-            f"  semiskill-function: design-verification\n  semiskill-role: dv-engineer\n"
-            f"  semiskill-level: intermediate\n  semiskill-version: 1.0.0\n---\n{body}")
+            "  semiskill-function: design-verification\n  semiskill-role: dv-engineer\n"
+            "  semiskill-level: intermediate\n  semiskill-version: 1.0.0\n---\n" + body)
 
 
 @pytest.fixture
@@ -43,114 +43,106 @@ def pg_store(pg_dsn):
 def source(tmp_path):
     root = tmp_path / "skills"
     for name in ("dv-alpha", "dv-beta"):
-        d = root / name
-        d.mkdir(parents=True)
-        (d / "SKILL.md").write_text(skill_md(name), encoding="utf-8")
+        directory = root / name
+        directory.mkdir(parents=True)
+        (directory / "SKILL.md").write_text(skill_md(name), encoding="utf-8")
     shared = root / "_shared"
     shared.mkdir()
-    (shared / "notes.md").write_text("# Shared\n\nReferenced by several skills.\n", encoding="utf-8")
+    (shared / "notes.md").write_text("# Unapproved repository support\n", encoding="utf-8")
     return root
 
 
-@pytest.mark.integration
-def test_pack_contains_every_published_skill(pg_store, pg_dsn, source, tmp_path):
-    publish_wave_sources(pg_store, source)
-    root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist",
-                                generated_at="2026-08-05")
-    assert manifest.skill_count == 2
-    assert (root / "dv-alpha" / "SKILL.md").exists()
-    assert (root / "dv-beta" / "SKILL.md").exists()
+def published_scope(store, source):
+    fixtures = publish_wave_sources(store, source)
+    return fixtures, public_export_scope(store, fixtures)
 
 
-@pytest.mark.integration
-def test_packed_bytes_are_identical_to_the_source(pg_store, pg_dsn, source, tmp_path):
-    """Packaging places bytes; it never re-serialises them (ADR-008)."""
-    publish_wave_sources(pg_store, source)
-    root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    for s in manifest.skills:
-        packed = (root / s.name / "SKILL.md").read_bytes()
-        original = (source / s.name / "SKILL.md").read_bytes()
-        assert packed == original
-        import hashlib
-        assert hashlib.sha256(packed).hexdigest() == s.sha256
-
-
-@pytest.mark.integration
-def test_pack_refuses_when_the_source_has_drifted(pg_store, pg_dsn, source, tmp_path):
-    """Shipping content that changed after it was scanned would give it a badge it did not earn."""
-    publish_wave_sources(pg_store, source)
-    p = source / "dv-alpha" / "SKILL.md"
-    p.write_text(p.read_text(encoding="utf-8") + "\nAn edit made after publication.\n",
-                 encoding="utf-8")
-    with pytest.raises(PackRefused) as e:
-        build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    assert "changed since it published" in str(e.value)
-
-
-@pytest.mark.integration
-def test_unpublished_skills_are_excluded(pg_store, pg_dsn, source, tmp_path):
-    """A skill blocked by the pipeline must not be able to reach an engineer's machine."""
-    publish_wave_sources(pg_store, source)
+def test_pack_contains_only_scoped_published_skills(pg_store, source, tmp_path):
+    fixtures, scope = published_scope(pg_store, source)
     blocked = source / "dv-blocked"
     blocked.mkdir()
     (blocked / "SKILL.md").write_text(skill_md("dv-blocked", tools="Read Bash"), encoding="utf-8")
 
-    root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    names = {s.name for s in manifest.skills}
-    assert "dv-blocked" not in names and names == {"dv-alpha", "dv-beta"}
+    root, manifest = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    assert manifest.skill_count == 2
+    assert {path.name for path in root.iterdir() if (path / "SKILL.md").exists()} == {
+        "dv-alpha", "dv-beta",
+    }
     assert not (root / "dv-blocked").exists()
+    assert {skill.skill_version_artifact_id for skill in manifest.skills} == {
+        str(fixture.skill_version.artifact_id) for fixture in fixtures
+    }
 
 
-@pytest.mark.integration
-def test_pack_refuses_when_nothing_is_published(pg_store, source, tmp_path):
-    with pytest.raises(PackRefused):
-        build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
+def test_pack_uses_frozen_artifact_bytes_after_source_mutation_or_deletion(
+    pg_store, source, tmp_path,
+):
+    fixtures, scope = published_scope(pg_store, source)
+    expected = {
+        fixture.skill_version.payload["slug"]: fixture.skill_version.payload["skill_md"].encode("utf-8")
+        for fixture in fixtures
+    }
+    (source / "dv-alpha" / "SKILL.md").write_text("changed after approval", encoding="utf-8")
+    (source / "dv-beta" / "SKILL.md").unlink()
+
+    root, manifest = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    for skill in manifest.skills:
+        delivered = (root / skill.name / "SKILL.md").read_bytes()
+        assert delivered == expected[skill.name]
+        assert hashlib.sha256(delivered).hexdigest() == skill.sha256
 
 
-@pytest.mark.integration
-def test_directory_name_equals_frontmatter_name(pg_store, pg_dsn, source, tmp_path):
-    """Cursor resolves a skill by its directory; a mismatch means it silently does not load."""
-    publish_wave_sources(pg_store, source)
-    root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    for s in manifest.skills:
-        text = (root / s.name / "SKILL.md").read_text(encoding="utf-8")
-        assert f"name: {s.name}\n" in text
+def test_bundled_payload_files_are_exact_and_rebuild_to_the_approved_hash(
+    pg_store, source, tmp_path,
+):
+    nested = source / "dv-alpha" / "references"
+    nested.mkdir()
+    (nested / "notes.md").write_text("line one\r\nno final newline", encoding="utf-8", newline="")
+    fixtures, scope = published_scope(pg_store, source)
+
+    root, manifest = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    fixture = next(item for item in fixtures if item.skill_version.payload["slug"] == "dv-alpha")
+    assert (root / "dv-alpha" / "references" / "notes.md").read_bytes() == (
+        fixture.skill_version.payload["files"]["references/notes.md"].encode("utf-8")
+    )
+    skill_md_text, files = load_skill_dir(root / "dv-alpha")
+    rebuilt = build_skill_version(skill_md=skill_md_text, actor="test", files=files)
+    assert payload_fingerprint(rebuilt.payload) == payload_fingerprint(fixture.skill_version.payload)
+    row = next(item for item in manifest.skills if item.name == "dv-alpha")
+    assert {item.path for item in row.files} == {"SKILL.md", "references/notes.md"}
 
 
-@pytest.mark.integration
-def test_pack_ships_docs_shared_files_and_the_body_linter(pg_store, pg_dsn, source, tmp_path):
-    publish_wave_sources(pg_store, source)
-    root, _ = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-
-    assert (root / "README-INSTALL.md").exists()
-    assert (root / "PERSONALIZING.md").exists()
-    assert (root / "_shared" / "notes.md").exists()
-    linter = root / "tools" / "lint_body.py"
-    assert linter.exists()
-    # it must still be the standalone, stdlib-only file the engineer can actually run
-    assert "import yaml" not in linter.read_text(encoding="utf-8")
-
-    install = (root / "README-INSTALL.md").read_text(encoding="utf-8")
-    assert ".cursor/skills/" in install
-    assert "not a runtime guarantee" in install
+def test_repository_shared_tree_is_never_copied(pg_store, source, tmp_path):
+    _, scope = published_scope(pg_store, source)
+    root, _ = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    assert not (root / "_shared").exists()
+    assert not (root / "tools").exists()
 
 
-@pytest.mark.integration
-def test_manifest_records_verdict_and_checksums(pg_store, pg_dsn, source, tmp_path):
-    publish_wave_sources(pg_store, source)
-    root, _ = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    data = json.loads((root / "MANIFEST.json").read_text(encoding="utf-8"))
-    assert data["skill_count"] == 2
-    for s in data["skills"]:
-        assert s["verdict"] == "approve"
-        assert s["aggregate_safety"] == 1.0
-        assert len(s["sha256"]) == 64
-        assert s["slots"] >= 1
+def test_unresolved_shared_dependency_fails_closed(pg_store, source, tmp_path):
+    path = source / "dv-alpha" / "SKILL.md"
+    path.write_text(path.read_text(encoding="utf-8") + "\nRead `_shared/notes.md`.\n", encoding="utf-8")
+    _, scope = published_scope(pg_store, source)
+    with pytest.raises(PackRefused, match="unresolved shared dependencies"):
+        build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    assert not (tmp_path / "dist" / "semiskill-dv-release").exists()
 
 
-@pytest.mark.integration
-def test_manifest_is_frozen_to_the_active_approval_chain(pg_store, source, tmp_path):
-    fixtures = publish_wave_sources(pg_store, source)
+def test_approved_shared_dependency_inside_skill_payload_is_delivered(pg_store, source, tmp_path):
+    path = source / "dv-alpha" / "SKILL.md"
+    path.write_text(path.read_text(encoding="utf-8") + "\nRead `_shared/notes.md`.\n", encoding="utf-8")
+    shared = source / "dv-alpha" / "_shared"
+    shared.mkdir()
+    (shared / "notes.md").write_text("# Approved local support\n", encoding="utf-8")
+    _, scope = published_scope(pg_store, source)
+    root, _ = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    assert (root / "dv-alpha" / "_shared" / "notes.md").read_text(encoding="utf-8") == (
+        "# Approved local support\n"
+    )
+
+
+def test_manifest_is_frozen_to_scope_and_active_approval_chain(pg_store, source, tmp_path):
+    fixtures, scope = published_scope(pg_store, source)
     fixture = next(item for item in fixtures if item.skill_version.payload["slug"] == "dv-alpha")
     later = Artifact.new(
         artifact_type=ArtifactType.REVIEW,
@@ -164,46 +156,44 @@ def test_manifest_is_frozen_to_the_active_approval_chain(pg_store, source, tmp_p
     )
     pg_store.append(replace(later, permissions_label=fixture.skill_version.permissions_label))
 
-    root, _ = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    manifest = json.loads((root / "MANIFEST.json").read_text(encoding="utf-8"))
-    row = next(item for item in manifest["skills"] if item["name"] == "dv-alpha")
+    root, _ = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    data = json.loads((root / "MANIFEST.json").read_text(encoding="utf-8"))
+    row = next(item for item in data["skills"] if item["name"] == "dv-alpha")
+    assert data["scope_id"] == scope.scope_id
     assert row["approval_artifact_id"] == str(fixture.approval.artifact_id)
     assert row["automated_review_artifact_id"] == str(fixture.automated_review.artifact_id)
     assert row["content_review_artifact_id"] == str(fixture.content_review.artifact_id)
     assert row["scan_artifact_ids"] == [str(scan.artifact_id) for scan in fixture.scans]
-    assert row["verdict"] == "approve" and row["aggregate_safety"] == 1.0
 
 
-@pytest.mark.integration
-def test_zip_is_written_and_contains_the_pack(pg_store, pg_dsn, source, tmp_path):
-    import zipfile
-    publish_wave_sources(pg_store, source)
-    build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    z = tmp_path / "dist" / "semiskill-dv.zip"
-    assert z.exists()
-    with zipfile.ZipFile(z) as zf:
-        names = zf.namelist()
-    assert "semiskill-dv/dv-alpha/SKILL.md" in names
-    assert "semiskill-dv/README-INSTALL.md" in names
+def test_zip_is_deterministic_and_covered_by_release_manifest(pg_store, source, tmp_path):
+    _, scope = published_scope(pg_store, source)
+    first, _ = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "a")
+    second, _ = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "b")
+    first_zip = first.parent / "semiskill-dv.zip"
+    second_zip = second.parent / "semiskill-dv.zip"
+    assert first_zip.read_bytes() == second_zip.read_bytes()
+    with zipfile.ZipFile(first_zip) as archive:
+        assert "semiskill-dv/dv-alpha/SKILL.md" in archive.namelist()
+        assert all(info.date_time == (1980, 1, 1, 0, 0, 0) for info in archive.infolist())
+    release = json.loads((first.parent / "EXPORT-MANIFEST.json").read_text(encoding="utf-8"))
+    assert "semiskill-dv.zip" in {item["path"] for item in release["files"]}
 
 
-@pytest.mark.integration
-def test_pack_is_deterministic(pg_store, pg_dsn, source, tmp_path):
-    publish_wave_sources(pg_store, source)
-    _, a = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "d1",
-                      generated_at="fixed", make_zip=False)
-    _, b = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "d2",
-                      generated_at="fixed", make_zip=False)
-    assert a.to_json() == b.to_json()
+def test_rebuild_without_zip_removes_stale_zip(pg_store, source, tmp_path):
+    _, scope = published_scope(pg_store, source)
+    root, _ = build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist")
+    assert (root.parent / "semiskill-dv.zip").exists()
+    root, _ = build_pack(
+        store=pg_store, scope=scope, out_dir=tmp_path / "dist", make_zip=False,
+    )
+    assert not (root.parent / "semiskill-dv.zip").exists()
 
 
-@pytest.mark.integration
-def test_a_skill_that_bundles_files_is_not_reported_as_drifted(pg_store, pg_dsn, source, tmp_path):
-    """The wave publishes a payload built from the whole directory. Recomputing the hash from
-    SKILL.md alone reports false drift on every skill that bundles a reference file."""
-    (source / "dv-alpha" / "references").mkdir()
-    (source / "dv-alpha" / "references" / "notes.md").write_text("# Notes\n", encoding="utf-8")
-    publish_wave_sources(pg_store, source)
-
-    root, manifest = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
-    assert "dv-alpha" in {s.name for s in manifest.skills}
+def test_empty_scope_and_unsafe_pack_name_are_refused(pg_store, source, tmp_path):
+    empty = public_export_scope(pg_store, [])
+    with pytest.raises(PackRefused, match="no published skills"):
+        build_pack(store=pg_store, scope=empty, out_dir=tmp_path / "dist")
+    _, scope = published_scope(pg_store, source)
+    with pytest.raises(PackRefused, match="portable path segment"):
+        build_pack(store=pg_store, scope=scope, out_dir=tmp_path / "dist", pack_name="../escape")

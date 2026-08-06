@@ -2,6 +2,7 @@ import io
 import json
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from semiskill.artifacts.schema import Artifact, ArtifactType
 from semiskill.artifacts.store import PublicationReconciliationBundle
 from semiskill.authoring.snapshot import load_scoreboard_snapshot
@@ -103,6 +104,63 @@ def test_production_approve_fails_closed_without_entra_adapter():
         "--decision", "approve", "--reason", "Reviewed.", "--environment", "production",
     ], store=FakeStore(), out=out)
     assert rc == 2 and "Entra/OIDC" in out.getvalue()
+
+
+@pytest.mark.parametrize("command", ["pack", "catalog", "site"])
+def test_export_commands_require_explicit_snapshot_and_permission_label(command):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([command])
+
+
+@pytest.mark.parametrize("command", ["pack", "catalog", "site"])
+def test_production_export_commands_fail_closed_without_entra_adapter(command):
+    out = io.StringIO()
+    rc = main([
+        command, "--scoreboard-snapshot", "missing.json", "--permission-label", "public",
+        "--environment", "production",
+    ], store=FakeStore(), out=out)
+    assert rc == 2 and "Entra/OIDC" in out.getvalue()
+
+
+@pytest.mark.parametrize("command", ["pack", "catalog", "site"])
+def test_export_cli_passes_the_resolved_scope_to_the_materializer(
+    command, monkeypatch, tmp_path,
+):
+    import semiskill.cli as cli
+
+    scope = SimpleNamespace(publications=(object(),))
+    observed = {}
+    monkeypatch.setattr(cli, "_export_scope_from_args", lambda args, store: scope)
+
+    if command == "pack":
+        def build_pack(**kwargs):
+            observed.update(kwargs)
+            return tmp_path / "release" / "semiskill-dv", SimpleNamespace(
+                skill_count=1, skills=(),
+            )
+        monkeypatch.setattr("semiskill.authoring.pack.build_pack", build_pack)
+        extra = ["--no-zip"]
+    elif command == "catalog":
+        def build_catalog(**kwargs):
+            observed.update(kwargs)
+            return tmp_path / "catalog", SimpleNamespace(entries=(object(),))
+        monkeypatch.setattr("semiskill.authoring.catalog_page.build_catalog", build_catalog)
+        extra = []
+    else:
+        def build_site(**kwargs):
+            observed.update(kwargs)
+            return SimpleNamespace(
+                entries=(object(),), pages=("index.html",), root=tmp_path / "site",
+            )
+        monkeypatch.setattr("semiskill.authoring.site.build_site", build_site)
+        extra = []
+
+    out = io.StringIO()
+    rc = main([
+        command, "--scoreboard-snapshot", "snapshot.json", "--permission-label", "public",
+        "--out", str(tmp_path / "out"), *extra,
+    ], store=FakeStore(), out=out)
+    assert rc == 0 and observed["scope"] is scope
 
 
 def test_lint_needs_no_store_and_exits_nonzero_on_error(tmp_path, capsys):

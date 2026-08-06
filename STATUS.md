@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T11:38:07Z_
+_Last updated: 2026-08-06T11:44:52Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -25,7 +25,7 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Disk: 84 authored - legacy REVIEW.json files 0 - canonical ready 0 (old claims provisional).
 - Catalog: 0 registered published; dev DB contains 2 unregistered test fixtures.
 - Consistency: 0 errors, 60 warnings. Prior full suite: 674 passed, 4 skipped, 1 xpassed;
-  scoped export/materializer hardening: 41 passed on isolated `semiskill_test`.
+  scoped export/pack/CLI verification: 86 passed on isolated `semiskill_test`.
 - Canonical snapshot: 84 authored/strict-lint-pass, 0 security/review/approval/publication;
   conservation true, anomalies zero, release blocked on the five expected downstream checks.
 
@@ -38,6 +38,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 ## Standing hazards
 - Never run tests concurrently; the legacy fixture truncates the shared development DB.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
+- All 84 source skills reference unapproved top-level `_shared` files; pack now refuses them until
+  those dependencies are vendored into each exact payload and rescanned.
 
 ## Last implementation commit
 - c47aa6d - portable contained export paths, exact scope/evidence witnesses, full-file install
