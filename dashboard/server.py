@@ -30,6 +30,7 @@ import subprocess
 import sys
 import threading
 import webbrowser
+from dataclasses import fields
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
@@ -52,6 +53,14 @@ from semiskill.authoring.snapshot import (                    # noqa: E402
     SnapshotUnavailable,
     load_progress,
     load_scoreboard_snapshot,
+)
+from semiskill.artifacts.schema import (                       # noqa: E402
+    OBJECTIVE_TAGS,
+    PERMISSIONS_LABELS,
+    ActorKind,
+    Artifact,
+    ArtifactType,
+    SourceSystem,
 )
 
 PORT = int(os.environ.get("SEMISKILL_DASHBOARD_PORT", "8899"))
@@ -843,6 +852,24 @@ def read_public_templates() -> list[dict]:
     ]
 
 
+def artifact_schema_signal() -> dict:
+    """Project the imported canonical schema instead of duplicating it in presentation code."""
+    return {
+        "source": "semiskill/artifacts/schema.py",
+        "fields": [
+            {"name": item.name, "type": str(item.type)}
+            for item in fields(Artifact)
+        ],
+        "vocabularies": {
+            "artifact_type": [item.value for item in ArtifactType],
+            "source_system": [item.value for item in SourceSystem],
+            "actor_kind": [item.value for item in ActorKind],
+            "permissions_label": list(PERMISSIONS_LABELS),
+            "objective_tag": list(OBJECTIVE_TAGS),
+        },
+    }
+
+
 def build_state(inbox_reader=None, template_reader=None) -> dict:
     inbox_reader = inbox_reader or read_inbox
     template_reader = template_reader or read_public_templates
@@ -856,6 +883,7 @@ def build_state(inbox_reader=None, template_reader=None) -> dict:
     _remove_unexecuted_redteam_credit(model, redteam)
     return {
         "generated_at": _now(),
+        "artifact_schema": artifact_schema_signal(),
         "model": model,
         "repo": repo_signals(),
         "state": state_files(),

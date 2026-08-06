@@ -1,10 +1,11 @@
 """L4/L6 orchestrator — run a submitted skill through the deterministic scanners in order.
 
-Each stage appends a scan_run (or, for the injection stage, an injection_test) artifact carrying its
-safety_score + hard_fail + findings. A hard-fail short-circuits: no later stage runs, no aggregate
-review is written, and the skill can never advance to publish. Otherwise the worst-stage safety score
-drives a suggest-only aggregate `review` verdict (approve / request-changes / reject) — which a human
-must still sign off before the publish actuator makes anything discoverable (ADR-002).
+Scanner stages 1–5 are always represented by scan_run artifacts (or injection_test for stage 3)
+carrying safety_score + hard_fail + findings. Available scanner adapters run; unavailable external
+stages emit explicit not_run/not_sampled evidence. Stage 6 always appends the aggregate review so the
+trail is complete. Any hard-fail forces that review to reject; otherwise the worst measured score
+drives a suggest-only verdict (approve / request-changes / reject). A human must still sign off before
+the publication actuator makes anything discoverable (ADR-011).
 
 Stages 1/2/3/4 are always represented. Stage 5 is either a supplied calibrated judge result or an
 explicit ``not_sampled`` artifact; a skipped judge is never rendered as a pass. Stage 6 is the

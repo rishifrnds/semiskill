@@ -590,17 +590,18 @@ function vArchitecture() {
 
   $('#view-architecture').innerHTML = `
     <div class="grid g2">
-      ${card('AIOS 6-layer block diagram', 'Every component maps to exactly one layer; data flows bottom-up, control flows top-down',
+      ${card('AIOS 6-layer block diagram', 'Six-layer mapping plus explicitly visible unmapped core code; data flows bottom-up and control flows top-down',
         `<svg viewBox="0 0 640 400" style="width:100%;height:400px">
           <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
             <path d="M0 0 L10 5 L0 10 z" fill="${hsl('--border')}"/></marker></defs>
           ${L.map(layerBox).join('')}
           <rect x="380" y="18" width="230" height="112" rx="9" class="box" fill="${hsl('--card')}" stroke="${hsl('--primary', .4)}"/>
           <text x="396" y="40" class="lbl">Gated actuator</text>
-          <text x="396" y="58" class="sub">governance.publish.publish_skill</text>
-          <text x="396" y="76" class="sub">re-checks verdict + no hard-fail</text>
-          <text x="396" y="94" class="sub">writes the catalog — nothing else does</text>
-          <text x="396" y="118" class="sub" fill="${hsl('--primary')}">ADR-002 · structural, not prompted</text>
+          <text x="396" y="58" class="sub">governance.publish.decide_publication</text>
+          <text x="396" y="74" class="sub">authenticated human + exact payload hash</text>
+          <text x="396" y="90" class="sub">frozen scan + independent review chain</text>
+          <text x="396" y="106" class="sub">actuator writes verified projection</text>
+          <text x="396" y="122" class="sub" fill="${hsl('--primary')}">ADR-011 · deterministic gate</text>
           <rect x="380" y="150" width="230" height="92" rx="9" class="box" fill="${hsl('--card')}" stroke="${hsl('--destructive', .35)}"/>
           <text x="396" y="172" class="lbl">Held-out corpus</text>
           <text x="396" y="190" class="sub">outside anything the pipeline</text>
@@ -626,16 +627,12 @@ function vArchitecture() {
       ${S.adrs.map(a => `<tr><td class="mono">${esc(a.id)}</td><td>${esc(a.title)}</td></tr>`).join('')}
       </tbody></table>`, { tight: true, action: 'A-32' })}
 
-    <div class="section-head"><h2>Canonical artifact schema</h2><p class="muted">Every event carries these fields — this is what makes the system queryable</p></div>
-    ${card('Artifact fields', 'semiskill/artifacts/schema.py',
-      `<div class="grid g4" style="gap:8px">${[
-        ['artifact_id', 'uuid, immutable'], ['artifact_type', 'skill_version | scan_run | review | approval | comment | rating | reuse_event | injection_test'],
-        ['source_system', 'github | sharepoint | cli | web'], ['actor', 'human | service-account | agent'],
-        ['timestamp_start/end', 'wall-clock bounds'], ['input_refs[] / output_refs[]', 'provenance edges'],
-        ['permissions_label', 'public | team | need-to-know | regulated'], ['objective_tag', 'safety | velocity | reuse | compliance'],
-        ['ground_truth_ref', 'scanner output / human verdict'], ['eval_score', 'security verdict / risk score'],
-        ['rollback_ref', 'unpublish path'], ['payload', 'type-specific body']
-      ].map(([k, v]) => `<div class="row"><div class="g"><div class="h mono" style="font-size:11.5px">${esc(k)}</div><div class="p">${esc(v)}</div></div></div>`).join('')}</div>`)}
+    <div class="section-head"><h2>Canonical artifact schema</h2><p class="muted">Imported from the running schema module; presentation code does not duplicate its fields or vocabularies</p></div>
+    ${card('Artifact fields', esc(S.artifact_schema.source),
+      `<div class="grid g4" style="gap:8px">${S.artifact_schema.fields.map(field => `<div class="row"><div class="g"><div class="h mono" style="font-size:11.5px">${esc(field.name)}</div><div class="p mono">${esc(field.type)}</div></div></div>`).join('')}</div>`)}
+    <div class="grid g2" style="margin-top:14px">
+      ${Object.entries(S.artifact_schema.vocabularies).map(([name, values]) => card(esc(name.replaceAll('_', ' ')), 'canonical constrained vocabulary', `<div class="mono muted" style="line-height:1.8">${values.map(esc).join(' · ')}</div>`, { tight: true })).join('')}
+    </div>
   `;
 
   const ids = [...new Set(S.repo.modules.map(m => m.layer))];
@@ -658,23 +655,23 @@ function vPipeline() {
       <circle cx="${x + 14}" cy="70" r="4" fill="${col}"/>
       <text x="${x + 26}" y="74" class="lbl" style="font-size:10.5px">Stage ${s.n}</text>
       <text x="${x + 10}" y="96" class="lbl" style="font-size:10.5px">${esc(s.name.length > 20 ? s.name.slice(0, 19) + '…' : s.name)}</text>
-      <text x="${x + 10}" y="112" class="sub">${s.status === 'live' ? 'live · ' + s.tests + ' tests' : 'stub · fake-tested'}</text>
+      <text x="${x + 10}" y="112" class="sub">${s.status === 'live' ? 'declared implemented' : 'external adapter pending'}</text>
       ${i < st.length - 1 ? `<path d="M${x + w} 90 L${x + w + gap} 90" class="flow ok"/>` : ''}
-      <path d="M${x + w / 2} 126 L${x + w / 2} 152" class="flow bad"/>
-      <text x="${x + w / 2 + 4}" y="146" class="sub" fill="${hsl('--destructive')}" style="font-size:9px">hard-fail</text>
+      ${s.n < 6 ? `<path d="M${x + w / 2} 126 L${x + w / 2} 152" class="flow bad"/>
+      <text x="${x + w / 2 + 4}" y="146" class="sub" fill="${hsl('--destructive')}" style="font-size:9px">hard-fail recorded</text>` : ''}
     </g>`;
   };
 
   $('#view-pipeline').innerHTML = `
     <div class="grid g4">
-      ${kpi('Stages live', st.filter(s => s.status === 'live').length + '/6', 'four deterministic stages run on 100% of submissions')}
-      ${kpi('Stages stubbed', st.filter(s => s.status !== 'live').length + '/6', 'security-audit + LLM judge need external resources', { color: hsl('--warning') })}
-      ${kpi('Pipeline tests', st.reduce((a, s) => a + s.tests, 0), 'across scanners, sensor and orchestrator')}
-      ${kpi('Lifecycle states', S.model.lifecycle.length, S.model.lifecycle.join(' → '))}
+      ${kpi('Declared implementations', st.filter(s => s.status === 'live').length + '/6', 'curated source map; not execution evidence')}
+      ${kpi('External adapters pending', st.filter(s => s.status !== 'live').length + '/6', 'security-audit + LLM judge need controlled resources', { color: hsl('--warning') })}
+      ${kpi('Stage definitions', st.length, 'all configured stages emit evidence; a hard-fail forces reject')}
+      ${kpi('Lifecycle vocabulary', S.model.lifecycle.length, S.model.lifecycle.join(' → '))}
     </div>
 
     <div style="margin-top:14px">
-      ${card('Verification flow', 'A hard-fail at any stage short-circuits: no later stage runs, no aggregate review is written, and the skill can never advance to publish',
+      ${card('Verification flow', 'Every configured stage emits evidence; any hard-fail forces the stage-6 aggregate review to reject, preserving the complete trail',
         `<svg viewBox="0 0 880 240" style="width:100%;height:250px">
           <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
             <path d="M0 0 L10 5 L0 10 z" fill="${hsl('--border')}"/></marker></defs>
@@ -683,7 +680,7 @@ function vPipeline() {
           <path d="M84 42 L84 54" class="flow"/>
           ${st.map(stageBox).join('')}
           <rect x="14" y="152" width="300" height="36" rx="8" fill="${hsl('--destructive')}18" stroke="${hsl('--destructive')}55"/>
-          <text x="30" y="175" class="lbl" fill="${hsl('--destructive')}">BLOCKED · quarantined with full artifact trail</text>
+          <text x="30" y="175" class="lbl" fill="${hsl('--destructive')}">REJECT · hard-fail retained in complete artifact trail</text>
           <rect x="620" y="152" width="246" height="36" rx="8" fill="${hsl('--card')}" stroke="${hsl('--border')}"/>
           <text x="636" y="175" class="lbl">② human review queue (risk-ranked)</text>
           <path d="M743 188 L743 200" class="flow ok"/>
@@ -694,10 +691,10 @@ function vPipeline() {
 
     <div class="grid g2" style="margin-top:14px">
       ${card('Stage detail', 'Observed stage inventory; the prepared request selects the highest-priority stage improvement',
-        `<table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Status</th><th class="num">Tests</th></tr></thead><tbody>
+        `<table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Declared status</th></tr></thead><tbody>
         ${st.map(s => `<tr><td class="mono muted">${s.n}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:11px">${esc(s.detail)}</div></td>
           <td>${badge(s.kind, s.kind === 'deterministic' ? 'info' : 'muted')}</td>
-          <td>${badge(s.status, s.status === 'live' ? 'done' : 'partial')}</td><td class="num">${s.tests}</td></tr>`).join('')}
+          <td>${badge(s.status, s.status === 'live' ? 'info' : 'partial')}</td></tr>`).join('')}
         </tbody></table>`, { tight: true, action: 'A-33' })}
       <div class="grid" style="gap:14px;align-content:start">
         ${card('Lifecycle state machine', 'State is derived from artifacts, never stored — so it cannot be forged',
@@ -847,7 +844,7 @@ function vSecurity() {
   const invariants = [
     ['Catalog written only by the approval actuator', 'done', 'ADR-002 · tests/governance/test_publish.py'],
     ['Lifecycle state derived, never stored', 'done', 'tests/spine/test_lifecycle.py'],
-    ['Hard-fail short-circuits the pipeline', 'done', 'tests/spine/test_pipeline.py'],
+    ['Hard-fail forces reject while all configured stages and stage-6 review remain recorded', 'done', 'tests/spine/test_pipeline.py'],
     ['Held-out corpus unreadable by the pipeline role', 'done', 'migration 0004 + role test'],
     ['Submitter cannot forge verification artifacts', 'done', 'semiskill_submitter role, migration 0003'],
     ['Skill bodies treated as untrusted at retrieval', 'done', 'context/untrusted.py'],

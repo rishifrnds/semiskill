@@ -3,13 +3,23 @@ import hashlib
 import inspect
 import json
 import uuid
+from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from dashboard import server
+from semiskill.artifacts.schema import (
+    OBJECTIVE_TAGS,
+    PERMISSIONS_LABELS,
+    ActorKind,
+    Artifact,
+    ArtifactType,
+    SourceSystem,
+)
 from semiskill.authoring.snapshot import finalize_scoreboard, write_json_atomic
+from semiskill.spine import pipeline
 from tests.authoring.test_snapshot import _body
 
 
@@ -666,6 +676,52 @@ def test_repo_inventory_never_executes_pytest(monkeypatch):
     assert "urllib" not in runtime_source.lower()
     assert "SET TRANSACTION READ ONLY" in runtime_source
     assert "pill('Docker'" not in html and "pill('Read API'" not in html
+
+
+def test_artifact_schema_view_is_projected_from_canonical_source():
+    projected = server.artifact_schema_signal()
+    assert projected["source"] == "semiskill/artifacts/schema.py"
+    assert projected["fields"] == [
+        {"name": item.name, "type": str(item.type)} for item in dataclass_fields(Artifact)
+    ]
+    assert projected["vocabularies"] == {
+        "artifact_type": [item.value for item in ArtifactType],
+        "source_system": [item.value for item in SourceSystem],
+        "actor_kind": [item.value for item in ActorKind],
+        "permissions_label": list(PERMISSIONS_LABELS),
+        "objective_tag": list(OBJECTIVE_TAGS),
+    }
+
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    assert "S.artifact_schema.fields" in html
+    assert "S.artifact_schema.vocabularies" in html
+    assert "skill_version | scan_run | review | approval" not in html
+
+
+def test_pipeline_and_publication_views_match_current_executable_contracts():
+    model = json.loads(Path("dashboard/model.json").read_text(encoding="utf-8"))
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    pipeline_source = inspect.getsource(pipeline.run_pipeline)
+
+    assert "break" not in pipeline_source
+    assert "_write_review" in pipeline_source
+    assert "Every configured stage emits evidence" in html
+    assert "hard-fail forces the stage-6 aggregate review to reject" in html
+    assert "s.n < 6" in html
+    assert "short-circuits" not in html and "no aggregate review is written" not in html
+    assert all("tests" not in stage for stage in model["pipeline_stages"])
+    aggregate = next(stage for stage in model["pipeline_stages"] if stage["id"] == "aggregate")
+    assert "hard-fail forces reject" in aggregate["detail"].lower()
+    assert "full scan chain" in aggregate["detail"].lower()
+
+    features = {item["id"]: item for item in model["features"]}
+    assert "0001–0015" in features["F-L2-05"]["name"]
+    assert "approval actuator" in features["F-L2-06"]["note"]
+    assert "decide_publication" in features["F-L4-04"]["note"]
+    assert "decide_unpublication" in features["F-L4-05"]["note"]
+    approver = next(item for item in model["actions"] if item["id"] == "A-01")
+    assert "governance.publish.decide_publication" in approver["prompt"]
+    assert "publish_skill" not in approver["prompt"] and "publish_skill" not in html
 
 
 def test_model_refresh_action_cannot_activate_its_own_trust_pin():
