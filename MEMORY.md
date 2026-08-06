@@ -410,9 +410,18 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008 harden the review and human-approval gates before any content batch
 
 
+- [J-008a] 2026-08-06T06:49:58Z  status: done
+  what: established the review/payload trust boundary with failing-first tests; root legacy
+  REVIEW.json is no longer shipped, scanned, or included in source hashes, while every other skill
+  file remains untrusted deliverable content
+  artifacts: c78d410, semiskill/capture/intake.py, semiskill/authoring/lint.py,
+  tests/capture/test_intake.py, tests/authoring/test_lint.py, tests/wave/test_wave.py
+  next: J-008b implement hash-bound canonical review artifacts and deterministic readiness
+
+
 ## In-Flight Step
-- [J-008] harden content-review artifacts, deterministic readiness, payload hashing and explicit
-  human approval before resuming any skill-content batch.
+- [J-008b] implement hash-bound content-review artifacts, typed findings, legacy migration and
+  deterministic readiness before changing the explicit approval boundary.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

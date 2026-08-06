@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T06:44:11Z_
+_Last updated: 2026-08-06T06:49:58Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-008: replace mutable `REVIEW.json` readiness and automatic approval with hash-bound artifacts
-  and an explicit human decision boundary; write failing tests first.
+- J-008b: replace mutable `REVIEW.json` readiness with hash-bound canonical review artifacts and
+  deterministic typed-finding readiness; the payload/scan boundary is now protected.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -37,4 +37,5 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- 2df246c — workflow and prompt library checkpoint recovered by J-007.
+- c78d410 — legacy `REVIEW.json` is excluded from installable bytes, scans, and source hashes;
+  arbitrary neighboring files remain untrusted payload and are still scanned.
