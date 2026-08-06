@@ -70,8 +70,8 @@
     {"id": "F-PRD-06", "layer": "Product", "name": "Notifications (submit \u2192 verdict \u2192 publish)", "status": "gap", "tests": 0, "evidence": "\u2014", "note": "No email/Teams hook. Blocks the author feedback loop."},
     {"id": "F-OPS-01", "layer": "Ops", "name": "Deployment target + runbook", "status": "gap", "tests": 0, "evidence": "docker-compose.yml", "note": "Local Docker Postgres only (ADR-005). No hosted environment."},
     {"id": "F-OPS-02", "layer": "Ops", "name": "Backup / restore + retention", "status": "gap", "tests": 0, "evidence": "\u2014", "note": "Append-only store with no backup policy is a single point of loss."},
-    {"id": "F-OPS-03", "layer": "Ops", "name": "Observability (this command centre)", "status": "partial", "tests": 0, "evidence": "dashboard/", "note": "Repo/DB/test signals are live here. No metrics store or alerting yet."},
-    {"id": "F-OPS-04", "layer": "Ops", "name": "CI (tests on every push)", "status": "gap", "tests": 0, "evidence": "\u2014", "note": "Suite is green locally; nothing runs it automatically."}
+    {"id": "F-OPS-03", "layer": "Ops", "name": "Observability (this command centre)", "status": "partial", "tests": 0, "evidence": "dashboard/", "note": "Repository source inventory and read-only database/scoreboard observations are displayed. No persisted verification-run evidence, metrics store or alerting exists yet."},
+    {"id": "F-OPS-04", "layer": "Ops", "name": "CI (tests on every push)", "status": "gap", "tests": 0, "evidence": "\u2014", "note": "No CI workflow or current source-bound full-suite run artifact is configured."}
   ],
 
   "risks": [

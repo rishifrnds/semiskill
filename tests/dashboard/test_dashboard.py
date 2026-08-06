@@ -491,9 +491,8 @@ def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
     monkeypatch.setattr(server, "repo_signals", lambda: {})
     monkeypatch.setattr(server, "state_files", lambda: {})
     monkeypatch.setattr(server, "runtime_signals", lambda: {
-        "checked_at": "now", "docker": "down",
+        "checked_at": "now",
         "db": {"status": "down", "detail": ""},
-        "api": {"status": "down", "detail": ""},
     })
     monkeypatch.setattr(server, "canonical_snapshot_signals", lambda **_kwargs: {
         "scoreboard": {"status": "unavailable", "snapshot": None},
@@ -513,7 +512,7 @@ def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
 
     assert "seeds" not in state
     assert "approvals" not in state["runtime"]["db"]
-    assert "catalog" not in state["runtime"]["api"]
+    assert "api" not in state["runtime"]
     assert "attacks" not in state and state["redteam"]["status"] == "not_executed"
     assert len(state["model"]["actions"]) == 36
     assert all("prompt" not in action and action.get("description") for action in state["model"]["actions"])
@@ -637,6 +636,36 @@ def test_dashboard_queue_readme_names_direct_writer_acl_boundary():
     assert "construct self-consistent forged rows" in readme
     assert "not an authorization boundary" in readme
     assert "filesystem ACLs are the trust root" in readme
+
+
+def test_repo_inventory_never_executes_pytest(monkeypatch):
+    commands = []
+
+    def fake_sh(cmd, **_kwargs):
+        commands.append(cmd)
+        if cmd[-2:] == ["--abbrev-ref", "HEAD"]:
+            return 0, "main\n"
+        return 0, ""
+
+    monkeypatch.setattr(server, "_sh", fake_sh)
+    signals = server.repo_signals()
+
+    assert signals["test_count_kind"] == "static_function_definitions"
+    assert signals["total_tests"] > 0
+    assert "collected_tests" not in signals
+    assert not any("pytest" in part for command in commands for part in command)
+
+    source = Path("dashboard/server.py").read_text(encoding="utf-8")
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    assert "pytest" not in source.lower()
+    assert "collected_tests" not in source and "collected_tests" not in html
+    assert "static source inventory only; no current pass result" in html
+
+    runtime_source = inspect.getsource(server.runtime_signals)
+    assert "docker" not in runtime_source.lower()
+    assert "urllib" not in runtime_source.lower()
+    assert "SET TRANSACTION READ ONLY" in runtime_source
+    assert "pill('Docker'" not in html and "pill('Read API'" not in html
 
 
 def test_model_refresh_action_cannot_activate_its_own_trust_pin():

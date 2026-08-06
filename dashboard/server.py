@@ -2,7 +2,7 @@
 
 Serves `index.html` and a live `/api/state` assembled from real signals:
   * repo      — git history, tracked files, module LOC, test inventory
-  * runtime   — Docker Postgres reachability and read-API health
+  * runtime   — read-only Postgres artifact-store liveness
   * scoreboard — validated canonical catalog state (never inferred from fixtures or API visibility)
   * plan      — the curated model in `model.json` (features, risks, launch, GTM)
   * inbox     — actions the user has clicked, appended to `inbox.jsonl`
@@ -13,7 +13,7 @@ performing work; browser text and legacy rows are never executable instructions.
 
 Read-mostly by construction: the only mutation path appends or archives task-queue
 events under `dashboard/`. Mutation requests cannot invoke command actuators; read-only
-state collection may run bounded local probes.
+state collection may run bounded Git and read-only database observations.
 
     python dashboard/server.py            # http://127.0.0.1:8899
 """
@@ -29,7 +29,6 @@ import socket
 import subprocess
 import sys
 import threading
-import time
 import webbrowser
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,7 +55,6 @@ from semiskill.authoring.snapshot import (                    # noqa: E402
 )
 
 PORT = int(os.environ.get("SEMISKILL_DASHBOARD_PORT", "8899"))
-API_URL = os.environ.get("SEMISKILL_API", "http://127.0.0.1:8787")
 
 _DEFAULT_SCOREBOARD_MAX_AGE_SECONDS = 900
 _DEFAULT_PROGRESS_MAX_AGE_SECONDS = 300
@@ -350,25 +348,8 @@ def repo_signals() -> dict:
     return {"commits": commits, "branch": branch.strip(), "dirty": len(dirty),
             "dirty_files": dirty[:20], "modules": modules, "tests": tests,
             "total_tests": sum(t["count"] for t in tests),
-            "collected_tests": collected_tests(),
+            "test_count_kind": "static_function_definitions",
             "total_loc": sum(m["loc"] for m in modules)}
-
-
-_collect_cache = {"n": 0, "at": 0.0}
-
-
-def collected_tests() -> int:
-    """True pytest count (parametrized cases expand past the `def test_` count).
-
-    Collection-only, so it needs no database. Cached for 5 minutes.
-    """
-    if _collect_cache["n"] and time.time() - _collect_cache["at"] < 300:
-        return _collect_cache["n"]
-    rc, out = _sh([sys.executable, "-m", "pytest", "--collect-only", "-q"], timeout=90)
-    m = re.search(r"(\d+)\s+tests? collected", out)
-    if m:
-        _collect_cache.update(n=int(m.group(1)), at=time.time())
-    return _collect_cache["n"]
 
 
 _LAYER_MAP = [
@@ -419,38 +400,25 @@ def state_files() -> dict:
 
 
 def runtime_signals() -> dict:
-    """Best-effort liveness probes. Everything degrades to 'down' without raising."""
+    """Read-only database liveness; this probe starts no process or HTTP request."""
     out = {"checked_at": _now()}
-
-    rc, _ = _sh(["docker", "info", "--format", "{{.ServerVersion}}"], timeout=8)
-    out["docker"] = "up" if rc == 0 else "down"
 
     db = {"status": "down", "detail": ""}
     try:
-        sys.path.insert(0, str(ROOT))
         import psycopg                                        # noqa: PLC0415
         from semiskill.config import Config                   # noqa: PLC0415
         dsn = Config.from_env().database_url
         with psycopg.connect(dsn, connect_timeout=2) as conn:
+            conn.execute("SET TRANSACTION READ ONLY")
             with conn.cursor() as cur:
                 cur.execute("select count(*) from artifacts")
                 total = cur.fetchone()[0]
                 cur.execute("select artifact_type, count(*) from artifacts group by 1 order by 2 desc")
                 by_type = [{"type": t, "n": n} for t, n in cur.fetchall()]
         db = {"status": "up", "detail": "", "artifacts": total, "by_type": by_type}
-    except Exception as e:                                    # noqa: BLE001
-        db["detail"] = f"{type(e).__name__}: {str(e)[:160]}"
+    except Exception:                                         # noqa: BLE001
+        db["detail"] = "database probe unavailable"
     out["db"] = db
-
-    api = {"status": "down", "detail": ""}
-    try:
-        import urllib.request                                  # noqa: PLC0415
-        with urllib.request.urlopen(f"{API_URL}/health", timeout=2) as r:
-            if r.status == 200:
-                api["status"] = "up"
-    except Exception as e:                                    # noqa: BLE001
-        api["detail"] = f"{type(e).__name__}: {str(e)[:120]}"
-    out["api"] = api
     return out
 
 

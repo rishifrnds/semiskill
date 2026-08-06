@@ -431,7 +431,7 @@ function renderAll() {
   $('#page-title').textContent = t;
   $('#page-sub').textContent = `${s} · state generated ${S.generated_at}`;
   $('#n-features').textContent = S.model.features.length;
-  $('#n-tests').textContent = S.repo.collected_tests || S.repo.total_tests;
+  $('#n-tests').textContent = S.repo.total_tests;
   $('#n-attacks').textContent = S.redteam.status === 'unavailable' ? '—' : S.redteam.corpus.length;
   const snapshot = canonicalSnapshot();
   $('#n-published').textContent = snapshot ? snapshot.funnel.published : '—';
@@ -444,9 +444,7 @@ function renderHealth() {
   const pill = (label, ok, detail) =>
     `<span class="badge ${ok ? 'up' : 'down'}" title="${esc(detail || '')}"><span class="dot ${ok ? 'pulse' : ''}"></span>${label}</span>`;
   $('#health').innerHTML =
-    pill('Docker', r.docker === 'up') +
     pill('Postgres', r.db.status === 'up', r.db.detail) +
-    pill('Read API', r.api.status === 'up', r.api.detail) +
     pill('Scoreboard', S.scoreboard.status === 'available', S.scoreboard.reason) +
     pill('Migrations', S.migration?.status === 'verified', S.migration?.reason) +
     `<span class="badge ${S.repo.dirty ? 'warn' : 'muted'}">git ${esc(S.repo.branch)} · ${S.repo.dirty} dirty</span>`;
@@ -474,7 +472,7 @@ function vOverview() {
   $('#view-overview').innerHTML = `
     <div class="grid g6">
       ${kpi('Current phase', phaseLabel, 'derived from the active project state', { color: hsl('--primary') })}
-      ${kpi('Tests collected', S.repo.collected_tests || S.repo.total_tests, `${S.repo.tests.length} files · collection inventory only; no current pass result`)}
+      ${kpi('Test functions', S.repo.total_tests, `${S.repo.tests.length} files · static source inventory only; no current pass result`)}
       ${kpi('Features done', `${done}/${f.length}`, `${partial} partial · ${gaps} gaps`, { progress: pct(done, f.length) })}
       ${kpi('Red-team escapes', '—', redteam.status === 'not_executed'
             ? `${redteam.corpus.length} corpus inputs · not executed`
@@ -808,7 +806,7 @@ function vQuality() {
 
   $('#view-quality').innerHTML = `
     <div class="grid g4">
-      ${kpi('Tests collected', S.repo.collected_tests || S.repo.total_tests, `${t.length} files · ${groups.length} suites · ${S.repo.total_tests} test functions`)}
+      ${kpi('Test functions', S.repo.total_tests, `${t.length} files · ${groups.length} suites · static source inventory`)}
       ${kpi('Last verified suite', 'not evidenced', 'No current commit/tree/database-bound run artifact is configured')}
       ${kpi('Open risks', risks.length, `${risks.filter(r => r.severity === 'critical' || r.severity === 'high').length} critical/high`,
         { color: hsl('--warning') })}
@@ -817,7 +815,7 @@ function vQuality() {
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Test distribution', 'Collected test inventory only; collection is not a pass result', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
+      ${card('Test-function distribution', 'Static source inventory only; it is not collection or a pass result', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
         { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue isolated suite</button>` })}
       ${card('Risk register', 'Ranked by severity; one prepared request selects the highest-priority risk',
         `<div class="list" style="max-height:260px;overflow:auto">${risks.map(r => `<div class="row">

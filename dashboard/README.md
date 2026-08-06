@@ -14,8 +14,8 @@ python dashboard/server.py        # http://127.0.0.1:8899
 |---|---|
 | Git branch, commits and dirty files | Feature register and declared status |
 | Module inventory and LOC | Risks and launch checklist |
-| Test-file inventory and collection count | Metric targets, proposed pricing and channels |
-| Postgres and read-API liveness | 36 hash-bound schema-v1 request templates |
+| Static test-function inventory (no execution result) | Metric targets, proposed pricing and channels |
+| Read-only Postgres artifact-store liveness | Integrity-pinned schema-v1 request templates |
 | Raw artifact counts when the database is available | Go-to-market hypotheses and draft assets |
 | Server-validated canonical scoreboard and progress | |
 | Exact migration/schema witness and redacted adoption provenance | |
