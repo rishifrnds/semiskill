@@ -510,6 +510,31 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-014, ADR-017, ADR-020, J-010b3e1; dashboard/server.py; dashboard/index.html;
   dashboard/README.md
 
+## [ADR-022] Full-suite proof is immutable, source-bound and non-crediting
+- Date: 2026-08-06
+- Status: accepted
+- Context: Console summaries could not establish which source tree, database or complete test
+  selection ran, and a stale successful run could survive a crash or later failure. Letting the
+  dashboard execute tests would also mix an unprivileged read surface with process and database
+  authority.
+- Decision: A human-invoked CLI runs one fixed serial pytest command with no passthrough arguments,
+  an explicit exact lowercase `_test` database lease and clean Git identity checks before and after.
+  It writes bounded, canonical, self-hashed immutable run/output records plus an atomic latest pointer;
+  an in-progress marker makes interruption and pointer ambiguity fail closed. Dashboard consumers may
+  only read and validate this fixed chain, and the observation carries `credit: none`.
+- Alternatives considered:
+  - Parse console output or pytest cache files - rejected because their selection, provenance and
+    completeness are neither strict nor source-bound.
+  - Run pytest from `/api/state` or a dashboard button - rejected because reads must not gain process,
+    filesystem-write or database-mutation authority.
+  - Treat the latest successful run as authoritative after any later failure - rejected because this
+    would hide current regressions and interrupted producers.
+- Consequences: A PASS proves only the recorded Python suite on the exact clean commit and isolated
+  test database; it never advances review, approval, publication or release counts. Evidence becomes
+  unavailable on tampering, source drift, database drift or ambiguous recovery, and skipped/xfail/
+  non-strict XPASS outcomes remain visible rather than being rewritten as perfect coverage.
+- Related: ADR-017, ADR-021, J-010b3e2a; semiskill/verification/; semiskill/cli.py
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

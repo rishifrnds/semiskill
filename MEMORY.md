@@ -747,9 +747,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010b3e2 persist clean-tree, source-bound isolated full-suite run evidence
 
 
+- [J-010b3e2a] 2026-08-06T20:44:48Z  status: done
+  what: added the fixed no-passthrough serial pytest producer, exact explicit `_test` database lease,
+  clean Git source binding, bounded process-tree execution, built-in outcome reporter and append-only
+  self-hashed run/output chain with fail-closed crash recovery; evidence is explicitly non-crediting
+  artifacts: 30ebe79, ADR-022, semiskill/verification/evidence.py,
+  semiskill/verification/full_suite.py, semiskill/verification/pytest_reporter.py,
+  semiskill/cli.py, tests/verification/test_full_suite.py; 58 focused tests passed, 1 platform-link
+  capability test skipped; Ruff, Python compilation and diff checks passed; independent exact-byte
+  audit found zero remaining P0/P1 after all five earlier findings received regressions
+  next: J-010b3e2b expose the immutable chain through a strict file-only dashboard reader and
+  non-crediting Quality/Launch presentation
+
+
 ## In-Flight Step
-- [J-010b3e2] persist an append-only clean-tree, source-bound isolated full-suite run artifact and
-  expose it through a strict file-only dashboard reader without affecting canonical skill credit.
+- [J-010b3e2b] expose immutable full-suite evidence through a strict file-only dashboard reader and
+  non-crediting Quality/Launch presentation without affecting any canonical skill count or gate.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
