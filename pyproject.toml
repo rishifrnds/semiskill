@@ -14,6 +14,9 @@ semiskill = "semiskill.cli:main"
 [tool.setuptools.packages.find]
 include = ["semiskill*"]
 
+[tool.setuptools.package-data]
+"semiskill.artifacts" = ["legacy_migration_manifest.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: requires a live Postgres (DATABASE_URL)"]

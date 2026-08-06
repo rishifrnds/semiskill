@@ -6,6 +6,7 @@ passes the Phase-C pipeline + human approval (ADR-002).
 """
 from __future__ import annotations
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -128,6 +129,72 @@ def cmd_unpublish(args, store, out) -> int:
         print(f"unpublish refused: {exc}", file=out)
         return 2
     print(f"unpublished approval={args.approval_id} correction={correction.artifact_id}", file=out)
+    return 0
+
+
+def cmd_migrate_adopt_legacy(args, store, out) -> int:
+    """Plan or execute the one-time post-0010 legacy checksum adoption."""
+    from semiskill.artifacts.migrate import (
+        MigrationAdoptionRefused,
+        adopt_legacy_migration_checksums,
+        plan_legacy_migration_checksums,
+    )
+    from semiskill.governance.identity import IdentityRefused, local_os_identity
+
+    if args.environment == "production":
+        print("migration adoption refused: production requires the configured Entra/OIDC adapter",
+              file=out)
+        return 2
+    dsn = args.dsn or os.environ.get("SEMISKILL_MIGRATION_DATABASE_URL")
+    if not dsn:
+        print(
+            "migration adoption refused: an explicit migration DSN is required via --dsn "
+            "or SEMISKILL_MIGRATION_DATABASE_URL",
+            file=out,
+        )
+        return 2
+    removals = tuple(sorted(args.remove_orphaned_test_fixture or ()))
+    try:
+        plan = plan_legacy_migration_checksums(
+            dsn,
+            args.repo_root,
+            expected_database=args.expected_database,
+            environment=args.environment,
+            remove_orphaned_test_fixtures=removals,
+        )
+        if not args.yes:
+            print(json.dumps(plan, indent=2, sort_keys=True), file=out)
+            print(
+                "\nread-only plan; no database state changed. Re-run with --yes, --reason, "
+                "and --expected-plan-sha256 after reviewing this exact digest.",
+                file=out,
+            )
+            return 0
+        if not args.expected_plan_sha256 or not args.reason:
+            raise MigrationAdoptionRefused(
+                "--yes requires --expected-plan-sha256 and a substantive --reason"
+            )
+        identity = local_os_identity()
+        result = adopt_legacy_migration_checksums(
+            dsn,
+            args.repo_root,
+            expected_database=args.expected_database,
+            expected_plan_sha256=args.expected_plan_sha256,
+            remove_orphaned_test_fixtures=removals,
+            identity=identity,
+            environment=args.environment,
+            reason=args.reason,
+        )
+    except MigrationAdoptionRefused as exc:
+        print(f"migration adoption refused: {exc}", file=out)
+        return 2
+    except IdentityRefused:
+        print("migration adoption refused: operator identity could not be established", file=out)
+        return 2
+    except Exception:  # database/filesystem diagnostics can contain DSNs or absolute paths
+        print("migration adoption refused: internal preflight or database operation failed", file=out)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True), file=out)
     return 0
 
 
@@ -384,6 +451,24 @@ def build_parser() -> argparse.ArgumentParser:
                            default="development")
     unpublish.add_argument("--no-quarantine", action="store_true")
     unpublish.set_defaults(func=cmd_unpublish, needs_store=True)
+
+    adoption = sub.add_parser(
+        "migrate-adopt-legacy",
+        help="plan or execute explicit audited post-0010 migration checksum adoption",
+    )
+    adoption.add_argument(
+        "--dsn", default=None,
+        help="migration-owner DSN (or SEMISKILL_MIGRATION_DATABASE_URL; never DATABASE_URL)",
+    )
+    adoption.add_argument("--expected-database", required=True)
+    adoption.add_argument("--environment", choices=["development", "test", "production"],
+                          default="development")
+    adoption.add_argument("--repo-root", default=".")
+    adoption.add_argument("--remove-orphaned-test-fixture", action="append", default=[])
+    adoption.add_argument("--expected-plan-sha256", default=None)
+    adoption.add_argument("--reason", default=None)
+    adoption.add_argument("--yes", action="store_true")
+    adoption.set_defaults(func=cmd_migrate_adopt_legacy, needs_store=False)
 
     lt = sub.add_parser("lint", help="pre-flight lint a skill or a wave directory (no database)")
     lt.add_argument("path", help="a SKILL.md, a skill directory, or a tree of them")

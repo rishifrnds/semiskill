@@ -106,6 +106,136 @@ def test_production_approve_fails_closed_without_entra_adapter():
     assert rc == 2 and "Entra/OIDC" in out.getvalue()
 
 
+def test_migration_adoption_has_no_actor_override():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([
+            "migrate-adopt-legacy", "--expected-database", "semiskill",
+            "--actor", "forged-user",
+        ])
+
+
+def test_migration_adoption_production_fails_closed_before_database_access():
+    out = io.StringIO()
+    rc = main([
+        "migrate-adopt-legacy", "--expected-database", "semiskill",
+        "--environment", "production",
+    ], store=None, out=out)
+    assert rc == 2 and "Entra/OIDC" in out.getvalue()
+
+
+def test_migration_adoption_defaults_to_read_only_plan(monkeypatch):
+    import semiskill.cli as cli
+
+    observed = {}
+    def plan(*args, **kwargs):
+        observed.update(kwargs)
+        return {"schema_version": "migration-checksum-adoption-plan/v1",
+                "plan_sha256": "sha256:" + "1" * 64}
+
+    monkeypatch.setattr("semiskill.artifacts.migrate.plan_legacy_migration_checksums", plan)
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.adopt_legacy_migration_checksums",
+        lambda *args, **kwargs: pytest.fail("read-only plan attempted adoption"),
+    )
+    monkeypatch.setenv("SEMISKILL_MIGRATION_DATABASE_URL", "postgresql://migration.invalid/db")
+    out = io.StringIO()
+    rc = main([
+        "migrate-adopt-legacy", "--expected-database", "semiskill",
+        "--remove-orphaned-test-fixture", "9001_probe.sql",
+    ], store=None, out=out)
+    assert rc == 0 and "no database state changed" in out.getvalue()
+    assert observed["remove_orphaned_test_fixtures"] == ("9001_probe.sql",)
+
+
+def test_migration_adoption_never_falls_back_to_runtime_database_url(monkeypatch):
+    monkeypatch.delenv("SEMISKILL_MIGRATION_DATABASE_URL", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://runtime:secret@private/catalog")
+    out = io.StringIO()
+    rc = main([
+        "migrate-adopt-legacy", "--expected-database", "semiskill",
+    ], store=None, out=out)
+    rendered = out.getvalue()
+    assert rc == 2 and "explicit migration DSN" in rendered
+    assert "runtime" not in rendered and "secret" not in rendered
+
+
+def test_migration_adoption_execute_binds_plan_identity_and_reason(monkeypatch):
+    import semiskill.cli as cli
+    from semiskill.governance.identity import AuthenticatedHuman
+
+    digest = "sha256:" + "2" * 64
+    identity = AuthenticatedHuman(
+        actor="operator", subject="uid:7", provider="local_os",
+        auth_context={"account": "operator", "uid": 7},
+    )
+    observed = {}
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.plan_legacy_migration_checksums",
+        lambda *args, **kwargs: {"plan_sha256": digest},
+    )
+    monkeypatch.setattr("semiskill.governance.identity.local_os_identity", lambda: identity)
+    monkeypatch.setenv("SEMISKILL_MIGRATION_DATABASE_URL", "postgresql://migration.invalid/db")
+
+    def adopt(*args, **kwargs):
+        observed.update(kwargs)
+        return {"adoption_id": "decision-id", "plan_sha256": digest}
+
+    monkeypatch.setattr("semiskill.artifacts.migrate.adopt_legacy_migration_checksums", adopt)
+    out = io.StringIO()
+    rc = main([
+        "migrate-adopt-legacy", "--expected-database", "semiskill", "--yes",
+        "--expected-plan-sha256", digest,
+        "--reason", "Reviewed the exact post-0010 schema and repository manifest.",
+    ], store=None, out=out)
+    assert rc == 0 and "decision-id" in out.getvalue()
+    assert observed["identity"] is identity
+    assert observed["expected_plan_sha256"] == digest
+
+
+def test_migration_adoption_redacts_unexpected_runtime_details(monkeypatch):
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.plan_legacy_migration_checksums",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeError("password=secret host=private C:\\sensitive\\migration.sql")
+        ),
+    )
+    monkeypatch.setenv("SEMISKILL_MIGRATION_DATABASE_URL", "postgresql://migration.invalid/db")
+    out = io.StringIO()
+    rc = main([
+        "migrate-adopt-legacy", "--expected-database", "semiskill",
+    ], store=None, out=out)
+    rendered = out.getvalue()
+    assert rc == 2
+    assert "internal preflight or database operation failed" in rendered
+    assert "secret" not in rendered and "sensitive" not in rendered
+
+
+def test_migration_adoption_redacts_identity_adapter_details(monkeypatch):
+    from semiskill.governance.identity import IdentityRefused
+
+    digest = "sha256:" + "3" * 64
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.plan_legacy_migration_checksums",
+        lambda *args, **kwargs: {"plan_sha256": digest},
+    )
+    monkeypatch.setattr(
+        "semiskill.governance.identity.local_os_identity",
+        lambda: (_ for _ in ()).throw(
+            IdentityRefused("password=secret C:\\private\\whoami.txt\x1b[31m")
+        ),
+    )
+    monkeypatch.setenv("SEMISKILL_MIGRATION_DATABASE_URL", "postgresql://migration.invalid/db")
+    out = io.StringIO()
+    rc = main([
+        "migrate-adopt-legacy", "--expected-database", "semiskill", "--yes",
+        "--expected-plan-sha256", digest,
+        "--reason", "Reviewed the exact post-0010 schema and source manifest.",
+    ], store=None, out=out)
+    rendered = out.getvalue()
+    assert rc == 2 and "identity could not be established" in rendered
+    assert "secret" not in rendered and "private" not in rendered and "\x1b" not in rendered
+
+
 @pytest.mark.parametrize("command", ["pack", "catalog", "site"])
 def test_export_commands_require_explicit_snapshot_and_permission_label(command):
     with pytest.raises(SystemExit):

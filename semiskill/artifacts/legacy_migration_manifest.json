@@ -1,0 +1,56 @@
+{
+  "schema_version": "migration-checksum-adoption/v1",
+  "historical_limit": "These hashes attest the reviewed post-0010 schema and repository bytes; they cannot prove which bytes were executed historically.",
+  "injection_corpus_sha256": "bee1c306c41e31ffa5b2bee5a06c5f8c7403b85a5980261cdfd239b254719f26",
+  "artifacts_columns_sha256": "bff3f0199d99adc69b043fb1372b873c0218c7f138ab39afe99ff81454889fc2",
+  "artifacts_constraints_sha256": "6f0330804db9b56f6afa125e25f89978636a985868c32bb37fc7eef5ac682f74",
+  "approval_index_sha256": "3813549b4d43186a95279f66e182d350d574c8c8de731120ea9bd9ee0ed95d9c",
+  "artifact_triggers_sha256": "a46a983770288f72c18176f3734d19434c91a23219be39962b1f0228d950fc49",
+  "function_security_sha256": "6c3dae94c5b77f0f61f34a3aa411e6e3c9f6a40f43df7ad01cb83a6005129923",
+  "public_function_inventory_sha256": "6b1254b0383e88a2b9a22054eaa54652e59f7dcde18df11a21f5536930a0fccc",
+  "relation_security_sha256": "bdace09398393588d6cbc59343009176203f237a2f97dd1717b9ee21558b9d8d",
+  "tracker_columns_sha256": [
+    "d7a2b3bc1bb7357d288a7d82d98fcab6ae7c06d83b7c2ada0cb322677dc7e3a3",
+    "f199946d372d29bfa26860962026c3de1a0a865f9c176eae4f848816cd15d579"
+  ],
+  "tracker_constraints_sha256": "4b465234093b654fd54f2314344cbc50b2a660b468cb532180916472ecbebefd",
+  "artifacts_index_inventory_sha256": "4036ce1ad31fcdb816962caae225410032897d44bd96b65d7acd125ddccb63f1",
+  "tracker_index_inventory_sha256": "b6d42c08053d773acadb3328b2a102fafd4ba8911025c0526c3c52f209665011",
+  "public_schema_acl_sha256": "46cc700996cff1081df78fe00804db942dc19dce73227e06931431c2c63d3736",
+  "default_acl_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "held_out_table_sha256": {
+    "injection_corpus": "a1b2b802944cca8b8395a713ef45c14109992b33ddb82fb895b5a17b3b5e2a1c",
+    "judge_gold_set": "e72e4c5affa58b9cc12177ff471181907db99c0526c785e9b3b129dcdb4ff60b"
+  },
+  "function_definition_sha256": {
+    "artifact_get(uuid,text[])": "6646faaf7e7b3a48ee810e1a049b1fcda530598f2bc70fbb59b7c873213c253c",
+    "catalog_search(text,text[],text,text,text,integer)": "f439e96c9592f72443f7ae6346655a613b68f26cbac31e84b04c373595c6de4e",
+    "lineage(uuid,text[],integer)": "7a308f2ad49842148f8c5ac6ff17f64eba72018f7f25e73010229af09f13b238",
+    "reuse_events_for_skill(uuid,text[])": "74e503b47d751f6f3f7380433a8b72a9a7a61ae524727f0920c969cc1fc7150e",
+    "probe_skill_against_corpus(text)": "8dfe14bac0601fc1f6d132af62eb3db4be1bd9ddf9279a81db494102fd6b93ac",
+    "skill_scan_report(uuid,text[])": "3e3b397cf8778f99227295c9dd18ba8f83cd9bb3f22ea15fc04c95e87e53b1a1",
+    "block_artifact_mutation()": "2d943f3c9cacddf0074e7f6bc603fbdc95a6ae7ce81546f26c70a535103fc4a3",
+    "enforce_submitter_types()": "e5a722dde4974b3a0b3d03fb9fe05b5ff68df5d411877cb9baca152b69466e5d",
+    "validate_approval_v1()": "710fbf8b4aa3a60cc028b64ac8557c1663707a1d333d8eb427c41d7c6edd262b"
+  },
+  "known_orphaned_test_fixtures": {
+    "9001_probe.sql": {
+      "relation": "public.mig_probe",
+      "columns_sha256": "31e5c6adda2ebddef88a393888b2d75f76a2a83842a91f9f1149d8721a9a28b9",
+      "constraints_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "origin": "tests/artifacts/test_migrate.py"
+    }
+  },
+  "migrations": [
+    {"filename": "0001_artifacts.sql", "sha256": "af1fda95a50eef3167df9d0bf00b008b9692dc8b5727de5de6fbdc34c601ac21"},
+    {"filename": "0002_context.sql", "sha256": "295835c8607dd9ffcdebd125db8839819ebe88f39cfd381b46f4e52e2762677d"},
+    {"filename": "0003_pipeline.sql", "sha256": "9c90a2c9a7e3fb9dc53af4be064105a590e852613df8323d092ba217775942a4"},
+    {"filename": "0004_corpus.sql", "sha256": "dbdf1ad6b636e28a6f13e815cdb492095a5ec2ce35ab346a6c1de62253f78539"},
+    {"filename": "0005_publish.sql", "sha256": "71dbf643814f90d679e93eeb6dbbce6805662a1628103cd4a85249cd715ea75b"},
+    {"filename": "0006_relax_objective_tag.sql", "sha256": "a4feb1cb0f5b6cf313c16586b692f6e80a9b46bc99a21690d88657a85d23d1c3"},
+    {"filename": "0007_cost.sql", "sha256": "5e23d32cd8c364b9c921d2e929fb161323f2bdad207270497fdea623751f1eaf"},
+    {"filename": "0008_detail.sql", "sha256": "2f1af20c631f6f748d10817ba5edc9d81c2bf63e31fc283f4a1e4e5681671d9c"},
+    {"filename": "0009_approval_contract.sql", "sha256": "98aebc7dcc581eb496932e067226748fe1c69c07349a5a5365dca12b9b8c5eaf"},
+    {"filename": "0010_unpublish_contract.sql", "sha256": "dc4214e35816546d1d0a20722fdae816122bc705faf95382540290dfebbdc840"}
+  ]
+}
