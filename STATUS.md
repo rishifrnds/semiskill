@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T11:28:46Z_
+_Last updated: 2026-08-06T11:37:44Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -25,7 +25,7 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Disk: 84 authored - legacy REVIEW.json files 0 - canonical ready 0 (old claims provisional).
 - Catalog: 0 registered published; dev DB contains 2 unregistered test fixtures.
 - Consistency: 0 errors, 60 warnings. Prior full suite: 674 passed, 4 skipped, 1 xpassed;
-  scoped export/materializer checkpoint: 38 passed on isolated `semiskill_test`.
+  scoped export/materializer hardening: 41 passed on isolated `semiskill_test`.
 - Canonical snapshot: 84 authored/strict-lint-pass, 0 security/review/approval/publication;
   conservation true, anomalies zero, release blocked on the five expected downstream checks.
 

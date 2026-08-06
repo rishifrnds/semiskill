@@ -16,7 +16,14 @@ import pytest
 from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.artifacts.store import PostgresArtifactStore
-from semiskill.authoring.catalog_page import build_catalog, collect, render_html, render_markdown
+from semiskill.authoring.catalog_page import (
+    CatalogRefused,
+    ScopedCatalog,
+    build_catalog,
+    collect,
+    render_html,
+    render_markdown,
+)
 from tests.support import public_export_scope, publish_wave_sources
 
 MIG = Path("semiskill/artifacts/migrations")
@@ -210,3 +217,17 @@ def test_generation_is_deterministic(populated, tmp_path):
     b, _ = build_catalog(store=store, out_dir=tmp_path / "b", scope=scope)
     for f in ("catalog.md", "catalog.csv", "catalog.html", "EXPORT-MANIFEST.json"):
         assert (a / f).read_text(encoding="utf-8") == (b / f).read_text(encoding="utf-8")
+
+
+def test_scoped_catalog_rejects_route_and_payload_witness_tampering(populated):
+    store, _, scope = populated
+    catalog = collect(store, scope=scope)
+    first = catalog.entries[0]
+    with pytest.raises(CatalogRefused, match="portable path segment"):
+        ScopedCatalog(scope=scope, entries=(replace(first, role="../escape"), *catalog.entries[1:]))
+    poisoned = replace(first.files[0], text=first.files[0].text + "changed")
+    with pytest.raises(CatalogRefused, match="exact scoped evidence"):
+        ScopedCatalog(
+            scope=scope,
+            entries=(replace(first, files=(poisoned, *first.files[1:])), *catalog.entries[1:]),
+        )

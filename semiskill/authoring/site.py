@@ -35,7 +35,7 @@ from semiskill.authoring.catalog_page import (
     render_csv,
     render_markdown as render_catalog_md,
 )
-from semiskill.authoring.export_files import atomic_build_tree, scope_stamp
+from semiskill.authoring.export_files import atomic_build_tree, safe_relative_path, scope_stamp
 from semiskill.authoring.export_scope import ExportScope
 from semiskill.authoring.markdown import render_markdown, strip_markdown
 
@@ -217,7 +217,7 @@ def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, scope: Export
       </div>
       <p class="sub">Working on a remote box over SSH? The prompt path needs no download at all.</p>
       <details id="install-fallback"><summary>Manual copy fallback</summary>
-        <textarea id="install-prompt-text" readonly>{E(_install_prompt(e))}</textarea>
+        <textarea id="install-prompt-text" readonly>{E(_install_prompt(e, scope))}</textarea>
       </details>
     </div>
 
@@ -254,14 +254,17 @@ def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, scope: Export
   </aside>
 </div>
 """
-    script = _json_block({"prompt": _install_prompt(e), "skill_md": e.skill_md}, "skill-data") + """
+    script = _json_block({"prompt": _install_prompt(e, scope), "skill_md": e.skill_md}, "skill-data") + """
 <script>
 const D = JSON.parse(document.getElementById('skill-data').textContent);
 function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;
   document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
-function copy(t,m){navigator.clipboard.writeText(t).then(()=>toast(m),()=>{
+async function copy(t,m){try{
+  if(!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('clipboard unavailable');
+  await navigator.clipboard.writeText(t);toast(m);
+}catch(_error){
   const d=document.getElementById('install-fallback'), a=document.getElementById('install-prompt-text');
-  d.open=true;a.focus();a.select();toast('Copy failed — the complete prompt is selected below.');});}
+  a.value=t;d.open=true;a.focus();a.select();toast('Copy failed — the complete content is selected below.');}}
 document.getElementById('copy-prompt').onclick=()=>copy(D.prompt,'Install prompt copied — paste it into Cursor Agent chat.');
 document.getElementById('copy-body').onclick=()=>copy(D.skill_md,'SKILL.md copied.');
 </script>"""
@@ -377,8 +380,11 @@ def build_site(*, store: ArtifactStore, out_dir: str | Path,
         (out / "assets").mkdir(parents=True)
 
         def write(rel: str, text: str) -> None:
-            (out / rel).write_bytes(text.encode("utf-8"))
-            pages.append(rel)
+            relative = safe_relative_path(rel)
+            destination = out.joinpath(*relative.parts)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(text.encode("utf-8"))
+            pages.append(relative.as_posix())
 
         ranked_catalog = ScopedCatalog(scope=scope, entries=entries)
         write("assets/site.css", _CSS)
@@ -496,6 +502,10 @@ ul.related li{display:flex;justify-content:space-between;gap:8px}
 .install-head{font-weight:600;margin-bottom:8px}
 .install ol{margin:0 0 12px 18px;font-size:13px;color:hsl(var(--muted-foreground))}
 .install code{color:hsl(var(--primary))}
+.install details{margin-top:10px}
+.install textarea{width:100%;min-height:13rem;margin-top:8px;padding:10px;resize:vertical;
+  color:hsl(var(--foreground));background:hsl(var(--background));border:1px solid hsl(var(--border));
+  border-radius:calc(var(--radius) - 2px);font:11px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
 .row{display:flex;gap:8px}
 .btn{cursor:pointer;border-radius:calc(var(--radius) - 2px);font-size:12.5px;font-weight:500;
   padding:8px 13px;border:1px solid hsl(var(--border));background:hsl(var(--muted));

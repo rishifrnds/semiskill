@@ -3,7 +3,11 @@ import json
 
 import pytest
 
-from semiskill.authoring.export_files import atomic_build_tree
+from semiskill.authoring.export_files import (
+    atomic_build_tree,
+    safe_relative_path,
+    verify_export_tree,
+)
 from semiskill.authoring.export_scope import ExportRefused
 from tests.support import public_export_scope
 
@@ -81,3 +85,30 @@ def test_unowned_or_tampered_target_is_never_deleted(pg_dsn, tmp_path):
             build=lambda root: (root / "new.txt").write_text("new", encoding="utf-8"),
         )
     assert (target / "keep.txt").read_text(encoding="utf-8") == "mine"
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["../escape", "/absolute", "a//b", "a/./b", "a:b", "CON", "nested/NUL.txt",
+     "trailing. ", "back\\slash", "line\nbreak"],
+)
+def test_export_paths_are_portable_and_canonical(value):
+    with pytest.raises(ExportRefused, match="path is invalid"):
+        safe_relative_path(value)
+
+
+def test_manifest_scope_tampering_is_detected(pg_dsn, tmp_path):
+    from semiskill.artifacts.migrate import apply_migrations
+    from semiskill.artifacts.store import PostgresArtifactStore
+    apply_migrations(pg_dsn, "semiskill/artifacts/migrations")
+    scope = public_export_scope(PostgresArtifactStore(pg_dsn), [])
+    target, _ = atomic_build_tree(
+        target=tmp_path / "site", export_kind="site", scope=scope,
+        build=lambda root: (root / "index.html").write_text("ok", encoding="utf-8"),
+    )
+    manifest_path = target / "EXPORT-MANIFEST.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["scope"]["permission_label"] = "regulated"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ExportRefused, match="modified"):
+        verify_export_tree(target, expected_kind="site")
