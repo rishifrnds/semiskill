@@ -469,9 +469,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008g migrate development and reconcile every approval/badge consumer and test
 
 
+- [J-008g] 2026-08-06T07:30:59Z  status: done
+  what: replaced legacy callback and ungated publication fixtures in the API, catalog, pack, site
+  and retrieval tests with a test-only complete approval/v1 evidence chain; the focused serial run
+  passed 40 tests and isolated remaining failures to mutable latest-review badge consumers
+  artifacts: 2b7366b, tests/support.py, tests/api/test_api.py,
+  tests/artifacts/test_migration_0002.py, tests/context/test_retrieve.py,
+  tests/authoring/test_catalog_page.py, tests/authoring/test_pack.py, tests/authoring/test_site.py
+  next: J-008h freeze every export badge and pack manifest to the active approval evidence chain
+
+
 ## In-Flight Step
-- [J-008g] apply the approval read model, eliminate legacy consumer assumptions, freeze exported
-  verification to approval evidence and restore a green full suite on the isolated test DB.
+- [J-008h] resolve and validate the immutable approval evidence chain once, use it in catalog/site/
+  pack exports, then repair the remaining legacy test assumptions and rerun the full isolated suite.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

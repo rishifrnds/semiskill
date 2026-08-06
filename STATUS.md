@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T07:21:08Z_
+_Last updated: 2026-08-06T07:30:59Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,14 +17,15 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-008g: apply approval migrations to development, repair consumers/tests around approval/v1,
-  freeze badges/pack/catalog to the approved evidence chain, then run the full isolated suite.
+- J-008h: freeze catalog/site/pack badges to the active approval's exact automated review, content
+  review and scan IDs; then repair remaining legacy assumptions and rerun the full isolated suite.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
 - Disk: 84 authored · legacy REVIEW.json files 0 · canonical ready 0 (old claims provisional).
 - Catalog: 0 registered published; dev DB contains 2 unregistered test fixtures.
-- Consistency: 0 errors, 60 warnings. Tests: 455 collected; no fresh full-suite result yet.
+- Consistency: 0 errors, 60 warnings. Latest full isolated run: 429 passed, 30 failed, 25 errors,
+  1 xpassed; focused approval-fixture run: 40 passed with failures isolated to old consumers.
 
 ## Immediate order
 1. Harden review collection/readiness/payload hashing and approval provenance.
@@ -40,3 +41,7 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - 8936e12 — approval/v1 requires exact skill/hash, frozen automated scans, latest independent
   content recheck, reason, authenticated OS/Entra identity and explicit decision; production is
   Entra-only, legacy approvals are non-authoritative, and unpublish is an authenticated correction.
+
+## Last checkpoint commit
+- 2b7366b: tests now publish only through a complete approval/v1 chain; mutable badge consumers are
+  exposed instead of masked by retired callback fixtures.
