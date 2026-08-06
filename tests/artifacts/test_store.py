@@ -75,7 +75,9 @@ def test_append_many_rolls_back_every_row_when_one_insert_fails(store):
     assert store.get(first.artifact_id) is None
 
 
-def test_non_test_approval_actuator_requires_distinct_database_identity():
+def test_non_test_approval_actuator_requires_distinct_database_identity(monkeypatch):
+    monkeypatch.delenv("SEMISKILL_APPROVAL_DATABASE_URL", raising=False)
+    monkeypatch.delenv("SEMISKILL_EXPORT_DATABASE_URL", raising=False)
     runtime = "postgresql://runtime:secret@db.internal:5432/semiskill"
     with pytest.raises(ValueError, match="distinct database identity"):
         PostgresArtifactStore(runtime, approval_dsn=runtime)

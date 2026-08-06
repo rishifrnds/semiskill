@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T21:04:36Z_
+_Last updated: 2026-08-06T21:11:24Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3e3a: execute the fixed full suite on the current clean committed source and exact isolated
-  test database, then verify the dashboard consumes that immutable non-crediting run.
+- J-010b3e3a: repair the two environment-isolation failures exposed by the first immutable run,
+  then commit before a clean-source rerun.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -30,7 +30,9 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   Python, JavaScript, JSON, model-pin and diff checks pass; exact-byte data and Chrome audits have
   0 P0/P1/P2 across all 11 views at 375px.
 - J-010b3e2: immutable producer plus strict file-only reader/UI; 152 focused tests and independent
-  reader/UI audits have zero P0/P1/P2. No current-commit run has been produced yet.
+  reader/UI audits have zero P0/P1/P2.
+- First immutable run on `12c0bac`: FAIL - 987 passed, 2 failed, 6 skipped, 1 xpassed; both failures
+  were unit tests that did not clear intentionally pinned approval/export test DSNs. Targeted fixes pass.
 - The last v2 snapshot predates commit `e6b6509` and is therefore unavailable for current catalog
   credit; the deterministic release gate remains blocked at 0/84.
 
