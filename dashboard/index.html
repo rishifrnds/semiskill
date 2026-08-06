@@ -333,7 +333,8 @@ function kpi(label, value, sub, opts = {}) {
 }
 function badge(text, cls) { return `<span class="badge ${cls || ''}">${esc(text)}</span>`; }
 function canonicalSnapshot() {
-  return S?.scoreboard?.status === 'available' ? S.scoreboard.snapshot : null;
+  return S?.scoreboard?.status === 'available' && S?.scoreboard?.validation?.status === 'verified'
+    ? S.scoreboard.snapshot : null;
 }
 function freshness(iso) {
   const at = Date.parse(iso);
@@ -404,6 +405,7 @@ function renderHealth() {
     pill('Postgres', r.db.status === 'up', r.db.detail) +
     pill('Read API', r.api.status === 'up', r.api.detail) +
     pill('Scoreboard', S.scoreboard.status === 'available', S.scoreboard.reason) +
+    pill('Migrations', S.migration?.status === 'verified', S.migration?.reason) +
     `<span class="badge ${S.repo.dirty ? 'warn' : 'muted'}">git ${esc(S.repo.branch)} · ${S.repo.dirty} dirty</span>`;
 }
 
@@ -813,6 +815,26 @@ function vSecurity() {
     ['Principals bound to a real identity provider', 'partial', 'verified bearer/group resolver implemented; production tenant configuration remains pending'],
     ['Live security-audit + judge stages in production', 'partial', 'injected fakes tested; live needs egress/keys'],
   ];
+  const migration = S.migration || { status: 'unavailable', reason: 'not_observed' };
+  const tracker = migration.tracker;
+  const adoption = migration.adoption;
+  const migrationRows = migration.status !== 'verified'
+    ? `<div class="empty">Migration evidence unavailable (${esc(migration.reason || 'unavailable')}). No migration claim is credited.</div>`
+    : `<div class="row"><div class="g"><div class="h">Repository ↔ database tracker</div>
+         <div class="sub mono">${tracker.repository_count}/${tracker.tracked_count} exact · latest ${esc(tracker.latest_migration)} · ${esc(tracker.sha256)}</div></div>${badge('verified', 'done')}</div>
+       <div class="row"><div class="g"><div class="h">Verified-publication projection</div>
+         <div class="sub">${migration.projection_rows} current rows · observed ${esc(migration.observed_at)}</div></div></div>`;
+  const adoptionRows = migration.status !== 'verified'
+    ? `<div class="empty">Adoption witness is hidden until the live tracker is verified.</div>`
+    : adoption
+      ? `<div class="row"><div class="g"><div class="h">Immutable adoption artifact</div>
+           <div class="sub mono">${esc(adoption.artifact_id)} · ${esc(adoption.timestamp)}</div></div>${badge('verified', 'done')}</div>
+         <div class="row"><div class="g"><div class="h">Bound source and plan</div>
+           <div class="sub mono">commit ${esc(adoption.source_commit)} · ${esc(adoption.plan_sha256)}</div></div></div>
+         <div class="row"><div class="g"><div class="h">Adoption result</div>
+           <div class="sub">${adoption.adopted_count} adopted · ${adoption.applied_count} applied · ${adoption.attestations_passed}/${adoption.attestations_total} post-attestations · removed test fixtures: ${esc((adoption.removed_test_fixtures || []).join(', ') || 'none')}</div>
+           <div class="p">${esc(adoption.historical_limit)}</div></div></div>`
+      : `<div class="empty">No legacy adoption artifact was observed; whether one was required is unknown and receives no credit.</div>`;
 
   $('#view-security').innerHTML = `
     <div class="grid g4">
@@ -829,6 +851,12 @@ function vSecurity() {
       ${card('Security invariants', 'The load-bearing properties — each is a test, not a promise',
         `<div class="list" style="max-height:250px;overflow:auto">${invariants.map(([n, s, e]) => `<div class="row">
           <div class="g"><div class="h">${badge(s, s)} ${esc(n)}</div><div class="p mono">${esc(e)}</div></div></div>`).join('')}</div>`, { tight: true })}
+    </div>
+
+    <div class="section-head"><h2>Migration adoption witness</h2><p class="muted">Live, redacted evidence only; operator identity, authentication context, reasons, and raw manifests never enter this API.</p></div>
+    <div class="grid g2">
+      ${card('Migration tracker', migration.status === 'verified' ? `${esc(migration.database.environment)} · ${esc(migration.database.database_name)}` : 'fail-closed', migrationRows, { tight: true })}
+      ${card('Legacy checksum adoption', adoption ? `${adoption.adopted_count} adopted · ${adoption.applied_count} applied` : 'no credited adoption', adoptionRows, { tight: true })}
     </div>
 
     <div class="section-head"><h2>Red-team corpus inputs</h2><p class="muted">Input inventory only — ${esc(redteam.reason)}; outcomes are not executed</p></div>
@@ -871,8 +899,7 @@ function vCatalog() {
   const sourceCommit = snapshot.sources.repository.commit;
   const db = snapshot.sources.database;
   const databaseName = snapshot.sources.database.database_name;
-  const currentCommit = S.repo.commits?.[0]?.sha || '';
-  const sourceMatches = currentCommit && sourceCommit.startsWith(currentCommit);
+  const validation = S.scoreboard.validation || {};
   const progress = S.progress.status === 'available' ? S.progress.snapshot : null;
   const workers = progress ? progress.workers : null;
   const stateRows = Object.entries(snapshot.exclusive_states);
@@ -912,10 +939,10 @@ function vCatalog() {
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Snapshot provenance', `${freshness(snapshot.generated_at)} · ${esc(snapshot.generated_at)}`,
-        `<div class="row"><div class="g"><div class="h">Source commit</div><div class="sub mono">${esc(sourceCommit)} ${repo.dirty ? '· dirty' : '· clean'} ${sourceMatches ? '· matches current HEAD' : '· differs from current HEAD'}</div></div></div>
+      ${card('Snapshot provenance', `server verified ${esc(validation.validated_at || 'unknown')} · age ${validation.age_seconds ?? '—'}s / ${validation.max_age_seconds ?? '—'}s`,
+        `<div class="row"><div class="g"><div class="h">Source commit</div><div class="sub mono">${esc(sourceCommit)} ${repo.dirty ? '· dirty' : '· clean'} · exact current HEAD verified by server</div></div>${badge(validation.status || 'unverified', validation.status === 'verified' ? 'done' : 'gap')}</div>
          <div class="row"><div class="g"><div class="h">Database identity</div><div class="sub mono">${esc(databaseName)} · ${esc(db.environment)} · ${esc(db.identity_sha256)}</div></div></div>
-         <div class="row"><div class="g"><div class="h">Snapshot</div><div class="sub mono">${esc(snapshot.snapshot_id)}</div></div>${badge(snapshot.release_gate.passed ? 'release pass' : 'release blocked', snapshot.release_gate.passed ? 'done' : 'gap')}</div>`)}
+         <div class="row"><div class="g"><div class="h">Snapshot</div><div class="sub mono">${esc(snapshot.snapshot_id)} · live recomputation matched</div></div>${badge(snapshot.release_gate.passed ? 'release pass' : 'release blocked', snapshot.release_gate.passed ? 'done' : 'gap')}</div>`)}
       ${card('Active worker assignments', progress ? `updated ${esc(progress.generated_at)} · ${freshness(progress.generated_at)}` : 'ephemeral progress is independently validated', workerRows)}
     </div>
 

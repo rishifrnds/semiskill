@@ -31,7 +31,7 @@ import uuid
 import webbrowser
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
@@ -79,6 +79,46 @@ RUNNABLE: dict[str, dict] = {
 _run_log: list[dict] = []          # newest last; in-memory ring of run results
 _run_lock = threading.Lock()
 
+_DEFAULT_SCOREBOARD_MAX_AGE_SECONDS = 900
+_DEFAULT_PROGRESS_MAX_AGE_SECONDS = 300
+_MAX_FUTURE_SKEW_SECONDS = 60
+_MIGRATION_NAME = re.compile(r"^\d{4}_[a-z0-9_]+\.sql$")
+_CANONICAL_SOURCE_PATHS = {
+    "registry": "specs/skill_registry.json",
+    "skills": "skills",
+}
+_CANONICAL_SCOPE = {
+    "phase": "dv-84",
+    "expected_active": 84,
+    "expected_declined": 20,
+    "expected_roles": 16,
+    "target_per_role": 5,
+}
+_POST_MIGRATION_ATTESTATION_KEYS = frozenset({
+    "required_relations_present",
+    "required_functions_present",
+    "critical_projection_index_exact",
+    "authority_triggers_exact",
+    "capability_roles_hardened",
+    "capability_memberships_exact",
+    "security_definer_paths_hardened",
+    "direct_table_boundary_exact",
+    "function_boundary_exact",
+    "projection_and_policy_start_empty",
+    "public_schema_create_revoked",
+})
+_CURRENT_SCHEMA_ATTESTATION_KEYS = (
+    _POST_MIGRATION_ATTESTATION_KEYS - {"projection_and_policy_start_empty"}
+)
+
+
+class DashboardSnapshotRejected(RuntimeError):
+    """Controlled fail-closed reason; raw source/database exceptions never cross the API."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
 
 # ---------------------------------------------------------------- helpers
 
@@ -97,6 +137,192 @@ def _sh(args: list[str], timeout: int = 20) -> tuple[int, str]:
         return 124, f"timed out after {timeout}s"
     except Exception as e:                                   # noqa: BLE001
         return 1, f"{type(e).__name__}: {e}"
+
+
+def _timestamp(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise DashboardSnapshotRejected("clock_skew") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise DashboardSnapshotRejected("clock_skew")
+    return parsed.astimezone(timezone.utc)
+
+
+def _max_age_seconds(name: str, default: int) -> int:
+    raw = os.environ.get(name, str(default))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise DashboardSnapshotRejected("freshness_configuration_invalid") from exc
+    if not 15 <= value <= 3_600:
+        raise DashboardSnapshotRejected("freshness_configuration_invalid")
+    return value
+
+
+def _freshness_validation(*, generated_at: str, observed_at: str, kind: str) -> dict:
+    generated = _timestamp(generated_at)
+    observed = _timestamp(observed_at)
+    age = (observed - generated).total_seconds()
+    if age < -_MAX_FUTURE_SKEW_SECONDS:
+        raise DashboardSnapshotRejected("clock_skew" if kind == "snapshot" else "progress_clock_skew")
+    env_name = (
+        "SEMISKILL_SCOREBOARD_MAX_AGE_SECONDS"
+        if kind == "snapshot" else "SEMISKILL_PROGRESS_MAX_AGE_SECONDS"
+    )
+    default = (
+        _DEFAULT_SCOREBOARD_MAX_AGE_SECONDS
+        if kind == "snapshot" else _DEFAULT_PROGRESS_MAX_AGE_SECONDS
+    )
+    maximum = _max_age_seconds(env_name, default)
+    if age > maximum:
+        raise DashboardSnapshotRejected("snapshot_expired" if kind == "snapshot" else "progress_expired")
+    return {"age_seconds": max(0, int(age)), "max_age_seconds": maximum}
+
+
+def _repository_identity() -> tuple[str, bool]:
+    rc, commit = _sh(["git", "rev-parse", "HEAD"])
+    if rc != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit.strip()):
+        raise DashboardSnapshotRejected("source_unavailable")
+    rc, status = _sh(["git", "status", "--porcelain", "--untracked-files=normal"])
+    if rc != 0:
+        raise DashboardSnapshotRejected("source_unavailable")
+    return commit.strip(), bool(status.strip())
+
+
+def _safe_source_path(value: object, *, kind: str) -> Path:
+    expected = _CANONICAL_SOURCE_PATHS.get(kind)
+    if not isinstance(value, str) or value != expected or "\\" in value:
+        raise DashboardSnapshotRejected(f"{kind}_path_invalid")
+    relative = PurePosixPath(value)
+    if relative.is_absolute() or ".." in relative.parts or "." in relative.parts:
+        raise DashboardSnapshotRejected(f"{kind}_path_invalid")
+    try:
+        target = (ROOT / Path(*relative.parts)).resolve(strict=True)
+    except OSError as exc:
+        raise DashboardSnapshotRejected(f"{kind}_path_invalid") from exc
+    try:
+        target.relative_to(ROOT.resolve())
+    except ValueError as exc:
+        raise DashboardSnapshotRejected(f"{kind}_path_invalid") from exc
+    candidate = ROOT
+    for part in relative.parts:
+        candidate = candidate / part
+        try:
+            stat = candidate.lstat()
+        except OSError as exc:
+            raise DashboardSnapshotRejected(f"{kind}_path_invalid") from exc
+        if candidate.is_symlink() or bool(getattr(stat, "st_file_attributes", 0) & 0x400):
+            raise DashboardSnapshotRejected(f"{kind}_path_invalid")
+    if kind == "registry" and not target.is_file():
+        raise DashboardSnapshotRejected("registry_path_invalid")
+    if kind == "skills" and not target.is_dir():
+        raise DashboardSnapshotRejected("skills_path_invalid")
+    return target
+
+
+def _validate_dashboard_scope(snapshot: dict) -> None:
+    scope = snapshot.get("scope")
+    if not isinstance(scope, dict) or any(
+        scope.get(key) != expected for key, expected in _CANONICAL_SCOPE.items()
+    ):
+        raise DashboardSnapshotRejected("scope_mismatch")
+
+
+def _rebuild_snapshot(snapshot: dict, registry_path: Path, skills_root: Path) -> dict:
+    try:
+        from semiskill.artifacts.store import PostgresArtifactStore  # noqa: PLC0415
+        from semiskill.authoring.snapshot import build_scoreboard_snapshot  # noqa: PLC0415
+        from semiskill.config import Config  # noqa: PLC0415
+
+        environment = snapshot["sources"]["database"]["environment"]
+        return build_scoreboard_snapshot(
+            store=PostgresArtifactStore(Config.from_env().database_url),
+            registry_path=registry_path,
+            skills_root=skills_root,
+            generated_at=snapshot["generated_at"],
+            expected_active=_CANONICAL_SCOPE["expected_active"],
+            expected_declined=_CANONICAL_SCOPE["expected_declined"],
+            expected_roles=_CANONICAL_SCOPE["expected_roles"],
+            target_per_role=_CANONICAL_SCOPE["target_per_role"],
+            environment=environment,
+            repository_root=ROOT,
+            phase=_CANONICAL_SCOPE["phase"],
+            expected_entra_issuer=os.environ.get("SEMISKILL_ENTRA_ISSUER"),
+            expected_entra_tenant=os.environ.get("SEMISKILL_ENTRA_TENANT_ID"),
+        )
+    except DashboardSnapshotRejected:
+        raise
+    except Exception as exc:  # database/parser details remain local
+        raise DashboardSnapshotRejected("database_unavailable") from exc
+
+
+def _live_snapshot_validation(snapshot: dict, *, migration: dict | None = None) -> dict:
+    _validate_dashboard_scope(snapshot)
+    sources = snapshot["sources"]
+    repository = sources["repository"]
+    if repository.get("dirty") is not False:
+        raise DashboardSnapshotRejected("snapshot_source_dirty")
+    current_commit, current_dirty = _repository_identity()
+    if current_commit != repository.get("commit"):
+        raise DashboardSnapshotRejected("source_commit_mismatch")
+    if current_dirty:
+        raise DashboardSnapshotRejected("working_tree_dirty")
+
+    registry_source = sources.get("registry")
+    skills_source = sources.get("skills")
+    if not isinstance(registry_source, dict) or not isinstance(skills_source, dict):
+        raise DashboardSnapshotRejected("source_path_invalid")
+    registry_path = _safe_source_path(registry_source.get("path"), kind="registry")
+    skills_root = _safe_source_path(skills_source.get("root"), kind="skills")
+    try:
+        registry_sha256 = "sha256:" + hashlib.sha256(registry_path.read_bytes()).hexdigest()
+        from semiskill.authoring.export_scope import _skills_tree_sha256  # noqa: PLC0415
+        from semiskill.authoring.snapshot import full_input_tree_sha256  # noqa: PLC0415
+        skills_sha256 = _skills_tree_sha256(skills_root)
+        full_skills_sha256 = full_input_tree_sha256(skills_root)
+    except Exception as exc:
+        raise DashboardSnapshotRejected("skills_tree_mismatch") from exc
+    if registry_sha256 != registry_source.get("sha256"):
+        raise DashboardSnapshotRejected("registry_hash_mismatch")
+    if skills_sha256 != skills_source.get("tree_sha256"):
+        raise DashboardSnapshotRejected("skills_tree_mismatch")
+    if full_skills_sha256 != skills_source.get("full_tree_sha256"):
+        raise DashboardSnapshotRejected("skills_full_tree_mismatch")
+
+    live = _rebuild_snapshot(snapshot, registry_path, skills_root)
+    if live["sources"]["registry"]["sha256"] != registry_source["sha256"]:
+        raise DashboardSnapshotRejected("registry_hash_mismatch")
+    if live["sources"]["skills"]["tree_sha256"] != skills_source["tree_sha256"]:
+        raise DashboardSnapshotRejected("skills_tree_mismatch")
+    if live["sources"]["skills"]["full_tree_sha256"] != skills_source["full_tree_sha256"]:
+        raise DashboardSnapshotRejected("skills_full_tree_mismatch")
+    if live["sources"]["database"] != sources["database"]:
+        raise DashboardSnapshotRejected("database_identity_mismatch")
+    if live["snapshot_id"] != snapshot["snapshot_id"]:
+        raise DashboardSnapshotRejected("database_state_mismatch")
+    migration = migration if migration is not None else migration_witness_signal()
+    if migration.get("status") != "verified":
+        raise DashboardSnapshotRejected("schema_witness_mismatch")
+    migration_database = migration.get("database")
+    if (
+        not isinstance(migration_database, dict)
+        or migration_database.get("environment") != sources["database"]["environment"]
+        or migration_database.get("database_name") != sources["database"]["database_name"]
+        or migration.get("tracker", {}).get("exact") is not True
+        or migration.get("schema", {}).get("status") != "verified"
+    ):
+        raise DashboardSnapshotRejected("schema_witness_mismatch")
+    final_commit, final_dirty = _repository_identity()
+    if final_commit != current_commit or final_dirty or final_dirty != current_dirty:
+        raise DashboardSnapshotRejected("source_changed_during_validation")
+    return {
+        "status": "verified",
+        "snapshot_id": live["snapshot_id"],
+        "source_commit": current_commit,
+        "database_identity_sha256": live["sources"]["database"]["identity_sha256"],
+        "migration_tracker_sha256": migration["tracker"]["sha256"],
+    }
 
 
 # ---------------------------------------------------------------- signals
@@ -241,16 +467,16 @@ def runtime_signals() -> dict:
     return out
 
 
-def canonical_snapshot_signals() -> dict:
+def canonical_snapshot_signals(*, migration: dict | None = None) -> dict:
     """Load canonical catalog state or expose an explicit, non-substituted unavailable state."""
     observed_at = _now()
     scoreboard = {
         "status": "unavailable", "observed_at": observed_at,
-        "reason": "not_configured", "snapshot": None,
+        "reason": "not_configured", "snapshot": None, "validation": None,
     }
     progress = {
         "status": "unavailable", "observed_at": observed_at,
-        "reason": "scoreboard_unavailable", "snapshot": None,
+        "reason": "scoreboard_unavailable", "snapshot": None, "validation": None,
     }
     scoreboard_path = os.environ.get("SEMISKILL_SCOREBOARD_SNAPSHOT")
     if not scoreboard_path:
@@ -264,8 +490,20 @@ def canonical_snapshot_signals() -> dict:
     if snapshot["sources"]["database"]["environment"] != environment:
         scoreboard["reason"] = "environment_mismatch"
         return {"scoreboard": scoreboard, "progress": progress}
+    migration = migration if migration is not None else migration_witness_signal()
+    try:
+        freshness = _freshness_validation(
+            generated_at=snapshot["generated_at"], observed_at=observed_at, kind="snapshot",
+        )
+        live_validation = _live_snapshot_validation(snapshot, migration=migration)
+    except DashboardSnapshotRejected as exc:
+        scoreboard["reason"] = exc.reason
+        return {"scoreboard": scoreboard, "progress": progress}
 
-    scoreboard.update(status="available", reason=None, snapshot=snapshot)
+    scoreboard.update(
+        status="available", reason=None, snapshot=snapshot,
+        validation={**freshness, **live_validation, "validated_at": observed_at},
+    )
     progress["reason"] = "not_configured"
     progress_path = os.environ.get("SEMISKILL_PROGRESS_SNAPSHOT")
     if progress_path:
@@ -274,8 +512,252 @@ def canonical_snapshot_signals() -> dict:
         except SnapshotUnavailable:
             progress["reason"] = "invalid_or_unavailable"
         else:
-            progress.update(status="available", reason=None, snapshot=progress_snapshot)
+            try:
+                scoreboard_time = _timestamp(snapshot["generated_at"])
+                progress_time = _timestamp(progress_snapshot["generated_at"])
+                if progress_time < scoreboard_time:
+                    raise DashboardSnapshotRejected("progress_older_than_scoreboard")
+                progress_freshness = _freshness_validation(
+                    generated_at=progress_snapshot["generated_at"],
+                    observed_at=observed_at,
+                    kind="progress",
+                )
+                maximum = progress_freshness["max_age_seconds"]
+                observed_time = _timestamp(observed_at)
+                for worker in progress_snapshot["workers"]:
+                    started = _timestamp(worker["started_at"])
+                    updated = _timestamp(worker["updated_at"])
+                    if started > updated or updated > progress_time:
+                        raise DashboardSnapshotRejected("worker_time_order_invalid")
+                    worker_age = (observed_time - updated).total_seconds()
+                    if worker_age < -_MAX_FUTURE_SKEW_SECONDS:
+                        raise DashboardSnapshotRejected("worker_clock_skew")
+                    if worker_age > maximum:
+                        raise DashboardSnapshotRejected("worker_stale")
+            except DashboardSnapshotRejected as exc:
+                progress["reason"] = exc.reason
+            else:
+                progress.update(
+                    status="available", reason=None, snapshot=progress_snapshot,
+                    validation={**progress_freshness, "validated_at": observed_at},
+                )
     return {"scoreboard": scoreboard, "progress": progress}
+
+
+def _migration_tracker_sha256(rows: list[dict[str, str]]) -> str:
+    encoded = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _migration_repository_rows() -> list[dict[str, str]]:
+    rows = []
+    directory = ROOT / "semiskill" / "artifacts" / "migrations"
+    for path in sorted(directory.glob("*.sql")):
+        stat = path.lstat()
+        if (
+            not _MIGRATION_NAME.fullmatch(path.name)
+            or path.is_symlink()
+            or bool(getattr(stat, "st_file_attributes", 0) & 0x400)
+            or not path.is_file()
+        ):
+            raise DashboardSnapshotRejected("migration_source_invalid")
+        rows.append({"filename": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+    if not rows:
+        raise DashboardSnapshotRejected("migration_source_invalid")
+    return rows
+
+
+def _read_migration_database_state(dsn: str, *, connect=None) -> dict:
+    if connect is None:
+        import psycopg  # noqa: PLC0415
+        connect = psycopg.connect
+    from semiskill.artifacts.migrate import _post_migration_attestations  # noqa: PLC0415
+
+    with connect(dsn, connect_timeout=3) as conn:
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        database_name = conn.execute("SELECT current_database()").fetchone()[0]
+        tracker_rows = [
+            {"filename": filename, "sha256": checksum}
+            for filename, checksum in conn.execute(
+                "SELECT filename,sha256 FROM public.schema_migrations ORDER BY filename"
+            ).fetchall()
+        ]
+        audits = conn.execute(
+            "SELECT artifact_id,timestamp_start,source_system,actor_kind,permissions_label,"
+            "objective_tag,ground_truth_ref,payload FROM public.artifacts "
+            "WHERE artifact_type='gate_decision' "
+            "AND payload->>'schema_version'='migration-checksum-adoption/v1' "
+            "ORDER BY timestamp_start,artifact_id LIMIT 2"
+        ).fetchall()
+        projection_rows = conn.execute(
+            "SELECT count(*) FROM public.verified_publication_events"
+        ).fetchone()[0]
+        schema_attestations = _post_migration_attestations(conn)
+        conn.rollback()
+    return {
+        "database_name": database_name,
+        "tracker_rows": tracker_rows,
+        "audits": audits,
+        "projection_rows": projection_rows,
+        "schema_attestations": schema_attestations,
+    }
+
+
+def _canonical_filename_list(value: object, *, repository: set[str], removed: bool = False) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or any(not isinstance(name, str) or not _MIGRATION_NAME.fullmatch(name) for name in value)
+        or len(value) != len(set(value))
+    ):
+        raise DashboardSnapshotRejected("adoption_witness_invalid")
+    if removed:
+        if any(name in repository for name in value):
+            raise DashboardSnapshotRejected("adoption_witness_invalid")
+    elif any(name not in repository for name in value):
+        raise DashboardSnapshotRejected("adoption_witness_invalid")
+    return value
+
+
+def _project_adoption_witness(
+    audits: list,
+    *,
+    repository_rows: list[dict[str, str]],
+    environment: str,
+    database_name: str,
+) -> dict | None:
+    if len(audits) > 1:
+        raise DashboardSnapshotRejected("adoption_witness_ambiguous")
+    if not audits:
+        return None
+    (
+        artifact_id, timestamp_start, source_system, actor_kind, permissions_label,
+        objective_tag, ground_truth_ref, payload,
+    ) = audits[0]
+    if not isinstance(payload, dict):
+        raise DashboardSnapshotRejected("adoption_witness_invalid")
+    plan_sha256 = payload.get("plan_sha256")
+    source_commit = payload.get("source_commit")
+    database = payload.get("database")
+    post = payload.get("post_migration_attestations")
+    if (
+        source_system != "cli"
+        or actor_kind != "human"
+        or permissions_label != "need-to-know"
+        or objective_tag != "compliance"
+        or ground_truth_ref != plan_sha256
+        or payload.get("schema_version") != "migration-checksum-adoption/v1"
+        or payload.get("decision") != "adopt_and_apply"
+        or payload.get("adoption_id") != str(artifact_id)
+        or payload.get("environment") != environment
+        or not isinstance(database, dict)
+        or database.get("database_name") != database_name
+        or payload.get("final_tracker") != repository_rows
+        or not isinstance(post, dict)
+        or set(post) != _POST_MIGRATION_ATTESTATION_KEYS
+        or any(value is not True for value in post.values())
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(plan_sha256))
+        or not re.fullmatch(r"[0-9a-f]{40}", str(source_commit))
+    ):
+        raise DashboardSnapshotRejected("adoption_witness_invalid")
+    try:
+        timestamp = timestamp_start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise DashboardSnapshotRejected("adoption_witness_invalid") from exc
+    repository_names = {row["filename"] for row in repository_rows}
+    adopted = _canonical_filename_list(payload.get("adopted_filenames"), repository=repository_names)
+    applied = _canonical_filename_list(payload.get("applied_filenames"), repository=repository_names)
+    removed = _canonical_filename_list(
+        payload.get("removed_orphaned_test_fixtures"), repository=repository_names, removed=True,
+    )
+    removed_relations = payload.get("removed_orphaned_relations")
+    if (
+        not isinstance(removed_relations, list)
+        or any(not isinstance(name, str) or not re.fullmatch(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*", name)
+               for name in removed_relations)
+        or len(removed_relations) != len(set(removed_relations))
+        or set(adopted) & set(applied)
+    ):
+        raise DashboardSnapshotRejected("adoption_witness_invalid")
+    return {
+        "artifact_id": str(artifact_id),
+        "timestamp": timestamp,
+        "environment": environment,
+        "source_commit": source_commit,
+        "plan_sha256": plan_sha256,
+        "adopted_count": len(adopted),
+        "applied_count": len(applied),
+        "attestations_passed": len(post),
+        "attestations_total": len(post),
+        "removed_test_fixtures": removed,
+        "historical_limit": (
+            "Reviewed hashes and schema attest the adopted present state; they cannot prove "
+            "which bytes were executed historically."
+        ),
+    }
+
+
+def migration_witness_signal() -> dict:
+    """Return a sanitized live tracker/adoption projection; never raw auth or audit payloads."""
+    observed_at = _now()
+    unavailable = {
+        "status": "unavailable", "reason": "database_unavailable",
+        "observed_at": observed_at, "tracker": None, "schema": None, "adoption": None,
+    }
+    try:
+        from semiskill.config import Config  # noqa: PLC0415
+        repository_rows = _migration_repository_rows()
+        environment = os.environ.get("SEMISKILL_ENVIRONMENT", "development")
+        database_state = _read_migration_database_state(Config.from_env().database_url)
+    except DashboardSnapshotRejected as exc:
+        unavailable["reason"] = exc.reason
+        return unavailable
+    except Exception:
+        return unavailable
+    try:
+        database_name = database_state["database_name"]
+        tracker_rows = database_state["tracker_rows"]
+        if tracker_rows != repository_rows:
+            raise DashboardSnapshotRejected("migration_tracker_mismatch")
+        schema = database_state["schema_attestations"]
+        if (
+            not isinstance(schema, dict)
+            or set(schema) != _POST_MIGRATION_ATTESTATION_KEYS
+            or any(schema.get(key) is not True for key in _CURRENT_SCHEMA_ATTESTATION_KEYS)
+        ):
+            raise DashboardSnapshotRejected("schema_witness_mismatch")
+        adoption = _project_adoption_witness(
+            database_state["audits"], repository_rows=repository_rows,
+            environment=environment, database_name=database_name,
+        )
+    except DashboardSnapshotRejected as exc:
+        unavailable["reason"] = exc.reason
+        unavailable["tracker"] = {
+            "repository_count": len(repository_rows), "tracked_count": len(
+                database_state.get("tracker_rows", [])
+            ),
+        }
+        return unavailable
+    except Exception:
+        unavailable["reason"] = "migration_witness_invalid"
+        return unavailable
+    return {
+        "status": "verified", "reason": None, "observed_at": observed_at,
+        "database": {"environment": environment, "database_name": database_name},
+        "tracker": {
+            "repository_count": len(repository_rows),
+            "tracked_count": len(tracker_rows),
+            "latest_migration": tracker_rows[-1]["filename"],
+            "sha256": _migration_tracker_sha256(tracker_rows),
+            "exact": True,
+        },
+        "schema": {
+            "status": "verified",
+            "passed": len(_CURRENT_SCHEMA_ATTESTATION_KEYS),
+            "total": len(_CURRENT_SCHEMA_ATTESTATION_KEYS),
+        },
+        "projection_rows": database_state["projection_rows"],
+        "adoption": adoption,
+    }
 
 
 def redteam_signal(path: str | Path | None = None) -> dict:
@@ -387,7 +869,8 @@ def read_inbox() -> list[dict]:
 
 def build_state() -> dict:
     model = json.loads(MODEL.read_text(encoding="utf-8"))
-    canonical = canonical_snapshot_signals()
+    migration = migration_witness_signal()
+    canonical = canonical_snapshot_signals(migration=migration)
     redteam = redteam_signal()
     _remove_unexecuted_redteam_credit(model, redteam)
     return {
@@ -398,6 +881,7 @@ def build_state() -> dict:
         "runtime": runtime_signals(),
         "scoreboard": canonical["scoreboard"],
         "progress": canonical["progress"],
+        "migration": migration,
         "redteam": redteam,
         "adrs": adrs(),
         "inbox": read_inbox(),

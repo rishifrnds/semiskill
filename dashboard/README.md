@@ -17,7 +17,8 @@ python dashboard/server.py        # → http://127.0.0.1:8899 (opens your browse
 | test files + `pytest --collect-only` count | metric targets, pricing, channels |
 | Docker / Postgres / read-API liveness | the 30 prepared task prompts |
 | artifact counts + type mix (when the DB is up) | |
-| validated canonical scoreboard + worker progress snapshots | |
+| server-recomputed canonical scoreboard + worker progress snapshots | |
+| exact migration tracker, current schema witness, and redacted adoption provenance | |
 | red-team input inventory + explicit execution availability | |
 | the action queue itself | |
 
@@ -27,12 +28,20 @@ Configure the authoritative catalog inputs before starting the server:
 $env:SEMISKILL_ENVIRONMENT = "development"
 $env:SEMISKILL_SCOREBOARD_SNAPSHOT = "reports/scoreboard/latest.json"
 $env:SEMISKILL_PROGRESS_SNAPSHOT = "reports/scoreboard/progress.json" # optional
+$env:SEMISKILL_SCOREBOARD_MAX_AGE_SECONDS = "900" # 15..3600
+$env:SEMISKILL_PROGRESS_MAX_AGE_SECONDS = "300"   # 15..3600
 ```
 
-The dashboard validates the snapshot's semantic counts, provenance, database environment and
-snapshot ID. If it is absent or invalid, catalog metrics remain explicitly unavailable; API rows,
-database counts, seeds and test fixtures are never substitutes. Progress is independently validated
+The dashboard accepts only an observation-bound `semiskill.scoreboard/v2` snapshot for the exact
+`dv-84` scope and canonical registry/skills paths. It verifies age, the exact clean Git commit,
+registry bytes, every file below `skills/**` (including `_shared`), per-skill payload hashes, live
+database identity/state, all 15 migration checksums, and current structural security attestations.
+The Git witness is checked again after recomputation to close source-change races. If any witness is
+absent or mismatched, catalog metrics remain explicitly unavailable; API rows, database counts,
+seeds and test fixtures are never substitutes. Progress is independently age- and causality-checked
 against the loaded scoreboard and may be unavailable while the scoreboard remains available.
+Only a fixed, sanitized migration/adoption projection reaches the browser; operator identity,
+authentication context, reasons, endpoints and raw manifests remain server-side.
 The adversarial fixture is input inventory only. Until a corpus-hash-bound execution result is
 persisted, escape counts and outcomes display **not executed** and receive no feature, launch, or
 analytics credit.

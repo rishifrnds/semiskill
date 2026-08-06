@@ -6,6 +6,7 @@ from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.snapshot import (
     SnapshotUnavailable,
     finalize_scoreboard,
+    full_input_tree_sha256,
     load_progress,
     load_scoreboard_snapshot,
     write_json_atomic,
@@ -45,7 +46,17 @@ def _body():
         "scope": {"phase": "test", "expected_active": 0, "expected_declined": 0,
                   "expected_roles": 0, "target_per_role": 1},
         "sources": {
-            "repository": {"commit": "test-commit", "dirty": False},
+            "repository": {
+                "commit": "test-commit", "dirty": False,
+                "tree_sha256": "sha256:" + "2" * 64,
+            },
+            "registry": {
+                "path": "specs/skill_registry.json", "sha256": "sha256:" + "3" * 64,
+            },
+            "skills": {
+                "root": "skills", "tree_sha256": "sha256:" + "2" * 64,
+                "full_tree_sha256": "sha256:" + "4" * 64,
+            },
             "database": {
                 "engine": "postgresql", "database_name": "semiskill_test",
                 "environment": "test", "identity_sha256": "sha256:" + "1" * 64,
@@ -63,12 +74,27 @@ def _body():
     }
 
 
-def test_snapshot_id_ignores_observation_time_and_mapping_order():
+def test_snapshot_id_binds_observation_time_and_ignores_mapping_order():
     first = finalize_scoreboard(_body(), generated_at="2026-08-06T00:00:00Z")
     reordered = dict(reversed(list(_body().items())))
     second = finalize_scoreboard(reordered, generated_at="2026-08-07T00:00:00Z")
-    assert first["snapshot_id"] == second["snapshot_id"]
+    same_time = finalize_scoreboard(reordered, generated_at="2026-08-06T00:00:00Z")
+    assert first["snapshot_id"] != second["snapshot_id"]
+    assert first["snapshot_id"] == same_time["snapshot_id"]
     assert first["generated_at"] != second["generated_at"]
+
+
+def test_full_input_tree_hash_includes_top_level_shared_bytes(tmp_path):
+    root = tmp_path / "skills"
+    shared = root / "_shared"
+    shared.mkdir(parents=True)
+    source = shared / "review-contract.md"
+    source.write_text("first", encoding="utf-8")
+    before = full_input_tree_sha256(root)
+
+    source.write_text("second", encoding="utf-8")
+
+    assert full_input_tree_sha256(root) != before
 
 
 def test_atomic_write_round_trips_a_valid_snapshot(tmp_path):

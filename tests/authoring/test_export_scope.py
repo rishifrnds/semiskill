@@ -45,6 +45,7 @@ def _empty_snapshot(*, environment="test", dirty=False):
     })
     body["sources"]["skills"] = {
         "root": "skills", "tree_sha256": "sha256:" + "2" * 64,
+        "full_tree_sha256": "sha256:" + "4" * 64,
     }
     body["sources"]["database"]["environment"] = environment
     body["sources"]["database"]["database_name"] = (

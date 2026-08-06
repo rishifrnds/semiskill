@@ -14,7 +14,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
 
-SCOREBOARD_SCHEMA = "semiskill.scoreboard/v1"
+SCOREBOARD_SCHEMA = "semiskill.scoreboard/v2"
 PROGRESS_SCHEMA = "semiskill.progress/v1"
 _FLAG_NAMES = (
     "authored", "strict_lint_pass", "security_pass", "reviewed",
@@ -54,6 +54,36 @@ def _is_sha256(value: object) -> bool:
     return True
 
 
+def _is_reparse_point(path: Path) -> bool:
+    try:
+        stat = path.lstat()
+    except OSError as exc:
+        raise SnapshotUnavailable("scoreboard input tree is unavailable") from exc
+    return path.is_symlink() or bool(getattr(stat, "st_file_attributes", 0) & 0x400)
+
+
+def full_input_tree_sha256(root: str | Path) -> str:
+    """Hash every regular byte under the canonical skills root, including `_shared`."""
+    source = Path(root)
+    try:
+        source = source.resolve(strict=True)
+    except OSError as exc:
+        raise SnapshotUnavailable("scoreboard skills root is unavailable") from exc
+    if not source.is_dir() or _is_reparse_point(source):
+        raise SnapshotUnavailable("scoreboard skills root must be a real directory")
+    rows: list[str] = []
+    for path in sorted(source.rglob("*"), key=lambda item: item.relative_to(source).as_posix()):
+        if _is_reparse_point(path):
+            raise SnapshotUnavailable("scoreboard input tree cannot contain links or reparse points")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise SnapshotUnavailable("scoreboard input tree contains an unsupported entry")
+        relative = path.relative_to(source).as_posix()
+        rows.append(f"{relative}\0{hashlib.sha256(path.read_bytes()).hexdigest()}")
+    return "sha256:" + hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest()
+
+
 def _semantic_validate_scoreboard(document: dict) -> None:
     """Recompute every count exposed by a persisted/provider-supplied scoreboard."""
     try:
@@ -82,6 +112,8 @@ def _semantic_validate_scoreboard(document: dict) -> None:
         raise SnapshotUnavailable("scoreboard target_per_role must be positive")
     sources = document.get("sources")
     repository = sources.get("repository") if isinstance(sources, dict) else None
+    registry_source = sources.get("registry") if isinstance(sources, dict) else None
+    skills_source = sources.get("skills") if isinstance(sources, dict) else None
     database = sources.get("database") if isinstance(sources, dict) else None
     if (
         not isinstance(repository, dict)
@@ -90,6 +122,18 @@ def _semantic_validate_scoreboard(document: dict) -> None:
         or type(repository.get("dirty")) is not bool
     ):
         raise SnapshotUnavailable("scoreboard repository provenance is invalid")
+    if (
+        not isinstance(registry_source, dict)
+        or not isinstance(registry_source.get("path"), str)
+        or not registry_source["path"].strip()
+        or not _is_sha256(registry_source.get("sha256"))
+        or not isinstance(skills_source, dict)
+        or not isinstance(skills_source.get("root"), str)
+        or not skills_source["root"].strip()
+        or not _is_sha256(skills_source.get("tree_sha256"))
+        or not _is_sha256(skills_source.get("full_tree_sha256"))
+    ):
+        raise SnapshotUnavailable("scoreboard source-tree provenance is invalid")
     if (
         not isinstance(database, dict)
         or not isinstance(database.get("engine"), str)
@@ -273,14 +317,13 @@ def _semantic_validate_scoreboard(document: dict) -> None:
 def _canonical_bytes(document: dict) -> bytes:
     body = deepcopy(document)
     body.pop("snapshot_id", None)
-    body.pop("generated_at", None)
     return json.dumps(
         body, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
     ).encode("utf-8")
 
 
 def finalize_scoreboard(body: dict, *, generated_at: str) -> dict:
-    """Stamp schema/time and derive an ID unaffected by observation time or mapping order."""
+    """Stamp schema/time and derive an observation-bound, mapping-order-stable ID."""
     if not isinstance(body, dict):
         raise ValueError("scoreboard body must be an object")
     document = deepcopy(body)
@@ -1325,6 +1368,16 @@ def build_scoreboard_snapshot(
         f"{slug}:{source_hashes.get(slug, 'invalid:' + source_errors.get(slug, 'missing'))}"
         for slug in sorted(disk_slugs)
     ).encode("utf-8")
+    full_tree_sha256 = full_input_tree_sha256(root)
+    source_registry_path = registry_file.as_posix()
+    source_skills_root = root.as_posix()
+    if repository_root is not None:
+        repository_path = Path(repository_root).resolve()
+        try:
+            source_registry_path = registry_file.resolve().relative_to(repository_path).as_posix()
+            source_skills_root = root.resolve().relative_to(repository_path).as_posix()
+        except ValueError as exc:
+            raise SnapshotUnavailable("scoreboard sources must stay inside the repository") from exc
     database = store.database_identity(environment=environment) if hasattr(
         store, "database_identity"
     ) else {"engine": "unknown", "environment": environment, "database_name": "unknown",
@@ -1345,9 +1398,13 @@ def build_scoreboard_snapshot(
         "sources": {
             "repository": {"commit": source_commit, "dirty": bool(repository_dirty),
                            "tree_sha256": _sha256_bytes(skill_tree_material)},
-            "registry": {"path": registry_file.as_posix(),
+            "registry": {"path": source_registry_path,
                          "sha256": _sha256_bytes(registry_bytes)},
-            "skills": {"root": root.as_posix(), "tree_sha256": _sha256_bytes(skill_tree_material)},
+            "skills": {
+                "root": source_skills_root,
+                "tree_sha256": _sha256_bytes(skill_tree_material),
+                "full_tree_sha256": full_tree_sha256,
+            },
             "database": database,
         },
         "policy": {"required_scan_stages": [1, 2, 3, 4, 6], "judge_stage": 5,
