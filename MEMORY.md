@@ -602,9 +602,18 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a6 run the full isolated verification gate for the export/dashboard tranche
 
 
+- [J-010a6] 2026-08-06T11:58:43Z  status: done
+  what: ran the full suite serially on the isolated test database and independently audited the
+  deterministic scoreboard, corrected live dashboard, exact-scope exporters and shared dependencies
+  artifacts: c3dc355, 711 passed, 4 skipped, 1 xpassed; scoreboard snapshot
+  sha256:902575ca982023f8e122dfc5756d67bc398475a70d125a3f836f57fc0621a480;
+  catalog-contract, Terra-scoreboard and shared-vendor read-only audits
+  next: J-010a7 add explicit audited legacy migration-checksum adoption and refresh development state
+
+
 ## In-Flight Step
-- [J-010a6] run the full Python suite serially against isolated semiskill_test, reconcile the live
-  dashboard, and audit the export/dashboard tranche before vendoring shared dependencies.
+- [J-010a7] add explicit audited adoption for legacy migration checksums, apply pending migrations
+  0011/0012 to development, and regenerate the canonical scoreboard snapshot.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
