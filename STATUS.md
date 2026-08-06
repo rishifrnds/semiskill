@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T07:52:34Z_
+_Last updated: 2026-08-06T08:00:26Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-009b: derive the canonical 84/20 funnel and every role/level cell from registry, filesystem,
-  strict lint, consistency and exact artifact chains; add conservation/release invariants.
+- J-009c: expose explicit snapshot generation and fail-closed read-only `/scoreboard` and
+  `/progress` providers; no API or dashboard path may infer counts or use fixture fallbacks.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -42,5 +42,5 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   Entra-only, legacy approvals are non-authoritative, and unpublish is an authenticated correction.
 
 ## Last checkpoint commit
-- 496d424: canonical snapshot/progress schemas now have stable IDs, atomic persistence, fail-closed
-  loaders and a non-secret database identity.
+- dab1562: the canonical 84/20 snapshot now reconciles every cell, exact hashes and evidence
+  chains, anomalies, funnel/role conservation and strict release checks; 21 focused tests pass.

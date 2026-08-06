@@ -506,9 +506,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-009b compute the full 84/20 cell/funnel/anomaly snapshot from authoritative inputs
 
 
+- [J-009b] 2026-08-06T08:00:26Z  status: done
+  what: derived the canonical 84-active/20-declined scoreboard from registry, source payloads,
+  strict lint, consistency and exact security/review/approval chains; every cell now exposes
+  state, hashes, provenance and blockers, while role/funnel conservation and anomaly-driven
+  release checks fail closed; exact-version reviews can no longer be shadowed by other versions
+  artifacts: dab1562, semiskill/authoring/snapshot.py, semiskill/authoring/gate.py,
+  tests/authoring/test_snapshot_builder.py, 21 passed
+  next: J-009c expose explicit snapshot generation and fail-closed read-only API endpoints
+
+
 ## In-Flight Step
-- [J-009b] compute the full 84-active/20-declined canonical cell matrix, funnel, role targets,
-  consistency/lint state, anomalies and exact review/approval provenance from authoritative inputs.
+- [J-009c] expose explicit canonical snapshot generation through the CLI and injected read-only
+  `/scoreboard` and `/progress` API providers; unavailable or malformed snapshots return 503.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
