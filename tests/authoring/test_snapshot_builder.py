@@ -1,4 +1,5 @@
 import json
+import uuid
 from dataclasses import replace
 from pathlib import Path
 
@@ -6,19 +7,24 @@ import pytest
 
 from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.artifacts.migrate import apply_migrations
-from semiskill.artifacts.store import PostgresArtifactStore
+from semiskill.artifacts.store import (
+    PostgresArtifactStore,
+    PublicationReconciliationBundle,
+)
 from semiskill.authoring.gate import make_content_review
 from semiskill.authoring.snapshot import SnapshotUnavailable, build_scoreboard_snapshot
 from semiskill.capture.intake import build_skill_version, load_skill_dir
+from semiskill.governance.reconciliation import _chain_sha256
 from tests.support import content_checks, publish_test_skill, publish_wave_sources
 
 MIGRATIONS = Path("semiskill/artifacts/migrations")
 
 
 class MemoryStore:
-    def __init__(self, rows=(), database_name="semiskill_dev"):
+    def __init__(self, rows=(), database_name="semiskill_dev", projections=()):
         self.rows = list(rows)
         self.database_name = database_name
+        self.projections = tuple(projections)
 
     def get(self, artifact_id):
         return next((row for row in self.rows if row.artifact_id == artifact_id), None)
@@ -30,6 +36,9 @@ class MemoryStore:
         return {"engine": "memory", "environment": environment,
                 "database_name": self.database_name,
                 "identity_sha256": "sha256:" + "1" * 64}
+
+    def publication_reconciliation_bundle(self):
+        return PublicationReconciliationBundle(tuple(self.rows), self.projections)
 
 
 def _rows(store):
@@ -176,7 +185,7 @@ def test_source_edit_is_published_stale_without_rewriting_frozen_badge(store, tm
 def test_prior_version_review_is_stale_evidence_without_review_funnel_credit(tmp_path):
     old = build_skill_version(skill_md=_skill("dv-one"), actor="author")
     old_review = make_content_review(
-        skill_version=old, phase="recheck", prompt_version="P5@2", run_id="old-run",
+        skill_version=old, phase="recheck", prompt_version="P5-RECHECK-CALIBRATED@2", run_id="old-run",
         batch_id="old-batch", attempt=1, reviewer_identity="old-reviewer",
         fixer_identity="old-fixer", checks=content_checks(), findings=[],
     )
@@ -216,7 +225,7 @@ def test_later_review_for_another_version_does_not_taint_frozen_badge(store, tmp
         actor="author",
     ))
     later = make_content_review(
-        skill_version=newer, phase="recheck", prompt_version="P5@2", run_id="new-run",
+        skill_version=newer, phase="recheck", prompt_version="P5-RECHECK-CALIBRATED@2", run_id="new-run",
         batch_id="new-batch", attempt=1, reviewer_identity="new-reviewer",
         fixer_identity="new-fixer", checks=content_checks(), findings=[{
             "finding_id": "B-1", "category": "correctness", "severity": "blocking",
@@ -248,7 +257,7 @@ def test_later_exact_lineage_collision_blocks_release_without_rewriting_badge(st
     directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
     fixture = publish_wave_sources(store, root)[0]
     duplicate = make_content_review(
-        skill_version=fixture.skill_version, phase="recheck", prompt_version="P5@2",
+        skill_version=fixture.skill_version, phase="recheck", prompt_version="P5-RECHECK-CALIBRATED@2",
         run_id="duplicate-run", batch_id="duplicate-batch", attempt=1,
         reviewer_identity="duplicate-reviewer", fixer_identity="duplicate-fixer",
         checks=content_checks(), findings=[],
@@ -332,7 +341,10 @@ def test_snapshot_environment_rejects_approval_from_other_environment(store, tmp
     directory.mkdir(parents=True)
     directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
     fixture = publish_wave_sources(store, root)[0]
-    memory = MemoryStore(_rows(store), database_name="semiskill_dev")
+    memory = MemoryStore(
+        _rows(store), database_name="semiskill_dev",
+        projections=store.publication_reconciliation_bundle().projections,
+    )
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
     ])
@@ -405,7 +417,10 @@ def test_cross_skill_correction_is_invalid_and_cannot_suppress_publication(store
         corrects_ref=first.approval.artifact_id,
         rollback_ref=second.approval.rollback_ref,
     )
-    memory = MemoryStore([*_rows(store), forged], database_name="semiskill_test")
+    memory = MemoryStore(
+        [*_rows(store), forged], database_name="semiskill_test",
+        projections=store.publication_reconciliation_bundle().projections,
+    )
     registry = _registry(tmp_path / "registry.json", [
         {"slug": slug, "role": "dv-engineer", "level": "senior"}
         for slug in ("dv-one", "dv-two")
@@ -442,7 +457,10 @@ def test_branched_approval_corrections_are_invalid_and_do_not_hide_valid_head(st
             corrects_ref=fixture.approval.artifact_id,
             rollback_ref=fixture.approval.rollback_ref,
         ))
-    memory = MemoryStore([*_rows(store), *branches], database_name="semiskill_test")
+    memory = MemoryStore(
+        [*_rows(store), *branches], database_name="semiskill_test",
+        projections=store.publication_reconciliation_bundle().projections,
+    )
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
     ])
@@ -460,6 +478,56 @@ def test_branched_approval_corrections_are_invalid_and_do_not_hide_valid_head(st
     assert snapshot["conservation"]["passed"] is True
 
 
+@pytest.mark.integration
+def test_duplicate_projected_heads_credit_zero_and_mark_the_registry_cell_invalid(store, tmp_path):
+    root = tmp_path / "skills"
+    directory = root / "dv-one"
+    directory.mkdir(parents=True)
+    directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
+    fixture = publish_wave_sources(store, root)[0]
+    bundle = store.publication_reconciliation_bundle()
+    base_row = bundle.projections[0]
+    clone_id = uuid.uuid4()
+    clone = replace(
+        fixture.approval,
+        artifact_id=clone_id,
+        rollback_ref={
+            "action": "unpublish",
+            "skill_version_id": str(fixture.skill_version.artifact_id),
+            "approval_id": str(clone_id),
+        },
+    )
+    clone_row = replace(
+        base_row,
+        approval_id=clone_id,
+        activated_at=clone.timestamp_start,
+        chain_sha256="0" * 64,
+    )
+    clone_row = replace(clone_row, chain_sha256=_chain_sha256(clone, clone_row))
+    memory = MemoryStore(
+        [*_rows(store), clone],
+        database_name="semiskill_test",
+        projections=(*bundle.projections, clone_row),
+    )
+    registry = _registry(tmp_path / "registry.json", [
+        {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
+    ])
+
+    snapshot = build_scoreboard_snapshot(
+        store=memory, registry_path=registry, skills_root=root,
+        generated_at="2026-08-06T00:00:00Z", expected_active=1, expected_declined=0,
+        expected_roles=1, target_per_role=1, environment="test",
+        source_commit="test", repository_dirty=False,
+    )
+    assert snapshot["funnel"]["published"] == 0
+    assert snapshot["anomalies"]["duplicate_active_publications"] == ["dv-one"]
+    assert snapshot["cells"][0]["state"] == "invalid"
+    assert any(
+        blocker["code"] == "DUPLICATE_PUBLICATION_HEAD"
+        for blocker in snapshot["cells"][0]["blockers"]
+    )
+
+
 def test_database_environment_label_cannot_disguise_test_state(tmp_path):
     root = tmp_path / "skills"
     root.mkdir()
@@ -470,5 +538,19 @@ def test_database_environment_label_cannot_disguise_test_state(tmp_path):
             skills_root=root, generated_at="2026-08-06T00:00:00Z",
             expected_active=0, expected_declined=0, expected_roles=0,
             target_per_role=1, environment="development", source_commit="test",
+            repository_dirty=False,
+        )
+
+
+def test_production_snapshot_requires_explicit_entra_tenant_policy(tmp_path):
+    root = tmp_path / "skills"
+    root.mkdir()
+    registry = _registry(tmp_path / "registry.json", [])
+    with pytest.raises(SnapshotUnavailable, match="Entra issuer and tenant policy"):
+        build_scoreboard_snapshot(
+            store=MemoryStore(database_name="semiskill_prod"), registry_path=registry,
+            skills_root=root, generated_at="2026-08-06T00:00:00Z",
+            expected_active=0, expected_declined=0, expected_roles=0,
+            target_per_role=1, environment="production", source_commit="test",
             repository_dirty=False,
         )

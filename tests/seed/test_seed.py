@@ -29,11 +29,15 @@ def test_clean_seed_is_scanned_and_queued_without_auto_approval(store, pg_dsn):
     scans = [a for a in store.by_type(ArtifactType.SCAN_RUN) if r.skill_version_id in a.input_refs]
     assert scans and not any(a.payload.get("hard_fail") for a in scans)          # passing scan trail
     assert store.by_type(ArtifactType.APPROVAL) == []
-    assert search_catalog(dsn=pg_dsn, principal=["team"]) == []
+    assert search_catalog(
+        dsn=pg_dsn, principal=["team"], trusted_clearance=True,
+    ) == []
 
 
 @pytest.mark.integration
 def test_broken_seed_blocked_identically(store, pg_dsn):
     r = seed_skill(store=store, dsn=pg_dsn, skill_md=BROKEN)
     assert r.published is False and r.blocked_at is not None
-    assert search_catalog(dsn=pg_dsn, principal=["team"]) == []                  # never discoverable
+    assert search_catalog(
+        dsn=pg_dsn, principal=["team"], trusted_clearance=True,
+    ) == []  # never discoverable

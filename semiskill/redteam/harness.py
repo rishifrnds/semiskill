@@ -73,7 +73,9 @@ def run_case(store, dsn: str, case: RedTeamCase) -> CaseResult:
     # Pipeline execution is queue-only. Forgery/detached-evidence resistance is exercised against
     # the authenticated approval actuator in governance tests, never through a callback shortcut.
     slug = sv.payload["slug"]
-    in_catalog = slug in {c.slug for c in search_catalog(dsn=dsn, principal=_ALL_LABELS)}
+    in_catalog = slug in {c.slug for c in search_catalog(
+        dsn=dsn, principal=_ALL_LABELS, trusted_clearance=True,
+    )}
     return CaseResult(name=case.name, attack_class=case.attack_class, caught=caught,
                       published=in_catalog, corpus_readable=corpus_readable_by_pipeline(dsn))
 

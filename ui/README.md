@@ -20,8 +20,9 @@ production scaffold.
 ## Data source
 All data comes from the read API — never a direct DB call from the browser:
 `GET /catalog?q=&function=&role=&level=` · `GET /skill/<id>` · `GET /queue` · `GET /lineage/<id>` ·
-`GET /reuse/<id>`. The caller's clearance is the `X-Principal-Labels` header (SharePoint identity →
-labels mapping is the integration point). See `lib/api.ts`.
+`GET /reuse/<id>`. Restricted requests carry a verified Entra/OIDC bearer token. The API maps the
+authenticated tenant, object ID, and groups to permission labels server-side; caller-supplied label
+headers are ignored. Requests without a token receive public-only results. See `lib/api.ts`.
 
 ## Run (production path — remaining productionization)
 ```bash
@@ -37,5 +38,5 @@ cd ui && npm install && npm run dev            # Next.js on http://localhost:300
 ## SharePoint embedding (ADR-004)
 1. Host the Next.js app (internal URL, egress-controlled).
 2. Add an **Embed** web part (or a minimal SPFx web part) to the SharePoint page pointing at it.
-3. Pass the signed-in user's groups as `X-Principal-Labels` (SSO → labels) so the same ACL the API
-   enforces governs what each employee sees.
+3. Forward the signed-in user's Entra/OIDC bearer token to the API. Configure the server-side group
+   mapping and a dedicated clearance database identity; never trust browser-supplied labels.

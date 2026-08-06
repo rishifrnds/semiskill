@@ -36,5 +36,11 @@ def test_artifact_get_filters_by_label(pg_dsn):
             "SELECT count(*) FROM artifact_get(%s, ARRAY['regulated'])", (aid,)
         ).fetchone()[0]
         conn.execute("RESET ROLE")
+        conn.execute("SET ROLE semiskill_acl_reader")
+        n_cleared = conn.execute(
+            "SELECT count(*) FROM artifact_get(%s, ARRAY['regulated'])", (aid,)
+        ).fetchone()[0]
+        conn.execute("RESET ROLE")
     assert n_wrong == 0
-    assert n_right == 1
+    assert n_right == 0  # ordinary app requests cannot self-assert restricted clearance
+    assert n_cleared == 1

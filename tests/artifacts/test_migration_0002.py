@@ -27,6 +27,7 @@ def _publish(store, sv):
 
 def _search(dsn, q, labels, f_function=None, f_role=None, f_level=None):
     with psycopg.connect(dsn) as conn:
+        conn.execute("SET LOCAL ROLE semiskill_acl_reader")
         rows = conn.execute(
             "SELECT slug FROM catalog_search(%s,%s,%s,%s,%s,%s)",
             (q, labels, f_function, f_role, f_level, 100),
@@ -54,7 +55,7 @@ def test_facet_and_text_filters(store, pg_dsn):
 
 
 @pytest.mark.integration
-def test_semiskill_app_can_execute_catalog_search(store, pg_dsn):
+def test_semiskill_app_catalog_search_is_public_only(store, pg_dsn):
     _publish(store, build_skill_version(skill_md=_md("X", "dv/x"), actor="a"))
     with psycopg.connect(pg_dsn) as conn:
         conn.execute("SET ROLE semiskill_app")
@@ -62,4 +63,4 @@ def test_semiskill_app_can_execute_catalog_search(store, pg_dsn):
             "SELECT count(*) FROM catalog_search('', ARRAY['team'], NULL, NULL, NULL, 100)"
         ).fetchone()[0]
         conn.execute("RESET ROLE")
-    assert n == 1
+    assert n == 0

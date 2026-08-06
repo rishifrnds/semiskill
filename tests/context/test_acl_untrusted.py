@@ -1,6 +1,10 @@
 import json
 import pytest
-from semiskill.context.acl import resolve_allowed_labels
+from semiskill.context.acl import (
+    EntraPrincipalResolver,
+    PrincipalUnauthenticated,
+    resolve_allowed_labels,
+)
 from semiskill.context.untrusted import delimit
 
 
@@ -11,6 +15,54 @@ def test_resolve_dedups_and_sorts():
 def test_resolve_fails_closed_on_empty():
     with pytest.raises(ValueError):
         resolve_allowed_labels([])
+
+
+def test_entra_resolver_maps_only_verified_configured_groups():
+    received = []
+
+    class Verifier:
+        def verify(self, assertion):
+            received.append(assertion)
+            return {
+                "iss": "issuer", "tid": "tenant", "oid": "object-id",
+                "groups": ["dv-team", "unknown-group"],
+            }
+
+    resolver = EntraPrincipalResolver(
+        verifier=Verifier(), expected_issuer="issuer", expected_tenant="tenant",
+        group_labels={"dv-team": ("team", "need-to-know")},
+    )
+    principal = resolver({
+        "Authorization": "Bearer signed-token",
+        "X-Principal-Labels": "regulated",
+    })
+    assert received == ["signed-token"]
+    assert principal.provider == "entra_oidc" and principal.subject == "object-id"
+    assert principal.labels == ("need-to-know", "public", "team")
+
+
+@pytest.mark.parametrize("headers", [{}, {"Authorization": "Basic abc"},
+                                      {"Authorization": "Bearer "}])
+def test_entra_resolver_requires_bearer_assertion(headers):
+    resolver = EntraPrincipalResolver(
+        verifier=object(), expected_issuer="issuer", expected_tenant="tenant",
+        group_labels={},
+    )
+    with pytest.raises(PrincipalUnauthenticated):
+        resolver(headers)
+
+
+def test_entra_resolver_rejects_wrong_tenant_claims():
+    class Verifier:
+        def verify(self, _assertion):
+            return {"iss": "issuer", "tid": "other", "oid": "object-id"}
+
+    resolver = EntraPrincipalResolver(
+        verifier=Verifier(), expected_issuer="issuer", expected_tenant="tenant",
+        group_labels={},
+    )
+    with pytest.raises(PrincipalUnauthenticated, match="issuer or tenant"):
+        resolver({"Authorization": "Bearer signed"})
 
 
 def test_delimit_brackets_untrusted_payload():

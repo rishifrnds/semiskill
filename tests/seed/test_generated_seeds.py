@@ -33,6 +33,11 @@ def test_generated_seed_wave_is_scanned_and_queued_without_auto_approval(store, 
         assert not any(a.input_refs and a.input_refs[0] == r.skill_version_id
                        for a in store.by_type(ArtifactType.APPROVAL))
 
-    cat = {c.slug for c in search_catalog(dsn=pg_dsn, principal=["team"])}
-    dv = {c.slug for c in search_catalog(dsn=pg_dsn, principal=["team"], function="design-verification")}
+    cat = {c.slug for c in search_catalog(
+        dsn=pg_dsn, principal=["team"], trusted_clearance=True,
+    )}
+    dv = {c.slug for c in search_catalog(
+        dsn=pg_dsn, principal=["team"], function="design-verification",
+        trusted_clearance=True,
+    )}
     assert cat == set() and dv == set()

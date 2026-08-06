@@ -12,9 +12,19 @@ from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, Act
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.capture.intake import build_skill_version
 from semiskill.authoring.snapshot import SnapshotUnavailable, finalize_scoreboard
+from semiskill.context.acl import (
+    PrincipalUnauthenticated,
+    ResolvedPrincipal,
+)
 from tests.support import publish_test_skill
 
 MIG = Path("semiskill/artifacts/migrations")
+
+
+def _test_principal_resolver(headers) -> ResolvedPrincipal:
+    raw = headers.get("X-Principal-Labels", "public")
+    labels = tuple(label.strip() for label in raw.split(",") if label.strip())
+    return ResolvedPrincipal(subject="test-user", provider="test-resolver", labels=labels)
 
 
 def _publish(store, slug, label="team"):
@@ -32,7 +42,10 @@ def server(pg_dsn):
     _publish(store, "dv/pub-team", "team")
     _publish(store, "dv/pub-reg", "regulated")
     store.append(build_skill_version(skill_md="---\nname: D\nslug: dv/draft\n---\nb", actor="a"))  # unpublished
-    httpd = serve(port=0, dsn=pg_dsn)
+    httpd = serve(
+        port=0, dsn=pg_dsn, clearance_dsn=pg_dsn,
+        principal_resolver=_test_principal_resolver,
+    )
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
     yield f"http://127.0.0.1:{httpd.server_address[1]}", store
@@ -70,6 +83,8 @@ def _snapshot_server(
         port=0, dsn="postgresql://unreachable:secret@127.0.0.1:1/never_used",
         scoreboard_provider=scoreboard_provider, progress_provider=progress_provider,
         operator_authorizer=(lambda _headers: True) if authorized else None,
+        principal_resolver=_test_principal_resolver,
+        clearance_dsn="postgresql://clearance:secret@127.0.0.1:1/never_used",
         snapshot_environment=snapshot_environment,
     )
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -93,6 +108,198 @@ def test_catalog_is_acl_filtered(server):
     assert team == {"dv/pub-team"}                                   # regulated + draft hidden
     both = {c["slug"] for c in _get(base, "/catalog", labels="team,regulated")[1]["results"]}
     assert both == {"dv/pub-team", "dv/pub-reg"}
+
+
+@pytest.mark.integration
+def test_clearance_header_cannot_self_assert_restricted_labels(server, pg_dsn):
+    httpd = serve(port=0, dsn=pg_dsn)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        code, body = _get(base, "/catalog", labels="team,regulated")
+        assert code == 200
+        assert body["results"] == []
+    finally:
+        httpd.shutdown()
+
+
+@pytest.mark.integration
+def test_explicit_resolver_ignores_forged_labels_outside_its_result(server, pg_dsn):
+    def team_only(_headers):
+        return ResolvedPrincipal(
+            subject="team-user", provider="test-resolver", labels=("team",),
+        )
+
+    httpd = serve(
+        port=0, dsn=pg_dsn, clearance_dsn=pg_dsn, principal_resolver=team_only,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        slugs = {
+            row["slug"] for row in _get(base, "/catalog", labels="regulated")[1]["results"]
+        }
+        assert slugs == {"dv/pub-team"}
+    finally:
+        httpd.shutdown()
+
+
+@pytest.mark.integration
+def test_resolver_is_called_once_for_skill_detail(server, pg_dsn):
+    _base, store = server
+    skill = next(
+        artifact for artifact in store.by_type(ArtifactType.SKILL_VERSION)
+        if artifact.payload.get("slug") == "dv/pub-team"
+    )
+    calls = 0
+
+    def resolver(_headers):
+        nonlocal calls
+        calls += 1
+        return ResolvedPrincipal(
+            subject="team-user", provider="test-resolver", labels=("team",),
+        )
+
+    httpd = serve(
+        port=0, dsn=pg_dsn, clearance_dsn=pg_dsn, principal_resolver=resolver,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        code, _body = _get(base, f"/skill/{skill.artifact_id}")
+        assert code == 200 and calls == 1
+    finally:
+        httpd.shutdown()
+
+
+@pytest.mark.integration
+def test_lineage_and_reuse_endpoints_are_bound_to_published_artifacts(server):
+    base, store = server
+    approval = next(
+        artifact for artifact in store.by_type(ArtifactType.APPROVAL)
+        if artifact.payload.get("skill", {}).get("slug") == "dv/pub-team"
+    )
+    skill_id = approval.input_refs[0]
+    lineage_status, lineage = _get(base, f"/lineage/{approval.artifact_id}", labels="team")
+    reuse_status, reuse = _get(base, f"/reuse/{skill_id}", labels="team")
+    assert lineage_status == 200
+    assert {node["artifact_id"] for node in lineage["nodes"]} >= {
+        str(approval.artifact_id), str(skill_id),
+    }
+    assert reuse_status == 200 and reuse == {"reuse": []}
+
+
+@pytest.mark.integration
+def test_operator_queue_is_not_authorized_by_catalog_clearance(server):
+    base, _store = server
+    status, body = _get(base, "/queue", labels="team,regulated")
+    assert status == 403 and body["error"]["code"] == "OPERATOR_AUTH_REQUIRED"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("route", ["skill", "lineage", "reuse"])
+def test_artifact_routes_reject_malformed_uuid(server, route):
+    base, _store = server
+    status, body = _get(base, f"/{route}/not-a-uuid", labels="team")
+    assert status == 400 and body["error"]["code"] == "INVALID_ARTIFACT_ID"
+
+
+def test_configured_resolver_without_clearance_database_fails_closed():
+    httpd = serve(
+        port=0, dsn="postgresql://unreachable:secret@127.0.0.1:1/never_used",
+        principal_resolver=_test_principal_resolver,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        status, body = _get(base, "/catalog")
+        assert status == 503 and body["error"]["code"] == "IDENTITY_UNAVAILABLE"
+    finally:
+        httpd.shutdown()
+
+
+def test_production_server_refuses_missing_entra_composition():
+    with pytest.raises(RuntimeError, match="Entra principal resolver"):
+        serve(
+            port=0, dsn="postgresql://runtime:secret@db/semiskill",
+            snapshot_environment="production",
+        )
+
+
+def test_operator_authorizer_exception_fails_closed():
+    def broken(_headers):
+        raise RuntimeError("secret operator detail")
+
+    httpd = serve(
+        port=0, dsn="postgresql://unreachable:secret@127.0.0.1:1/never_used",
+        operator_authorizer=broken,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        status, body = _get(base, "/queue")
+        assert status == 403 and body["error"]["code"] == "OPERATOR_AUTH_REQUIRED"
+        assert "secret" not in json.dumps(body)
+    finally:
+        httpd.shutdown()
+
+
+@pytest.mark.parametrize(
+    ("resolver", "expected_status", "expected_code"),
+    [
+        (lambda _headers: (_ for _ in ()).throw(PrincipalUnauthenticated("secret-token")),
+         401, "AUTHENTICATION_REQUIRED"),
+        (lambda _headers: (_ for _ in ()).throw(RuntimeError("secret-token")),
+         503, "IDENTITY_UNAVAILABLE"),
+        (lambda _headers: ["team"], 503, "IDENTITY_UNAVAILABLE"),
+    ],
+)
+def test_principal_resolution_failures_are_structured_and_do_not_leak(
+    resolver, expected_status, expected_code,
+):
+    unreachable = "postgresql://unreachable:secret@127.0.0.1:1/never_used"
+    httpd = serve(
+        port=0, dsn=unreachable, clearance_dsn=unreachable,
+        principal_resolver=resolver,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        status, body = _get(base, "/catalog")
+        assert status == expected_status
+        assert body["error"]["code"] == expected_code
+        assert "secret-token" not in json.dumps(body)
+    finally:
+        httpd.shutdown()
+
+
+def test_unknown_route_does_not_invoke_principal_resolver():
+    called = False
+
+    def resolver(_headers):
+        nonlocal called
+        called = True
+        raise RuntimeError("must not run")
+
+    httpd = serve(
+        port=0, dsn="postgresql://unreachable:secret@127.0.0.1:1/never_used",
+        clearance_dsn="postgresql://unreachable:secret@127.0.0.1:1/never_used",
+        principal_resolver=resolver,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        status, _body = _get(base, "/unknown")
+        assert status == 404 and called is False
+    finally:
+        httpd.shutdown()
 
 
 @pytest.mark.integration

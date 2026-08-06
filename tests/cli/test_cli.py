@@ -3,6 +3,7 @@ import json
 import pytest
 from pathlib import Path
 from semiskill.artifacts.schema import Artifact, ArtifactType
+from semiskill.artifacts.store import PublicationReconciliationBundle
 from semiskill.authoring.snapshot import load_scoreboard_snapshot
 from semiskill.cli import build_parser, main
 
@@ -31,6 +32,9 @@ class FakeStore:
 
     def by_type(self, t: ArtifactType):
         return [r for r in self.rows if r.artifact_type == t]
+
+    def publication_reconciliation_bundle(self):
+        return PublicationReconciliationBundle(tuple(self.rows), ())
 
 
 @pytest.fixture

@@ -29,6 +29,49 @@ def test_apply_is_idempotent(pg_dsn, tmp_path):
 
 
 @pytest.mark.integration
+def test_applied_migration_content_cannot_change_silently(pg_dsn, tmp_path):
+    migration = tmp_path / "9002_checksum_probe.sql"
+    migration.write_text("CREATE TABLE checksum_probe (id int);", encoding="utf-8")
+    with psycopg.connect(pg_dsn, autocommit=True) as conn:
+        conn.execute("DROP TABLE IF EXISTS checksum_probe")
+        conn.execute(
+            "DELETE FROM schema_migrations WHERE filename = '9002_checksum_probe.sql'"
+        )
+    try:
+        assert apply_migrations(pg_dsn, tmp_path) == ["9002_checksum_probe.sql"]
+        migration.write_text(
+            "CREATE TABLE checksum_probe (id bigint);", encoding="utf-8",
+        )
+        with pytest.raises(RuntimeError, match="checksum differs"):
+            apply_migrations(pg_dsn, tmp_path)
+    finally:
+        with psycopg.connect(pg_dsn, autocommit=True) as conn:
+            conn.execute("DROP TABLE IF EXISTS checksum_probe")
+            conn.execute(
+                "DELETE FROM schema_migrations WHERE filename = '9002_checksum_probe.sql'"
+            )
+
+
+@pytest.mark.integration
+def test_legacy_null_checksum_is_never_silently_blessed(pg_dsn, tmp_path):
+    migration = tmp_path / "9003_legacy_probe.sql"
+    migration.write_text("SELECT 1;", encoding="utf-8")
+    with psycopg.connect(pg_dsn, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO schema_migrations (filename,sha256) VALUES "
+            "('9003_legacy_probe.sql',NULL) ON CONFLICT (filename) DO UPDATE SET sha256=NULL"
+        )
+    try:
+        with pytest.raises(RuntimeError, match="audited adoption is required"):
+            apply_migrations(pg_dsn, tmp_path)
+    finally:
+        with psycopg.connect(pg_dsn, autocommit=True) as conn:
+            conn.execute(
+                "DELETE FROM schema_migrations WHERE filename='9003_legacy_probe.sql'"
+            )
+
+
+@pytest.mark.integration
 def test_0001_schema_present(pg_dsn):
     # The real 0001 (applied once per session) creates the 17-column artifacts table + enum.
     apply_migrations(pg_dsn, MIG)  # idempotent no-op here

@@ -32,12 +32,90 @@ class AuthenticatedHuman:
     auth_context: dict = field(default_factory=dict)
 
     def __post_init__(self):
-        if not self.actor.strip() or not self.subject.strip():
+        if (not isinstance(self.actor, str) or not self.actor.strip()
+                or not isinstance(self.subject, str) or not self.subject.strip()):
             raise IdentityRefused("authenticated actor and subject are required")
-        if self.provider not in {"local_os", "entra_oidc"}:
+        if not isinstance(self.provider, str) or self.provider not in {"local_os", "entra_oidc"}:
             raise IdentityRefused(f"unsupported identity provider: {self.provider!r}")
         if not isinstance(self.auth_context, dict):
             raise IdentityRefused("authentication context must be an object")
+        if self.provider == "local_os":
+            account = self.auth_context.get("account")
+            sid = self.auth_context.get("sid")
+            uid = self.auth_context.get("uid")
+            if account != self.actor:
+                raise IdentityRefused("local identity actor is not bound to its OS account")
+            if isinstance(sid, str) and sid:
+                if self.subject != sid:
+                    raise IdentityRefused("local identity subject is not bound to its SID")
+            elif type(uid) is int and uid >= 0:
+                if self.subject != f"uid:{uid}":
+                    raise IdentityRefused("local identity subject is not bound to its uid")
+            else:
+                raise IdentityRefused("local identity requires a SID or uid")
+        else:
+            issuer = self.auth_context.get("issuer")
+            tenant = self.auth_context.get("tenant_id")
+            object_id = self.auth_context.get("object_id")
+            if not all(isinstance(value, str) and value.strip()
+                       for value in (issuer, tenant, object_id)):
+                raise IdentityRefused("Entra identity requires issuer, tenant, and object ID")
+            if object_id != self.subject:
+                raise IdentityRefused("Entra identity subject is not bound to its object ID")
+
+
+def validate_identity_policy(
+    identity: AuthenticatedHuman,
+    *,
+    environment: str,
+    expected_entra_issuer: str | None = None,
+    expected_entra_tenant: str | None = None,
+) -> None:
+    """Apply environment policy after the adapter established an internally bound identity."""
+    if not isinstance(environment, str) or environment not in {
+        "development", "test", "production",
+    }:
+        raise IdentityRefused(f"unknown identity environment: {environment!r}")
+    if environment != "production":
+        return
+    if identity.provider != "entra_oidc":
+        raise IdentityRefused("production accepts only an Entra/OIDC authenticated identity")
+    if not isinstance(expected_entra_issuer, str) or not expected_entra_issuer.strip():
+        raise IdentityRefused("production Entra issuer policy is not configured")
+    if not isinstance(expected_entra_tenant, str) or not expected_entra_tenant.strip():
+        raise IdentityRefused("production Entra tenant policy is not configured")
+    if identity.auth_context.get("issuer") != expected_entra_issuer:
+        raise IdentityRefused("Entra issuer does not match production policy")
+    if identity.auth_context.get("tenant_id") != expected_entra_tenant:
+        raise IdentityRefused("Entra tenant does not match production policy")
+
+
+def identity_from_authentication(
+    authentication: dict,
+    *,
+    artifact_actor: str,
+    environment: str,
+    expected_entra_issuer: str | None = None,
+    expected_entra_tenant: str | None = None,
+) -> AuthenticatedHuman:
+    """Revalidate persisted non-secret authentication evidence for reconciliation."""
+    if not isinstance(authentication, dict):
+        raise IdentityRefused("persisted authentication must be an object")
+    if authentication.get("actor") != artifact_actor:
+        raise IdentityRefused("persisted authentication actor does not match the artifact actor")
+    identity = AuthenticatedHuman(
+        actor=authentication.get("actor"),
+        subject=authentication.get("subject"),
+        provider=authentication.get("provider"),
+        auth_context=authentication.get("context"),
+    )
+    validate_identity_policy(
+        identity,
+        environment=environment,
+        expected_entra_issuer=expected_entra_issuer,
+        expected_entra_tenant=expected_entra_tenant,
+    )
+    return identity
 
 
 class EntraVerifier(Protocol):
@@ -96,6 +174,10 @@ def entra_identity(
     expected_tenant: str,
 ) -> AuthenticatedHuman:
     """Verify an Entra assertion and return only allowlisted, non-secret identity metadata."""
+    if not isinstance(expected_issuer, str) or not expected_issuer.strip():
+        raise IdentityRefused("production Entra issuer policy is not configured")
+    if not isinstance(expected_tenant, str) or not expected_tenant.strip():
+        raise IdentityRefused("production Entra tenant policy is not configured")
     if verifier is None:
         raise IdentityRefused("production Entra/OIDC verifier is not configured")
     if not assertion:

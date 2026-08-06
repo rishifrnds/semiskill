@@ -21,9 +21,16 @@ def decide_unpublication(
     identity: AuthenticatedHuman,
     environment: str,
     quarantine: bool = True,
+    expected_entra_issuer: str | None = None,
+    expected_entra_tenant: str | None = None,
 ) -> Artifact:
     """Append an authenticated correction; never mutate or delete the original approval."""
-    _validate_environment(identity, environment)
+    _validate_environment(
+        identity,
+        environment,
+        expected_entra_issuer=expected_entra_issuer,
+        expected_entra_tenant=expected_entra_tenant,
+    )
     reason = reason.strip() if isinstance(reason, str) else ""
     if not reason:
         raise RollbackRefused("a non-empty human unpublication reason is required")
@@ -44,6 +51,10 @@ def decide_unpublication(
         matching = next((artifact for artifact in corrections
                          if artifact.payload.get("decision") == "unpublish"), None)
         if matching is not None:
+            activate = getattr(store, "activate_approval", None)
+            if not callable(activate):
+                raise RollbackRefused("verified publication actuator is unavailable")
+            activate(matching.artifact_id)
             return matching
         raise RollbackRefused("publication already has a different correction")
 
@@ -72,7 +83,10 @@ def decide_unpublication(
         corrects_ref=published.artifact_id,
         rollback_ref={"action": "reapprove", "approval_id": str(published.artifact_id)},
     )
-    return store.append(correction)
+    append_approval = getattr(store, "append_approval", None)
+    if not callable(append_approval):
+        raise RollbackRefused("verified publication actuator is unavailable")
+    return append_approval(correction)
 
 
 def unpublish_skill(*_args, **_kwargs):

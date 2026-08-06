@@ -55,5 +55,21 @@ def pg_dsn(_migrated_db) -> str:
     """Reset only the isolated `_test` database before each integration test."""
     dsn = _migrated_db
     with psycopg.connect(dsn, autocommit=True) as conn:
-        conn.execute("TRUNCATE artifacts")
+        conn.execute("TRUNCATE verified_publication_events, artifacts")
+        conn.execute("DELETE FROM publication_trust_policy")
+        current_user = conn.execute("SELECT current_user").fetchone()[0]
+        conn.execute(
+            sql.SQL("GRANT semiskill_approval_actuator TO {}")
+            .format(sql.Identifier(current_user))
+        )
+        conn.execute(
+            sql.SQL("GRANT semiskill_acl_reader TO {}")
+            .format(sql.Identifier(current_user))
+        )
+        conn.execute(
+            "INSERT INTO publication_trust_policy "
+            "(policy_id,environment,database_name,policy_version,approve_threshold,enabled,"
+            "allow_unregistered_test_fixtures) "
+            "VALUES (true,'test',current_database(),'publication-v1',0.8,true,true)"
+        )
     return dsn

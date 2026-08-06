@@ -18,7 +18,7 @@ from semiskill.governance.publish import decide_publication
 
 TEST_IDENTITY = AuthenticatedHuman(
     actor="test-human",
-    subject="test-subject",
+    subject="uid:99999",
     provider="local_os",
     auth_context={"account": "test-human", "uid": 99999},
 )

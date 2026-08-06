@@ -207,6 +207,27 @@ def test_collector_normalizes_malformed_stored_attempt_to_batch_rejection():
     assert store.append_many_calls == calls
 
 
+def test_reused_lineage_context_rejects_the_entire_collector_batch():
+    a, b = version("dv-a"), version("dv-b")
+    store = Store([a, b])
+    first = collect(store, [a, b], [result(a), result(b)])
+    calls = store.append_many_calls
+    followups = [
+        result(
+            skill,
+            attempt=2,
+            run_id="run-1",
+            prior_review_ref=str(prior.artifact_id),
+            reviewer_identity=f"reviewer:{skill.payload['slug']}:context-2",
+            fixer_identity=f"fixer:{skill.payload['slug']}:context-2",
+        )
+        for skill, prior in zip((a, b), first)
+    ]
+    with pytest.raises(BatchRejected, match="run_id must be unique"):
+        collect(store, [a, b], followups)
+    assert store.append_many_calls == calls
+
+
 def test_legacy_import_preserves_raw_record_but_is_non_authoritative(tmp_path):
     source = tmp_path / "skills" / "dv-a" / "REVIEW.json"
     source.parent.mkdir(parents=True)

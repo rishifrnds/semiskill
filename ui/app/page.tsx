@@ -1,11 +1,10 @@
 import { searchCatalog } from "@/lib/api";
 import { SkillCard } from "@/components/skill-card";
 
-// Server component: reads the ACL-enforced catalog for the signed-in principal. In production the
-// principal derives from SharePoint SSO group membership; here it is illustrative.
+// Server component: an omitted access token deliberately yields the public-only catalog. A
+// production host forwards a verified Entra access token; the API derives labels server-side.
 export default async function CatalogPage() {
-  const principal = ["public", "team"];
-  const skills = await searchCatalog(principal).catch(() => []);
+  const skills = await searchCatalog().catch(() => []);
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Verified Skill Catalog</h1>

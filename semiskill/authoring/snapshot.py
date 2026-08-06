@@ -413,13 +413,18 @@ def _validate_database_environment(database: dict, environment: str) -> None:
         raise SnapshotUnavailable("snapshot environment is invalid")
 
 
-def _security_projection(store, skill_version, reviews, artifacts_by_id, preferred=None) -> dict:
+def _security_projection(
+    store, skill_version, reviews, artifacts_by_id, preferred=None,
+    judge_required_by_policy: bool = True,
+) -> dict:
     from semiskill.artifacts.schema import ArtifactType
     from semiskill.authoring.gate import SECURITY_REVIEW_KIND
+    from semiskill.governance.publish import MIN_APPROVAL_SAFETY, _canonical_score, _completed_at
 
     candidates = [
         review for review in reviews
-        if review.payload.get("review_kind") == SECURITY_REVIEW_KIND
+        if isinstance(review.payload, dict)
+        and review.payload.get("review_kind") == SECURITY_REVIEW_KIND
         and review.input_refs and review.input_refs[0] == skill_version.artifact_id
     ]
     automated = preferred or max(
@@ -433,8 +438,23 @@ def _security_projection(store, skill_version, reviews, artifacts_by_id, preferr
         }
 
     errors: list[str] = []
-    payload = automated.payload
+    payload = automated.payload if isinstance(automated.payload, dict) else {}
+    if not isinstance(automated.payload, dict):
+        errors.append("INVALID_AGGREGATE_PAYLOAD")
+    if (
+        automated.artifact_type is not ArtifactType.REVIEW
+        or payload.get("review_kind") != SECURITY_REVIEW_KIND
+        or payload.get("schema_version") != 1
+        or payload.get("stage") != 6
+    ):
+        errors.append("INVALID_AGGREGATE_SCHEMA")
+    if automated.permissions_label != skill_version.permissions_label:
+        errors.append("AGGREGATE_PERMISSION_DRIFT")
+    if _completed_at(skill_version) > automated.timestamp_start:
+        errors.append("AGGREGATE_PREDATES_SKILL")
     refs = automated.input_refs[1:]
+    if len(automated.input_refs) != 6 or automated.input_refs[0] != skill_version.artifact_id:
+        errors.append("INVALID_SCAN_REFERENCE_COUNT")
     recorded = payload.get("scan_artifact_ids")
     if recorded != [str(ref) for ref in refs]:
         errors.append("SCAN_REFERENCE_MISMATCH")
@@ -446,31 +466,54 @@ def _security_projection(store, skill_version, reviews, artifacts_by_id, preferr
         }:
             errors.append("MISSING_SCAN_ARTIFACT")
             continue
-        if not scan.input_refs or scan.input_refs[0] != skill_version.artifact_id:
+        scan_payload = scan.payload if isinstance(scan.payload, dict) else {}
+        if not isinstance(scan.payload, dict):
+            errors.append("INVALID_SCAN_PAYLOAD")
+        if len(scan.input_refs) != 1 or scan.input_refs[0] != skill_version.artifact_id:
             errors.append("DETACHED_SCAN_ARTIFACT")
+        if scan.permissions_label != skill_version.permissions_label:
+            errors.append("SCAN_PERMISSION_DRIFT")
+        if _completed_at(skill_version) > scan.timestamp_start:
+            errors.append("SCAN_PREDATES_SKILL")
+        if _completed_at(scan) > automated.timestamp_start:
+            errors.append("SCAN_COMPLETES_AFTER_AGGREGATE")
         scans.append(scan)
 
     stages = []
     seen: set[int] = set()
     for scan in sorted(scans, key=lambda artifact: (
-        artifact.payload.get("stage") if type(artifact.payload.get("stage")) is int else 99,
+        artifact.payload.get("stage")
+        if isinstance(artifact.payload, dict) and type(artifact.payload.get("stage")) is int
+        else 99,
         str(artifact.artifact_id),
     )):
-        stage = scan.payload.get("stage")
+        scan_payload = scan.payload if isinstance(scan.payload, dict) else {}
+        stage = scan_payload.get("stage")
         if type(stage) is not int or stage not in {1, 2, 3, 4, 5} or stage in seen:
             errors.append("INVALID_OR_DUPLICATE_STAGE")
         else:
             seen.add(stage)
-        status = scan.payload.get("status")
-        hard_fail = scan.payload.get("hard_fail")
-        safety = scan.payload.get("safety_score")
+            expected_type = ArtifactType.INJECTION_TEST if stage == 3 else ArtifactType.SCAN_RUN
+            if scan.artifact_type is not expected_type:
+                errors.append("INVALID_STAGE_ARTIFACT_TYPE")
+        status = scan_payload.get("status")
+        sampled = scan_payload.get("sampled")
+        hard_fail = scan_payload.get("hard_fail")
+        safety = scan_payload.get("safety_score")
         if status not in {"passed", "failed", "not_run", "not_sampled"}:
             errors.append("INVALID_STAGE_STATUS")
+        if type(sampled) is not bool:
+            errors.append("INVALID_SAMPLED_STATE")
+        elif sampled is not (status in {"passed", "failed"}):
+            errors.append("STAGE_STATUS_SAMPLE_MISMATCH")
         if type(hard_fail) is not bool:
             errors.append("INVALID_HARD_FAIL")
-        if type(safety) not in {int, float} or not 0.0 <= float(safety) <= 1.0:
+        canonical_safety = _canonical_score(safety)
+        if canonical_safety is None:
             errors.append("INVALID_STAGE_SAFETY")
             safety = None
+        elif scan.eval_score is None or float(scan.eval_score) != canonical_safety:
+            errors.append("STAGE_EVAL_SCORE_MISMATCH")
         stages.append({
             "stage": stage,
             "status": status if isinstance(status, str) else "invalid",
@@ -484,10 +527,14 @@ def _security_projection(store, skill_version, reviews, artifacts_by_id, preferr
     required = [stage for stage in stages if stage["stage"] in {1, 2, 3, 4}]
     if any(stage["status"] != "passed" or stage["hard_fail"] for stage in required):
         errors.append("REQUIRED_STAGE_BLOCKED")
+    if any(stage["hard_fail"] is not False for stage in stages):
+        errors.append("HARD_FAIL_PRESENT")
     judge = next((stage for stage in stages if stage["stage"] == 5), None)
     judge_required = payload.get("judge_required")
     if type(judge_required) is not bool:
         errors.append("INVALID_JUDGE_REQUIREMENT")
+    elif judge_required is not judge_required_by_policy:
+        errors.append("JUDGE_POLICY_MISMATCH")
     elif judge_required and (judge is None or judge["status"] != "passed"):
         errors.append("REQUIRED_JUDGE_NOT_PASSED")
     elif not judge_required and judge is not None and judge["status"] not in {"passed", "not_sampled"}:
@@ -495,9 +542,31 @@ def _security_projection(store, skill_version, reviews, artifacts_by_id, preferr
     if payload.get("verdict") != "approve":
         errors.append("AGGREGATE_NOT_APPROVE")
     aggregate = payload.get("aggregate_safety")
-    if type(aggregate) not in {int, float} or not 0.0 <= float(aggregate) <= 1.0:
+    canonical_aggregate = _canonical_score(aggregate)
+    if canonical_aggregate is None:
         errors.append("INVALID_AGGREGATE_SAFETY")
         aggregate = None
+    elif automated.eval_score is None or float(automated.eval_score) != canonical_aggregate:
+        errors.append("AGGREGATE_EVAL_SCORE_MISMATCH")
+    measured = [
+        stage["safety"] for stage, scan in zip(stages, sorted(scans, key=lambda artifact: (
+            artifact.payload.get("stage")
+            if isinstance(artifact.payload, dict) and type(artifact.payload.get("stage")) is int
+            else 99,
+            str(artifact.artifact_id),
+        )))
+        if isinstance(scan.payload, dict) and scan.payload.get("sampled") is True
+        and stage["safety"] is not None
+    ]
+    if (
+        canonical_aggregate is not None
+        and (
+            not measured
+            or canonical_aggregate != min(measured)
+            or canonical_aggregate < MIN_APPROVAL_SAFETY
+        )
+    ):
+        errors.append("AGGREGATE_POLICY_MISMATCH")
     status = "passed" if not errors else (
         "blocked" if any(code in errors for code in {
             "REQUIRED_STAGE_BLOCKED", "REQUIRED_JUDGE_NOT_PASSED", "AGGREGATE_NOT_APPROVE",
@@ -536,6 +605,8 @@ def build_scoreboard_snapshot(
     repository_dirty: bool | None = None,
     repository_root: str | Path | None = None,
     phase: str = "dv-84",
+    expected_entra_issuer: str | None = None,
+    expected_entra_tenant: str | None = None,
 ) -> dict:
     """Derive one complete authoritative snapshot from registry, source tree, and artifacts."""
     from semiskill.artifacts.schema import ArtifactType, ActorKind
@@ -549,9 +620,16 @@ def build_scoreboard_snapshot(
     from semiskill.authoring.scoreboard import load_registry
     from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
     from semiskill.governance.publish import (
-        APPROVAL_SCHEMA, ApprovalChainInvalid, resolve_frozen_approval_evidence,
-        resolve_frozen_rejection_evidence,
+        APPROVAL_SCHEMA, ApprovalChainInvalid, resolve_frozen_rejection_evidence,
     )
+    from semiskill.governance.identity import IdentityRefused, identity_from_authentication
+    from semiskill.governance.reconciliation import reconcile_publications
+
+    if environment == "production" and (
+        not isinstance(expected_entra_issuer, str) or not expected_entra_issuer.strip()
+        or not isinstance(expected_entra_tenant, str) or not expected_entra_tenant.strip()
+    ):
+        raise SnapshotUnavailable("production Entra issuer and tenant policy are required")
 
     registry_file = Path(registry_path)
     root = Path(skills_root)
@@ -581,10 +659,32 @@ def build_scoreboard_snapshot(
     if consistency_registry_error:
         consistency_errors += 1
 
-    skill_versions = store.by_type(ArtifactType.SKILL_VERSION)
-    scans = store.by_type(ArtifactType.SCAN_RUN) + store.by_type(ArtifactType.INJECTION_TEST)
-    reviews = store.by_type(ArtifactType.REVIEW)
-    approvals = store.by_type(ArtifactType.APPROVAL)
+    bundle_reader = getattr(store, "publication_reconciliation_bundle", None)
+    if not callable(bundle_reader):
+        raise SnapshotUnavailable("verified publication reconciliation bundle is unavailable")
+    try:
+        reconciliation = reconcile_publications(
+            bundle_reader(),
+            environment=environment,
+            expected_entra_issuer=expected_entra_issuer,
+            expected_entra_tenant=expected_entra_tenant,
+        )
+    except (TypeError, ValueError) as exc:
+        raise SnapshotUnavailable("verified publication reconciliation bundle is malformed") from exc
+    reconciled_store = reconciliation.store
+    projected_ids = reconciled_store.verified_publication_ids()
+    skill_versions = reconciled_store.by_type(ArtifactType.SKILL_VERSION)
+    scans = (
+        reconciled_store.by_type(ArtifactType.SCAN_RUN)
+        + reconciled_store.by_type(ArtifactType.INJECTION_TEST)
+    )
+    reviews = reconciled_store.by_type(ArtifactType.REVIEW)
+    approvals = reconciled_store.by_type(ArtifactType.APPROVAL)
+    malformed_artifact_payloads = sorted(
+        str(artifact.artifact_id)
+        for artifact in [*skill_versions, *scans, *reviews, *approvals]
+        if not isinstance(artifact.payload, dict)
+    )
     artifacts_by_id = {
         artifact.artifact_id: artifact
         for artifact in [*skill_versions, *scans, *reviews, *approvals]
@@ -593,34 +693,39 @@ def build_scoreboard_snapshot(
     authoritative_approvals = [
         approval for approval in approvals
         if approval.actor_kind is ActorKind.HUMAN
+        and isinstance(approval.payload, dict)
         and approval.payload.get("schema_version") == APPROVAL_SCHEMA
     ]
-    approval_by_id = {approval.artifact_id: approval for approval in authoritative_approvals}
-
     def approval_contract_errors(approval) -> list[str]:
-        payload = approval.payload
+        payload = approval.payload if isinstance(approval.payload, dict) else {}
         errors: list[str] = []
+        if not isinstance(approval.payload, dict):
+            errors.append("payload")
         decision = payload.get("decision")
-        if decision not in {"approve", "reject", "unpublish"}:
+        if not isinstance(decision, str) or decision not in {"approve", "reject", "unpublish"}:
             errors.append("decision")
         if payload.get("published") is not (decision == "approve"):
             errors.append("published")
         if not isinstance(payload.get("reason"), str) or not payload["reason"].strip():
             errors.append("reason")
-        authentication = payload.get("authentication")
-        if not isinstance(authentication, dict) or authentication.get("provider") not in {
-            "local_os", "entra_oidc",
-        } or not isinstance(authentication.get("subject"), str) or not authentication["subject"].strip():
-            errors.append("authentication")
-        if payload.get("environment") not in {"development", "test", "production"}:
+        approval_environment = payload.get("environment")
+        if not isinstance(approval_environment, str) or approval_environment not in {
+            "development", "test", "production",
+        }:
             errors.append("environment")
-        elif payload.get("environment") != environment:
+        elif approval_environment != environment:
             errors.append("snapshot_environment")
-        elif payload.get("environment") == "production" and (
-            not isinstance(authentication, dict)
-            or authentication.get("provider") != "entra_oidc"
-        ):
-            errors.append("production_identity")
+        else:
+            try:
+                identity_from_authentication(
+                    payload.get("authentication"),
+                    artifact_actor=approval.actor,
+                    environment=environment,
+                    expected_entra_issuer=expected_entra_issuer,
+                    expected_entra_tenant=expected_entra_tenant,
+                )
+            except IdentityRefused:
+                errors.append("authentication")
         skill = payload.get("skill")
         evidence = payload.get("evidence")
         if len(approval.input_refs) != 3 or not isinstance(skill, dict) or not isinstance(evidence, dict):
@@ -633,126 +738,68 @@ def build_scoreboard_snapshot(
             errors.append("reference_payload")
         return errors
 
-    valid_publication_candidates: dict[str, list[tuple]] = {}
-    invalid_approval_chains: list[str] = []
+    invalid_ids: set = set(reconciliation.invalid_approval_ids)
+    invalid_approval_chains: list[str] = [
+        str(issue.approval_id) for issue in reconciliation.issues
+        if issue.approval_id is not None
+    ]
     active_rejections: set = set()
-    invalid_ids: set = set()
-    valid_positive: dict = {}
     for approval in authoritative_approvals:
         contract_errors = approval_contract_errors(approval)
         if contract_errors:
             invalid_ids.add(approval.artifact_id)
             continue
-        if approval.payload.get("decision") != "approve":
+        if approval.corrects_ref is not None and approval.artifact_id not in projected_ids:
+            invalid_ids.add(approval.artifact_id)
+            continue
+        if approval.payload.get("decision") != "reject" or approval.corrects_ref is not None:
             continue
         skill_version = artifacts_by_id.get(approval.input_refs[0])
         if skill_version is None or skill_version.artifact_type is not ArtifactType.SKILL_VERSION:
             invalid_ids.add(approval.artifact_id)
-            continue
-        try:
-            frozen = resolve_frozen_approval_evidence(
-                store, skill_version=skill_version, approval=approval,
-            )
-        except ApprovalChainInvalid:
-            invalid_ids.add(approval.artifact_id)
-            continue
-        valid_positive[approval.artifact_id] = (skill_version, approval, frozen)
-
-    valid_corrections: set = set()
-    suppressed: set = set()
-    correction_children: dict = {}
-    for correction in authoritative_approvals:
-        if correction.corrects_ref is not None:
-            correction_children.setdefault(correction.corrects_ref, []).append(correction)
-    for children in correction_children.values():
-        if len(children) > 1:
-            invalid_ids.update(child.artifact_id for child in children)
-    for correction in sorted(authoritative_approvals, key=lambda artifact: (
-        artifact.timestamp_start, str(artifact.artifact_id),
-    )):
-        if correction.corrects_ref is None:
-            if correction.payload.get("decision") == "unpublish":
-                invalid_ids.add(correction.artifact_id)
-            continue
-        correction_target = approval_by_id.get(correction.corrects_ref)
-        target_positive = valid_positive.get(correction.corrects_ref)
-        decision = correction.payload.get("decision")
-        target_lineage_valid = bool(
-            target_positive is not None
-            and (
-                correction_target.corrects_ref is None
-                or correction_target.artifact_id in valid_corrections
-            )
-        ) if correction_target is not None else False
-        relationship_valid = bool(
-            correction.artifact_id not in invalid_ids
-            and correction_target is not None
-            and target_lineage_valid
-            and correction.permissions_label == correction_target.permissions_label
-            and correction.timestamp_start >= correction_target.timestamp_start
-            and correction.payload.get("skill", {}).get("slug")
-            == correction_target.payload.get("skill", {}).get("slug")
-        )
-        if decision == "approve":
-            relationship_valid = relationship_valid and correction.artifact_id in valid_positive
-        elif decision == "unpublish":
-            relationship_valid = relationship_valid and (
-                correction.input_refs == correction_target.input_refs
-                and correction.payload.get("skill") == correction_target.payload.get("skill")
-                and correction.payload.get("evidence") == correction_target.payload.get("evidence")
-            )
         else:
-            relationship_valid = False
-        if relationship_valid:
-            valid_corrections.add(correction.artifact_id)
-            suppressed.add(correction_target.artifact_id)
-        else:
-            invalid_ids.add(correction.artifact_id)
-
-    for approval in authoritative_approvals:
-        if approval.payload.get("decision") == "reject" and approval.corrects_ref is None:
-            if approval.artifact_id in invalid_ids:
-                continue
-            skill_version = artifacts_by_id.get(approval.input_refs[0])
-            if skill_version is None or skill_version.artifact_type is not ArtifactType.SKILL_VERSION:
+            try:
+                resolve_frozen_rejection_evidence(
+                    reconciled_store, skill_version=skill_version, approval=approval,
+                )
+            except ApprovalChainInvalid:
                 invalid_ids.add(approval.artifact_id)
             else:
-                try:
-                    resolve_frozen_rejection_evidence(
-                        store, skill_version=skill_version, approval=approval,
-                    )
-                except ApprovalChainInvalid:
-                    invalid_ids.add(approval.artifact_id)
-                else:
-                    active_rejections.add(skill_version.artifact_id)
+                active_rejections.add(skill_version.artifact_id)
 
-    for approval_id, publication in valid_positive.items():
-        approval = publication[1]
-        if approval_id in suppressed:
-            continue
-        if approval.corrects_ref is not None and approval_id not in valid_corrections:
-            invalid_ids.add(approval_id)
-            continue
-        slug = publication[0].payload.get("slug")
-        if slug:
-            valid_publication_candidates.setdefault(slug, []).append(publication)
     invalid_approval_chains.extend(str(artifact_id) for artifact_id in sorted(
         invalid_ids, key=str,
     ))
-    duplicate_active_publications = sorted(
-        slug for slug, candidates in valid_publication_candidates.items() if len(candidates) > 1
-    )
     valid_publications = {
-        slug: max(candidates, key=lambda item: (
-            item[1].timestamp_start, str(item[1].artifact_id),
-        ))
-        for slug, candidates in valid_publication_candidates.items()
+        slug: (
+            publication.skill_version,
+            publication.approval,
+            publication.frozen_evidence,
+        )
+        for slug, publication in reconciliation.active_by_slug.items()
     }
+    duplicate_active_publications = sorted({
+        issue.slug for issue in reconciliation.issues
+        if issue.code == "DUPLICATE_PUBLICATION_HEAD" and issue.slug is not None
+    })
+    orphaned_projection_rows = sorted({
+        str(issue.approval_id) for issue in reconciliation.issues
+        if issue.code == "PROJECTION_ORPHAN" and issue.approval_id is not None
+    })
+    projection_drift = sorted({
+        str(issue.approval_id) for issue in reconciliation.issues
+        if issue.code not in {"PROJECTION_ORPHAN", "DUPLICATE_PUBLICATION_HEAD"}
+        and issue.approval_id is not None
+    })
     authoritative_ids = {approval.artifact_id for approval in authoritative_approvals}
     ungated_publications = sorted(
         str(approval.artifact_id) for approval in approvals
-        if approval.artifact_id not in authoritative_ids
+        if isinstance(approval.payload, dict)
         and approval.payload.get("published") is True
+        and (
+            approval.artifact_id not in authoritative_ids
+            or (projected_ids is not None and approval.artifact_id not in projected_ids)
+        )
     )
 
     disk_slugs = {path.parent.name for path in root.glob("*/SKILL.md")}
@@ -782,11 +829,18 @@ def build_scoreboard_snapshot(
         "stale_approval_hashes": [],
         "invalid_review_lineage": [],
         "invalid_approval_chains": sorted(invalid_approval_chains),
+        "orphaned_projection_rows": orphaned_projection_rows,
+        "projection_drift": projection_drift,
         "permission_label_drift": [],
         "duplicate_active_publications": duplicate_active_publications,
         "missing_required_stages": [],
         "post_approval_blockers": [],
+        "malformed_artifact_payloads": malformed_artifact_payloads,
     }
+    projection_issues_by_slug: dict[str, set[str]] = {}
+    for issue in reconciliation.issues:
+        if issue.slug is not None:
+            projection_issues_by_slug.setdefault(issue.slug, set()).add(issue.code)
 
     cells: list[dict] = []
     for row in registry:
@@ -865,7 +919,8 @@ def build_scoreboard_snapshot(
 
         exact_versions = [
             version for version in skill_versions
-            if version.payload.get("slug") == slug and source_hash
+            if isinstance(version.payload, dict)
+            and version.payload.get("slug") == slug and source_hash
             and payload_fingerprint(version.payload) == source_hash
         ]
         selected_version = published_version if current_publication else max(
@@ -876,20 +931,25 @@ def build_scoreboard_snapshot(
 
         if selected_version is not None:
             if current_publication:
-                content_state = readiness_for_review(store, selected_version, frozen.content_review)
+                content_state = readiness_for_review(
+                    reconciled_store, selected_version, frozen.content_review,
+                )
                 content_review = frozen.content_review
                 security = _security_projection(
-                    store, selected_version, reviews, artifacts_by_id,
+                    reconciled_store, selected_version, reviews, artifacts_by_id,
                     preferred=frozen.automated_review,
                 )
             else:
-                content_state = readiness_for_version(store, selected_version)
+                content_state = readiness_for_version(reconciled_store, selected_version)
                 content_review = content_state.review
-                security = _security_projection(store, selected_version, reviews, artifacts_by_id)
+                security = _security_projection(
+                    reconciled_store, selected_version, reviews, artifacts_by_id,
+                )
         else:
             slug_content = [
                 review for review in reviews
-                if review.payload.get("review_kind") == CONTENT_REVIEW_KIND
+                if isinstance(review.payload, dict)
+                and review.payload.get("review_kind") == CONTENT_REVIEW_KIND
                 and review.payload.get("slug") == slug
             ]
             content_review = max(slug_content, key=lambda artifact: (
@@ -940,14 +1000,15 @@ def build_scoreboard_snapshot(
         if current_publication:
             later_content = [
                 review for review in reviews
-                if review.payload.get("review_kind") == CONTENT_REVIEW_KIND
+                if isinstance(review.payload, dict)
+                and review.payload.get("review_kind") == CONTENT_REVIEW_KIND
                 and review.payload.get("slug") == slug
                 and review.input_refs
                 and review.input_refs[0] == published_version.artifact_id
                 and review.timestamp_start > approval.timestamp_start
             ]
             if later_content:
-                current_lineage = readiness_for_version(store, published_version)
+                current_lineage = readiness_for_version(reconciled_store, published_version)
                 if not current_lineage.ready:
                     anomalies["post_approval_blockers"].append(slug)
                 if current_lineage.status == INVALID:
@@ -994,7 +1055,9 @@ def build_scoreboard_snapshot(
             blockers.append({"code": "FACET_DRIFT", "source": "registry", "artifact_id": None})
         if permission_drift:
             blockers.append({"code": "PERMISSION_LABEL_DRIFT", "source": "registry",
-                             "artifact_id": None})
+                              "artifact_id": None})
+        for code in sorted(projection_issues_by_slug.get(slug, set())):
+            blockers.append({"code": code, "source": "approval", "artifact_id": None})
 
         rejected = bool(selected_version and selected_version.artifact_id in active_rejections)
         if rejected:
@@ -1004,6 +1067,8 @@ def build_scoreboard_snapshot(
             state = "published_stale"
         elif current_publication:
             state = "published"
+        elif slug in projection_issues_by_slug:
+            state = "invalid"
         elif not authored:
             state = "missing"
         elif slug in source_errors:
@@ -1025,12 +1090,9 @@ def build_scoreboard_snapshot(
         else:
             state = "recheck_ready"
 
-        finding_ids = []
-        if content_review is not None and isinstance(content_review.payload.get("findings"), list):
-            finding_ids = sorted(
-                finding.get("finding_id") for finding in content_review.payload["findings"]
-                if isinstance(finding, dict) and isinstance(finding.get("finding_id"), str)
-            )
+        finding_ids = sorted(
+            finding.finding_id for finding in content_state.effective_findings
+        ) if content_state is not None else []
         scan_ids = [
             stage["artifact_id"] for stage in security["stages"]
             if stage["stage"] != 6 and stage["artifact_id"]
@@ -1230,7 +1292,12 @@ def build_scoreboard_snapshot(
         "policy": {"required_scan_stages": [1, 2, 3, 4, 6], "judge_stage": 5,
                    "judge_skipped_status": "not_sampled",
                    "required_content_checks": ["strict_lint", "consistency", "source_hash",
-                                               "artifact_reconciliation"]},
+                                               "artifact_reconciliation"],
+                   "production_identity": {
+                       "provider": "entra_oidc",
+                       "issuer": expected_entra_issuer if environment == "production" else None,
+                       "tenant_id": expected_entra_tenant if environment == "production" else None,
+                   }},
         "registry": {"total": len(registry), "active": len(active_cells),
                      "declined": len(declined_rows), "roles": len(active_roles),
                      "levels": active_levels},

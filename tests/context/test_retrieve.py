@@ -31,17 +31,37 @@ def test_need_to_know_invisible_to_unauthorized(store, pg_dsn):
     _publish(store, build_skill_version(skill_md=_md("Secret Skill", "dv/secret"), actor="a",
                                         permissions_label="need-to-know"))
 
-    team_view = {c.slug for c in search_catalog(dsn=pg_dsn, principal=["team"])}
+    team_view = {c.slug for c in search_catalog(
+        dsn=pg_dsn, principal=["team"], trusted_clearance=True,
+    )}
     assert team_view == {"dv/pub"}                      # secret skill is invisible
 
-    cleared = {c.slug for c in search_catalog(dsn=pg_dsn, principal=["team", "need-to-know"])}
+    cleared = {c.slug for c in search_catalog(
+        dsn=pg_dsn, principal=["team", "need-to-know"], trusted_clearance=True,
+    )}
     assert cleared == {"dv/pub", "dv/secret"}           # visible with clearance
+
+
+@pytest.mark.integration
+def test_untrusted_reader_cannot_self_assert_restricted_labels(store, pg_dsn):
+    _publish(store, build_skill_version(
+        skill_md=_md("Public Skill", "dv/public"), actor="a", permissions_label="public",
+    ))
+    _publish(store, build_skill_version(
+        skill_md=_md("Secret Skill", "dv/secret"), actor="a",
+        permissions_label="need-to-know",
+    ))
+
+    cards = search_catalog(
+        dsn=pg_dsn, principal=["public", "need-to-know"], trusted_clearance=False,
+    )
+    assert {card.slug for card in cards} == {"dv/public"}
 
 
 @pytest.mark.integration
 def test_results_are_delimited_untrusted(store, pg_dsn):
     _publish(store, build_skill_version(skill_md=_md("X", "dv/x"), actor="a"))
-    cards = search_catalog(dsn=pg_dsn, principal=["team"])
+    cards = search_catalog(dsn=pg_dsn, principal=["team"], trusted_clearance=True)
     assert len(cards) == 1
     assert cards[0].content.startswith("<<<UNTRUSTED-ARTIFACT-DATA>>>")
 
@@ -49,7 +69,9 @@ def test_results_are_delimited_untrusted(store, pg_dsn):
 @pytest.mark.integration
 def test_unpublished_not_in_catalog(store, pg_dsn):
     store.append(build_skill_version(skill_md=_md("Draft", "dv/draft"), actor="a"))  # no approval
-    assert search_catalog(dsn=pg_dsn, principal=["team"]) == []
+    assert search_catalog(
+        dsn=pg_dsn, principal=["team"], trusted_clearance=True,
+    ) == []
 
 
 @pytest.mark.integration

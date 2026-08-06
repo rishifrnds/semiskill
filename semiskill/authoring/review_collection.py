@@ -113,7 +113,8 @@ def collect_review_batch(
 
         existing = [
             artifact for artifact in store.by_type(ArtifactType.REVIEW)
-            if artifact.payload.get("review_kind") == "content_review"
+            if isinstance(artifact.payload, dict)
+            and artifact.payload.get("review_kind") == "content_review"
             and artifact.input_refs
             and artifact.input_refs[0] == skill_version.artifact_id
         ]

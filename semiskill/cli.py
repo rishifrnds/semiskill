@@ -6,6 +6,7 @@ passes the Phase-C pipeline + human approval (ADR-002).
 """
 from __future__ import annotations
 import argparse
+import os
 import sys
 from pathlib import Path
 from semiskill.config import Config
@@ -266,6 +267,8 @@ def cmd_scoreboard(args, store, out) -> int:
                 generated_at=generated_at,
                 target_per_role=args.fail_under,
                 environment=args.environment,
+                expected_entra_issuer=os.environ.get("SEMISKILL_ENTRA_ISSUER"),
+                expected_entra_tenant=os.environ.get("SEMISKILL_ENTRA_TENANT_ID"),
             )
             write_json_atomic(args.snapshot_out, snapshot)
         except Exception:  # snapshot paths, database details and parser traces stay local

@@ -24,7 +24,9 @@ def _submit(store, *, slug, body="A helpful skill that does safe things.", tools
 
 
 def _in_catalog(dsn):
-    return {c.slug for c in search_catalog(dsn=dsn, principal=["team"])}
+    return {c.slug for c in search_catalog(
+        dsn=dsn, principal=["team"], trusted_clearance=True,
+    )}
 
 
 @pytest.mark.integration

@@ -39,12 +39,13 @@ class ReuseRecord:
 
 
 def get_lineage(*, dsn: str, start_artifact_id, principal: Iterable[str],
-                max_depth: int = 10) -> ProvenanceResult:
+                max_depth: int = 10, trusted_clearance: bool = False) -> ProvenanceResult:
     """Ancestry via input_refs (e.g. approval → review → scan_runs → skill_version), ACL-pruned at
     each hop. Returns empty unless the start node itself is visible to the caller."""
     allowed = list(resolve_allowed_labels(principal))
+    reader_role = "semiskill_acl_reader" if trusted_clearance else "semiskill_app"
     with psycopg.connect(dsn, row_factory=psycopg.rows.dict_row) as conn:
-        conn.execute("SET LOCAL ROLE semiskill_app")
+        conn.execute(f"SET LOCAL ROLE {reader_role}")
         rows = conn.execute("SELECT * FROM lineage(%s, %s, %s)",
                             (start_artifact_id, allowed, max_depth)).fetchall()
         conn.rollback()
@@ -64,11 +65,13 @@ def get_lineage(*, dsn: str, start_artifact_id, principal: Iterable[str],
     return ProvenanceResult(nodes=nodes, edges=edges)
 
 
-def get_reuse(*, dsn: str, skill_version_id, principal: Iterable[str]) -> list[ReuseRecord]:
+def get_reuse(*, dsn: str, skill_version_id, principal: Iterable[str],
+              trusted_clearance: bool = False) -> list[ReuseRecord]:
     """Who reused a skill (the reuse graph), ACL-filtered and gated on the skill being visible."""
     allowed = list(resolve_allowed_labels(principal))
+    reader_role = "semiskill_acl_reader" if trusted_clearance else "semiskill_app"
     with psycopg.connect(dsn, row_factory=psycopg.rows.dict_row) as conn:
-        conn.execute("SET LOCAL ROLE semiskill_app")
+        conn.execute(f"SET LOCAL ROLE {reader_role}")
         rows = conn.execute("SELECT * FROM reuse_events_for_skill(%s, %s)",
                             (skill_version_id, allowed)).fetchall()
         conn.rollback()

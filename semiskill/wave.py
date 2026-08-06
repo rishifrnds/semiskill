@@ -127,49 +127,29 @@ def load_wave(root: str | Path) -> list[WaveItem]:
 
 def _published_index(store: ArtifactStore) -> dict[str, tuple[Artifact, Artifact]]:
     """Return active exact approval/v1 publications; legacy approvals never enter the catalog."""
-    from semiskill.governance.publish import (
-        APPROVAL_SCHEMA,
-        resolve_frozen_approval_evidence,
-    )
+    from semiskill.governance.publish import ApprovalChainInvalid
+    from semiskill.governance.reconciliation import reconcile_publications
 
-    approvals = [
-        artifact for artifact in store.by_type(ArtifactType.APPROVAL)
-        if artifact.actor_kind is ActorKind.HUMAN
-        and artifact.payload.get("schema_version") == APPROVAL_SCHEMA
-    ]
-    corrected = {
-        artifact.corrects_ref for artifact in approvals if artifact.corrects_ref is not None
+    bundle_reader = getattr(store, "publication_reconciliation_bundle", None)
+    if not callable(bundle_reader):
+        raise ApprovalChainInvalid("verified publication reconciliation bundle is unavailable")
+    try:
+        result = reconcile_publications(bundle_reader())
+    except (TypeError, ValueError) as exc:
+        raise ApprovalChainInvalid("verified publication reconciliation bundle is malformed") from exc
+    if result.issues:
+        raise ApprovalChainInvalid("verified publication reconciliation found projection anomalies")
+    return {
+        slug: (publication.skill_version, publication.approval)
+        for slug, publication in result.active_by_slug.items()
     }
-    out: dict[str, tuple[Artifact, Artifact]] = {}
-    for approval in approvals:
-        if (
-            approval.artifact_id in corrected
-            or approval.payload.get("decision") != "approve"
-            or approval.payload.get("published") is not True
-            or len(approval.input_refs) != 3
-        ):
-            continue
-        skill_version = store.get(approval.input_refs[0])
-        if skill_version is None or skill_version.artifact_type is not ArtifactType.SKILL_VERSION:
-            continue
-        resolve_frozen_approval_evidence(
-            store, skill_version=skill_version, approval=approval,
-        )
-        slug = skill_version.payload.get("slug")
-        prior = out.get(slug)
-        if slug and (
-            prior is None
-            or (approval.timestamp_start, str(approval.artifact_id))
-            > (prior[1].timestamp_start, str(prior[1].artifact_id))
-        ):
-            out[slug] = (skill_version, approval)
-    return out
 
 
 def _exact_version(store: ArtifactStore, item: WaveItem) -> Artifact | None:
     versions = [
         artifact for artifact in store.by_type(ArtifactType.SKILL_VERSION)
-        if artifact.payload.get("slug") == item.slug
+        if isinstance(artifact.payload, dict)
+        and artifact.payload.get("slug") == item.slug
         and payload_hash(artifact.payload) == item.payload_sha256
     ]
     return max(versions, key=lambda artifact: artifact.timestamp_start, default=None)
@@ -178,7 +158,8 @@ def _exact_version(store: ArtifactStore, item: WaveItem) -> Artifact | None:
 def _security_review(store: ArtifactStore, skill_version: Artifact) -> Artifact | None:
     reviews = [
         artifact for artifact in store.by_type(ArtifactType.REVIEW)
-        if artifact.payload.get("review_kind") == "security_aggregate"
+        if isinstance(artifact.payload, dict)
+        and artifact.payload.get("review_kind") == "security_aggregate"
         and artifact.input_refs
         and artifact.input_refs[0] == skill_version.artifact_id
     ]
@@ -192,7 +173,8 @@ def _pipeline_from_review(store: ArtifactStore, skill_version: Artifact, review:
         skill_version_id=skill_version.artifact_id,
         scan_artifacts=scans,
         review=review,
-        verdict=str(review.payload.get("verdict") or "reject"),
+        verdict=str(review.payload.get("verdict") or "reject")
+        if isinstance(review.payload, dict) else "reject",
         blocked_at=None,
     )
 

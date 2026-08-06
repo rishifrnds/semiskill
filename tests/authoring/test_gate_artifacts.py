@@ -7,6 +7,7 @@ from semiskill.authoring.gate import (
     REVIEWED,
     STALE,
     make_content_review,
+    readiness_for_review,
     readiness_for_version,
 )
 from semiskill.capture.intake import build_skill_version
@@ -224,6 +225,7 @@ def test_disputed_blocking_finding_blocks_and_all_rounds_remain_queryable():
         sv,
         attempt=2,
         run_id="run-2",
+        reviewer_identity="reviewer-context-2",
         prior_review=first,
         findings=[finding(disposition="disputed")],
     )
@@ -233,6 +235,66 @@ def test_disputed_blocking_finding_blocks_and_all_rounds_remain_queryable():
 
     assert state.status == REVIEWED and state.open_blocking_findings == 1
     assert store.get(first.artifact_id) is first and store.get(second.artifact_id) is second
+
+
+def test_omitted_prior_blocker_remains_effective_until_explicitly_resolved():
+    sv = skill()
+    first = review(sv, findings=[finding(disposition="disputed")])
+    omitted = review(
+        sv,
+        attempt=2,
+        run_id="run-2",
+        reviewer_identity="reviewer-context-2",
+        prior_review=first,
+        findings=[],
+    )
+    blocked = readiness_for_version(Store([sv, first, omitted]), sv)
+    assert blocked.status == REVIEWED and blocked.open_blocking_findings == 1
+
+    resolved = review(
+        sv,
+        attempt=3,
+        run_id="run-3",
+        reviewer_identity="reviewer-context-3",
+        prior_review=omitted,
+        findings=[finding(disposition="resolved")],
+    )
+    store = Store([sv, first, omitted, resolved])
+    assert readiness_for_version(store, sv).status == READY
+    assert readiness_for_review(store, sv, first).status == REVIEWED
+
+    final = review(
+        sv,
+        attempt=4,
+        run_id="run-4",
+        reviewer_identity="reviewer-context-4",
+        prior_review=resolved,
+        findings=[],
+    )
+    final_state = readiness_for_version(Store([sv, first, omitted, resolved, final]), sv)
+    assert final_state.status == READY
+    assert [(row.finding_id, row.disposition) for row in final_state.effective_findings] == [
+        ("F-1", "resolved"),
+    ]
+
+
+def test_finding_identity_and_reviewer_context_are_immutable_across_lineage():
+    sv = skill()
+    first = review(sv, findings=[finding()])
+    changed = finding(disposition="resolved")
+    changed["severity"] = "non_blocking"
+    second = review(
+        sv,
+        attempt=2,
+        run_id="run-2",
+        reviewer_identity="reviewer-context-1",
+        prior_review=first,
+        findings=[changed],
+    )
+    state = readiness_for_version(Store([sv, first, second]), sv)
+    assert state.status == INVALID
+    assert "finding F-1 identity changed across review attempts" in state.errors
+    assert "reviewer_identity must be unique across the review lineage" in state.errors
 
 
 def test_malformed_string_boolean_is_invalid_not_coerced():

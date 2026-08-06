@@ -73,3 +73,20 @@ def test_append_many_rolls_back_every_row_when_one_insert_fails(store):
         store.append_many([first, duplicate])
 
     assert store.get(first.artifact_id) is None
+
+
+def test_non_test_approval_actuator_requires_distinct_database_identity():
+    runtime = "postgresql://runtime:secret@db.internal:5432/semiskill"
+    with pytest.raises(ValueError, match="distinct database identity"):
+        PostgresArtifactStore(runtime, approval_dsn=runtime)
+    with pytest.raises(ValueError, match="catalog database"):
+        PostgresArtifactStore(
+            runtime,
+            approval_dsn="postgresql://actuator:secret@db.internal:5432/other_catalog",
+        )
+
+    store = PostgresArtifactStore(
+        runtime,
+        approval_dsn="postgresql://actuator:secret@db.internal:5432/semiskill",
+    )
+    assert store._approval_dsn.endswith("/semiskill")

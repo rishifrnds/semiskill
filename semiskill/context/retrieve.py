@@ -31,11 +31,19 @@ class SkillCard:
 
 def search_catalog(*, dsn: str, principal: Iterable[str], query: str = "",
                    function: str | None = None, role: str | None = None,
-                   level: str | None = None, limit: int = 100) -> list[SkillCard]:
-    """ACL-enforced catalog search. Fails closed on an empty principal (resolve_allowed_labels)."""
+                   level: str | None = None, limit: int = 100,
+                   trusted_clearance: bool = False) -> list[SkillCard]:
+    """ACL-enforced catalog search.
+
+    Restricted labels are honored only when the caller explicitly declares that ``principal`` came
+    from a trusted authentication/authorization resolver. The database independently enforces that
+    distinction through the role used for the query; an ordinary catalog role is always reduced to
+    public visibility even if application input contains more privileged labels.
+    """
     allowed = list(resolve_allowed_labels(principal))
+    reader_role = "semiskill_acl_reader" if trusted_clearance else "semiskill_app"
     with psycopg.connect(dsn, row_factory=psycopg.rows.dict_row) as conn:
-        conn.execute("SET LOCAL ROLE semiskill_app")
+        conn.execute(f"SET LOCAL ROLE {reader_role}")
         rows = conn.execute(
             "SELECT * FROM catalog_search(%s, %s, %s, %s, %s, %s)",
             (query, allowed, function, role, level, limit),
@@ -52,17 +60,21 @@ def search_catalog(*, dsn: str, principal: Iterable[str], query: str = "",
     ]
 
 
-def get_skill_detail(*, dsn: str, skill_version_id, principal: Iterable[str]) -> dict | None:
+def get_skill_detail(*, dsn: str, skill_version_id, principal: Iterable[str],
+                     trusted_clearance: bool = False) -> dict | None:
     """Detail for a PUBLISHED, visible skill: its card fields + the verification/scan report (the
     UI badge). Returns None if the skill is not published or not visible to the caller."""
     principal = list(principal)
-    card = next((c for c in search_catalog(dsn=dsn, principal=principal, limit=1000)
+    card = next((c for c in search_catalog(
+        dsn=dsn, principal=principal, limit=1000, trusted_clearance=trusted_clearance,
+    )
                  if str(c.artifact_id) == str(skill_version_id)), None)
     if card is None:
         return None
     allowed = list(resolve_allowed_labels(principal))
+    reader_role = "semiskill_acl_reader" if trusted_clearance else "semiskill_app"
     with psycopg.connect(dsn, row_factory=psycopg.rows.dict_row) as conn:
-        conn.execute("SET LOCAL ROLE semiskill_app")
+        conn.execute(f"SET LOCAL ROLE {reader_role}")
         row = conn.execute("SELECT * FROM skill_scan_report(%s, %s)",
                             (skill_version_id, allowed)).fetchone()
         conn.rollback()
