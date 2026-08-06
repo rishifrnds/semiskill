@@ -10,7 +10,7 @@ metadata:
   semiskill-role: static-signoff-engineer
   semiskill-level: fresher
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-02-18
   semiskill-tags: lint, static-signoff, waivers, rule-classes, triage, rtl
 ---

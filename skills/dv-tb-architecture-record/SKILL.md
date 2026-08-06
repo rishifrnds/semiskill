@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: principal
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-04-27
   semiskill-tags: architecture, testbench, uvm, vip, reuse, configuration, decision-record
 ---

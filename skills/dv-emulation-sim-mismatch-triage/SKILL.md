@@ -10,7 +10,7 @@ metadata:
   semiskill-role: emulation-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-06-22
   semiskill-tags: emulation, acceleration, x-propagation, two-state, races, transactors, bring-up
 ---

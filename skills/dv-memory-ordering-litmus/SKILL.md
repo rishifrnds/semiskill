@@ -10,7 +10,7 @@ metadata:
   semiskill-role: processor-ip-dv-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-06-27
   semiskill-tags: memory-model, litmus, ordering, coherence, multicore, fences, dependencies, traces
 ---

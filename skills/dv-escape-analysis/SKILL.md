@@ -10,7 +10,7 @@ metadata:
   semiskill-role: verification-lead
   semiskill-level: senior-manager
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-24
   semiskill-tags: escape-analysis, corrective-action, silicon-escape, interop, coverage-hole, sign-off, systemic
 ---

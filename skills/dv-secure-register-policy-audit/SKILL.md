@@ -10,7 +10,7 @@ metadata:
   semiskill-role: security-verification-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-08-19
   semiskill-tags: security, registers, access-control, lock-bits, negative-testing, ral, audit
 ---

@@ -11,11 +11,15 @@ from semiskill.artifacts.store import (
     PostgresArtifactStore,
     PublicationReconciliationBundle,
 )
-from semiskill.authoring.gate import make_content_review
 from semiskill.authoring.snapshot import SnapshotUnavailable, build_scoreboard_snapshot
 from semiskill.capture.intake import build_skill_version, load_skill_dir
 from semiskill.governance.reconciliation import _chain_sha256
-from tests.support import content_checks, publish_test_skill, publish_wave_sources
+from tests.support import (
+    append_test_content_review,
+    content_checks,
+    publish_test_skill,
+    publish_wave_sources,
+)
 
 MIGRATIONS = Path("semiskill/artifacts/migrations")
 
@@ -25,9 +29,29 @@ class MemoryStore:
         self.rows = list(rows)
         self.database_name = database_name
         self.projections = tuple(projections)
+        self.review_contract_ids = {
+            row.artifact_id for row in self.rows
+            if row.artifact_type is ArtifactType.GATE_DECISION
+        }
 
     def get(self, artifact_id):
         return next((row for row in self.rows if row.artifact_id == artifact_id), None)
+
+    def append(self, artifact):
+        self.rows.append(artifact)
+        return artifact
+
+    def append_many(self, artifacts):
+        self.rows.extend(artifacts)
+        return list(artifacts)
+
+    def append_review_contract(self, artifact):
+        self.rows.append(artifact)
+        self.review_contract_ids.add(artifact.artifact_id)
+        return artifact
+
+    def verified_review_contract_ids(self):
+        return set(self.review_contract_ids)
 
     def by_type(self, artifact_type):
         return [row for row in self.rows if row.artifact_type is artifact_type]
@@ -38,7 +62,9 @@ class MemoryStore:
                 "identity_sha256": "sha256:" + "1" * 64}
 
     def publication_reconciliation_bundle(self):
-        return PublicationReconciliationBundle(tuple(self.rows), self.projections)
+        return PublicationReconciliationBundle(
+            tuple(self.rows), self.projections, tuple(self.review_contract_ids),
+        )
 
 
 def _rows(store):
@@ -89,6 +115,15 @@ A reviewer checks the cited source and conclusion.
 def _registry(path: Path, cells: list[dict], target=1) -> Path:
     path.write_text(json.dumps({"target_per_role": target, "cells": cells}), encoding="utf-8")
     return path
+
+
+def _write_shared(root: Path, *, profile: bytes = b"profile-v1\n") -> Path:
+    shared = root / "_shared"
+    shared.mkdir(exist_ok=True)
+    (shared / "team-profile.md").write_bytes(profile)
+    (shared / "failure-signature-schema.md").write_bytes(b"schema\n")
+    (shared / "handoff-vocabulary.md").write_bytes(b"vocabulary\n")
+    return shared
 
 
 @pytest.mark.integration
@@ -182,11 +217,54 @@ def test_source_edit_is_published_stale_without_rewriting_frozen_badge(store, tm
     assert snapshot["funnel"]["published"] == 0
 
 
+@pytest.mark.integration
+def test_shared_only_edit_invalidates_publication_and_scoreboard_credit(store, tmp_path):
+    root = tmp_path / "skills"
+    directory = root / "dv-one"
+    directory.mkdir(parents=True)
+    directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
+    shared = _write_shared(root)
+    fixture = publish_wave_sources(store, root)[0]
+    registry = _registry(tmp_path / "registry.json", [
+        {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
+    ])
+
+    baseline = build_scoreboard_snapshot(
+        store=store, registry_path=registry, skills_root=root,
+        generated_at="2026-08-06T00:00:00Z", expected_active=1, expected_declined=0,
+        expected_roles=1, target_per_role=1, environment="test",
+        source_commit="test-commit", repository_dirty=False,
+    )
+    assert baseline["cells"][0]["state"] == "published"
+
+    (shared / "team-profile.md").write_bytes(b"profile-v2\n")
+    snapshot = build_scoreboard_snapshot(
+        store=store, registry_path=registry, skills_root=root,
+        generated_at="2026-08-06T00:01:00Z", expected_active=1, expected_declined=0,
+        expected_roles=1, target_per_role=1, environment="test",
+        source_commit="test-commit", repository_dirty=True,
+    )
+
+    cell = snapshot["cells"][0]
+    assert cell["state"] == "published_stale"
+    assert cell["stage_flags"]["approved"] is False
+    assert cell["stage_flags"]["published"] is False
+    assert cell["payload_hashes"]["all_match"] is False
+    assert cell["payload_hashes"]["source"] != cell["payload_hashes"]["approval"]
+    assert cell["artifacts"]["approval_id"] == str(fixture.approval.artifact_id)
+    assert snapshot["funnel"]["published"] == 0
+    assert snapshot["anomalies"]["stale_source_hashes"] == ["dv-one"]
+    assert snapshot["anomalies"]["stale_review_hashes"] == ["dv-one"]
+    assert snapshot["anomalies"]["stale_approval_hashes"] == ["dv-one"]
+    assert snapshot["release_gate"]["passed"] is False
+
+
 def test_prior_version_review_is_stale_evidence_without_review_funnel_credit(tmp_path):
     old = build_skill_version(skill_md=_skill("dv-one"), actor="author")
-    old_review = make_content_review(
-        skill_version=old, phase="recheck", prompt_version="P5-RECHECK-CALIBRATED@2", run_id="old-run",
-        batch_id="old-batch", attempt=1, reviewer_identity="old-reviewer",
+    memory = MemoryStore([old])
+    append_test_content_review(
+        memory, old, prompt_version="P5-RECHECK-CALIBRATED@2", run_id="old-run",
+        batch_id="old-batch", reviewer_identity="old-reviewer",
         fixer_identity="old-fixer", checks=content_checks(), findings=[],
     )
     root = tmp_path / "skills"
@@ -201,7 +279,7 @@ def test_prior_version_review_is_stale_evidence_without_review_funnel_credit(tmp
     ])
 
     snapshot = build_scoreboard_snapshot(
-        store=MemoryStore([old, old_review]), registry_path=registry, skills_root=root,
+        store=memory, registry_path=registry, skills_root=root,
         generated_at="2026-08-06T00:00:00Z", expected_active=1, expected_declined=0,
         expected_roles=1, target_per_role=1, source_commit="test", repository_dirty=False,
     )
@@ -224,16 +302,15 @@ def test_later_review_for_another_version_does_not_taint_frozen_badge(store, tmp
         skill_md=_skill("dv-one").replace("semiskill-version: 1.0.0", "semiskill-version: 2.0.0"),
         actor="author",
     ))
-    later = make_content_review(
-        skill_version=newer, phase="recheck", prompt_version="P5-RECHECK-CALIBRATED@2", run_id="new-run",
-        batch_id="new-batch", attempt=1, reviewer_identity="new-reviewer",
+    later = append_test_content_review(
+        store, newer, prompt_version="P5-RECHECK-CALIBRATED@2", run_id="new-run",
+        batch_id="new-batch", reviewer_identity="new-reviewer",
         fixer_identity="new-fixer", checks=content_checks(), findings=[{
-            "finding_id": "B-1", "category": "correctness", "severity": "blocking",
+            "finding_id": "B-1", "category": "technical_correctness", "severity": "blocking",
             "evidence": "new version issue", "location": "SKILL.md:1",
             "required_change": "fix new version", "disposition": "open",
-        }],
+        }], prior_review=fixture.content_review,
     )
-    store.append(later)
     assert later.timestamp_start >= fixture.approval.timestamp_start
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
@@ -256,13 +333,12 @@ def test_later_exact_lineage_collision_blocks_release_without_rewriting_badge(st
     directory.mkdir(parents=True)
     directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
     fixture = publish_wave_sources(store, root)[0]
-    duplicate = make_content_review(
-        skill_version=fixture.skill_version, phase="recheck", prompt_version="P5-RECHECK-CALIBRATED@2",
-        run_id="duplicate-run", batch_id="duplicate-batch", attempt=1,
+    duplicate = append_test_content_review(
+        store, fixture.skill_version, prompt_version="P5-RECHECK-CALIBRATED@2",
+        run_id="duplicate-run", batch_id="duplicate-batch",
         reviewer_identity="duplicate-reviewer", fixer_identity="duplicate-fixer",
         checks=content_checks(), findings=[],
     )
-    store.append(duplicate)
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
     ])

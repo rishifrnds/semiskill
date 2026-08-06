@@ -1,12 +1,14 @@
 """Materialize one exact, permission-scoped installable SemiSkill release.
 
-Only frozen bytes from the approval-bound skill payload are eligible. Repository source files,
-top-level ``_shared`` content, authoring tools, and mutable review files are never copied into a
-release. A complete release directory (pack folder, deterministic ZIP, and export manifest) is
-transactionally swapped as one owned tree.
+Only frozen bytes from the approval-bound skill payload are eligible. Mutable repository source
+files, authoring tools, and review files are never copied into a release. Canonical shared source
+bytes are already vendored into every approved skill payload and must form one coherent snapshot
+across the release. A complete release directory (pack folder, deterministic ZIP, and export
+manifest) is transactionally swapped as one owned tree.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import zipfile
@@ -21,10 +23,16 @@ from semiskill.authoring.export_files import (
     safe_relative_path,
 )
 from semiskill.authoring.export_scope import ExportRefused, ExportScope
-from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
+from semiskill.capture.intake import (
+    CANONICAL_SHARED_FILES,
+    build_skill_version,
+    load_skill_dir,
+    payload_fingerprint,
+)
 
 PACK_NAME = "semiskill-dv"
 _SHARED_REF = re.compile(r"_shared/[A-Za-z0-9._/-]+")
+_CANONICAL_SHARED_PATHS = tuple(f"_shared/{name}" for name in CANONICAL_SHARED_FILES)
 
 
 class PackRefused(ExportRefused):
@@ -71,13 +79,14 @@ class PackManifest:
     scoreboard_snapshot_id: str
     source_commit: str
     source_tree_sha256: str
+    shared_bundle_sha256: str
     skill_count: int
     skills: tuple[PackedSkill, ...]
 
     def to_json(self) -> str:
         return json.dumps(
             {
-                "schema_version": "semiskill.pack/v2",
+                "schema_version": "semiskill.pack/v3",
                 "pack": self.pack,
                 "generated_at": self.generated_at,
                 "scope_id": self.scope_id,
@@ -85,6 +94,7 @@ class PackManifest:
                 "scoreboard_snapshot_id": self.scoreboard_snapshot_id,
                 "source_commit": self.source_commit,
                 "source_tree_sha256": self.source_tree_sha256,
+                "shared_bundle_sha256": self.shared_bundle_sha256,
                 "skill_count": self.skill_count,
                 "skills": [asdict(skill) for skill in self.skills],
             },
@@ -109,6 +119,36 @@ def _missing_shared_references(files: tuple) -> tuple[str, ...]:
         for reference in _SHARED_REF.findall(item.text)
     }
     return tuple(sorted(reference for reference in referenced if reference not in available))
+
+
+def _canonical_shared_snapshot(files: tuple, *, slug: str) -> tuple[tuple[str, str], ...]:
+    shared = {
+        item.path: item.text
+        for item in files
+        if item.path.split("/", 1)[0].casefold() == "_shared"
+    }
+    expected = set(_CANONICAL_SHARED_PATHS)
+    actual = set(shared)
+    if actual != expected:
+        details = []
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        if missing:
+            details.append("missing " + ", ".join(missing))
+        if extra:
+            details.append("unexpected " + ", ".join(extra))
+        raise PackRefused(
+            f"{slug}: approved payload does not contain the exact canonical shared set"
+            + (": " + "; ".join(details) if details else "")
+        )
+    return tuple((path, shared[path]) for path in _CANONICAL_SHARED_PATHS)
+
+
+def _shared_snapshot_sha256(snapshot: tuple[tuple[str, str], ...]) -> str:
+    encoded = json.dumps(
+        dict(snapshot), sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def _markdown_cell(value: object) -> str:
@@ -156,12 +196,20 @@ def build_pack(
         raise PackRefused(str(exc)) from exc
 
     packed: list[PackedSkill] = []
+    shared_snapshot: tuple[tuple[str, str], ...] | None = None
     for entry in catalog.entries:
         missing = _missing_shared_references(entry.files)
         if missing:
             raise PackRefused(
                 f"{entry.slug}: approved payload has unresolved shared dependencies: "
                 + ", ".join(missing)
+            )
+        entry_shared = _canonical_shared_snapshot(entry.files, slug=entry.slug)
+        if shared_snapshot is None:
+            shared_snapshot = entry_shared
+        elif entry_shared != shared_snapshot:
+            raise PackRefused(
+                f"{entry.slug}: approved payload uses a different canonical shared snapshot"
             )
         skill_file = next(item for item in entry.files if item.path == "SKILL.md")
         packed.append(PackedSkill(
@@ -187,6 +235,8 @@ def build_pack(
             files=tuple(PackedFile(item.path, item.sha256, item.bytes_len) for item in entry.files),
         ))
 
+    if shared_snapshot is None:  # Defensive: the non-empty scope/catalog contracts imply this.
+        raise PackRefused("the export scope contains no approved shared snapshot")
     manifest = PackManifest(
         pack=pack_name,
         generated_at=scope.generated_at,
@@ -195,6 +245,7 @@ def build_pack(
         scoreboard_snapshot_id=scope.scoreboard_snapshot_id,
         source_commit=scope.source_commit,
         source_tree_sha256=scope.source_tree_sha256,
+        shared_bundle_sha256=_shared_snapshot_sha256(shared_snapshot),
         skill_count=len(packed),
         skills=tuple(packed),
     )
@@ -262,6 +313,8 @@ Put the `{pack_name}` folder in `~/.cursor/skills/` (Windows:
 
 `MANIFEST.json` binds every delivered file to export scope `{manifest.scope_id}` and records the
 exact approval, review, scan, payload-hash, permission-label, and source-snapshot provenance.
+Shared bundle `{manifest.shared_bundle_sha256}` is vendored under every skill root. Each skill is
+self-contained; these are frozen approval-bound support copies, not a global writable store.
 
 Verification describes these exact bytes at publication time. It is not a runtime guarantee, and
 Cursor does not enforce the declared tool list. Read a procedure before relying on it.
@@ -272,8 +325,9 @@ def _personalizing_doc(pack_name: str) -> str:
     return f"""# Making these yours
 
 Fill `[[FILL: ...]]` slots from your repository, but never place credentials, customer data, or
-export-controlled content in a shared skill. Save a personalized fork under a new slug so it cannot
-be confused with the approved `{pack_name}` payload. A changed fork no longer carries this pack's
-verification badge and must pass the normal submission, scan, review, and human-approval gates
-before it can be shared.
+export-controlled content in a shared skill. The source pack is authored once, while installed
+`_shared/` support files are deliberately vendored per skill; editing one installed copy does not
+update siblings. Save a personalized fork under a new slug so it cannot be confused with the
+approved `{pack_name}` payload. A changed fork no longer carries this pack's verification badge and
+must pass the normal submission, scan, review, and human-approval gates before it can be shared.
 """

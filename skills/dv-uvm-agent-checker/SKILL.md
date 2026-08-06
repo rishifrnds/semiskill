@@ -10,7 +10,7 @@ metadata:
   semiskill-role: ip-dv-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-03-05
   semiskill-tags: uvm, agent, monitor, driver, scoreboard, checker, house-conventions
 ---

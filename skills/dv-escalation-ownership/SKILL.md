@@ -10,7 +10,7 @@ metadata:
   semiskill-role: verification-lead
   semiskill-level: director
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-14
   semiskill-tags: escalation, customer, severity, blast-radius, commitments, closure, verification-plan
 ---

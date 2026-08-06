@@ -10,7 +10,7 @@ metadata:
   semiskill-role: applications-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-05-21
   semiskill-tags: escalation, customer-defect, duplicate-check, release-notes, versioning, documentation, handoff
 ---

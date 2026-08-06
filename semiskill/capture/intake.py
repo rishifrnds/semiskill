@@ -25,6 +25,18 @@ MAX_PAYLOAD_FILE_BYTES = 1024 * 1024
 MAX_PAYLOAD_TOTAL_BYTES = 4 * 1024 * 1024
 _READ_CHUNK_BYTES = 64 * 1024
 
+# The DV pack's shared inputs are a reviewed public contract, not an open directory glob. Adding a
+# fourth file requires a code/ADR change so it cannot silently widen every public skill payload.
+CANONICAL_SHARED_FILES = (
+    "failure-signature-schema.md",
+    "handoff-vocabulary.md",
+    "team-profile.md",
+)
+_SHARED_REFERENCE = re.compile(
+    r"(?<![A-Za-z0-9_./-])_shared/(?:[A-Za-z0-9_-]+/)*"
+    r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*"
+)
+
 # Canonical identity of the installable skill bytes. Governance metadata, artifact IDs, actors,
 # and timestamps are intentionally absent.
 PAYLOAD_FINGERPRINT_FIELDS = (
@@ -51,6 +63,20 @@ def payload_fingerprint(payload: dict) -> str:
 class ParsedSkill:
     frontmatter: dict
     body: str
+
+
+@dataclass(frozen=True, slots=True)
+class SharedBundle:
+    """One immutable, safely-read snapshot of the canonical pack-wide support files."""
+
+    files: tuple[tuple[str, str], ...]
+    sha256: str
+
+    def as_payload_files(self) -> dict[str, str]:
+        return dict(self.files)
+
+
+EMPTY_SHARED_BUNDLE = SharedBundle((), hashlib.sha256(b"{}").hexdigest())
 
 
 def _slugify(name: str) -> str:
@@ -743,3 +769,117 @@ def load_skill_dir(path: str | Path) -> tuple[str, dict[str, str]]:
 
     with _posix_root_session(p) as root_fd:
         return read_session(root_fd, _payload_entries_posix(root_fd))
+
+
+def _shared_bundle_from_rows(rows: dict[str, str]) -> SharedBundle:
+    ordered = tuple(sorted(rows.items(), key=lambda item: (item[0].casefold(), item[0])))
+    encoded = json.dumps(
+        dict(ordered), sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+    ).encode("utf-8")
+    return SharedBundle(ordered, hashlib.sha256(encoded).hexdigest())
+
+
+def load_shared_bundle(path: str | Path) -> SharedBundle:
+    """Read the exact allowlisted public ``_shared`` tree without following filesystem links."""
+    p = Path(path)
+
+    def read_session(
+        root: Path | int,
+        relative_paths: list[PurePosixPath],
+        windows_root_identity: tuple[int, int] | None = None,
+    ) -> SharedBundle:
+        names = {relative.as_posix() for relative in relative_paths}
+        governance = [
+            relative for relative in relative_paths if relative.name.casefold() == "review.json"
+        ]
+        if governance:
+            raise ValueError(
+                "governance metadata must not be embedded in the shared payload: "
+                f"{governance[0]}"
+            )
+        expected = set(CANONICAL_SHARED_FILES)
+        missing = sorted(expected - names)
+        unknown = sorted(names - expected)
+        if missing:
+            raise ValueError("missing canonical shared files: " + ", ".join(missing))
+        if unknown:
+            raise ValueError("unregistered shared files: " + ", ".join(unknown))
+        rows: dict[str, str] = {}
+        total = 0
+        for name in CANONICAL_SHARED_FILES:
+            value = _read_utf8_payload(
+                root, PurePosixPath(name), windows_root_identity,
+            )
+            total += len(value.encode("utf-8"))
+            if total > MAX_PAYLOAD_TOTAL_BYTES:
+                raise ValueError("shared payload exceeds the total byte limit")
+            rows[f"_shared/{name}"] = value
+        return _shared_bundle_from_rows(rows)
+
+    if os.name == "nt":
+        with _windows_root_session(p) as root_identity:
+            if _is_link_or_reparse(p) or not p.is_dir():
+                raise ValueError(f"shared path must be a regular non-link directory: {p}")
+            try:
+                root = p.resolve(strict=True)
+            except OSError as exc:
+                raise ValueError(f"shared path is unreadable: {p}") from exc
+            entries = _payload_entries(p)
+            relatives = [PurePosixPath(entry.relative_to(p).as_posix()) for entry in entries]
+            return read_session(root, relatives, root_identity)
+
+    with _posix_root_session(p) as root_fd:
+        return read_session(root_fd, _payload_entries_posix(root_fd))
+
+
+def shared_bundle_for_skills_root(root: str | Path) -> SharedBundle:
+    """Load one optional shared snapshot for a whole source operation."""
+    shared = Path(root) / "_shared"
+    return load_shared_bundle(shared) if os.path.lexists(shared) else EMPTY_SHARED_BUNDLE
+
+
+def _shared_references(skill_md: str, files: dict[str, str]) -> set[str]:
+    return {
+        match.group(0)
+        for text in (skill_md, *files.values())
+        for match in _SHARED_REFERENCE.finditer(text)
+    }
+
+
+def load_skill_source(
+    path: str | Path,
+    *,
+    shared_bundle: SharedBundle | None = None,
+) -> tuple[str, dict[str, str]]:
+    """Load a skill plus one exact shared snapshot into its immutable payload file namespace.
+
+    The source tree stores shared files once as a sibling directory. Agent Skills resolves file
+    references from each skill root, so approved/installable payloads contain exact per-skill copies.
+    """
+    p = Path(path)
+    skill_md, local_files = load_skill_dir(p)
+    if not isinstance(shared_bundle, (SharedBundle, type(None))):
+        raise ValueError("shared_bundle must be a safely loaded SharedBundle")
+    if shared_bundle is None:
+        sibling = p.parent / "_shared"
+        shared_bundle = load_shared_bundle(sibling) if os.path.lexists(sibling) else EMPTY_SHARED_BUNDLE
+    shared_files = shared_bundle.as_payload_files()
+    local_shared = sorted(
+        name for name in local_files if PurePosixPath(name).parts[0].casefold() == "_shared"
+    )
+    if local_shared and shared_files:
+        raise ValueError(
+            "local _shared content shadows the canonical shared bundle: " + ", ".join(local_shared)
+        )
+    merged = dict(local_files)
+    folded = {name.casefold() for name in merged}
+    for name, value in shared_files.items():
+        if name.casefold() in folded:
+            raise ValueError(f"shared payload path collides with a local file: {name}")
+        merged[name] = value
+        folded.add(name.casefold())
+    missing = sorted(_shared_references(skill_md, merged) - set(merged))
+    if missing:
+        raise ValueError("unresolved shared dependencies: " + ", ".join(missing))
+    _validate_payload_budget(skill_md, merged)
+    return skill_md, merged

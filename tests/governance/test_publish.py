@@ -11,7 +11,7 @@ import psycopg
 from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.artifacts.store import PostgresArtifactStore, PublicationReconciliationBundle
-from semiskill.authoring.gate import make_content_review
+from semiskill.authoring.review_collection import BatchRejected
 from semiskill.capture.intake import build_skill_version, payload_fingerprint
 from semiskill.context.retrieve import search_catalog
 from semiskill.governance.identity import AuthenticatedHuman
@@ -22,6 +22,7 @@ from semiskill.governance.publish import (
     resolve_frozen_approval_evidence,
 )
 from semiskill.governance.rollback import decide_unpublication
+from tests.support import append_test_content_review
 
 MIG = Path("semiskill/artifacts/migrations")
 
@@ -43,6 +44,7 @@ IDENTITY = AuthenticatedHuman(
 class MemoryStore:
     def __init__(self):
         self.rows = {}
+        self.review_contract_ids = set()
 
     def append(self, artifact):
         self.rows[artifact.artifact_id] = artifact
@@ -54,6 +56,13 @@ class MemoryStore:
     def append_approval(self, artifact):
         return self.append(artifact)
 
+    def append_review_contract(self, artifact):
+        self.review_contract_ids.add(artifact.artifact_id)
+        return self.append(artifact)
+
+    def verified_review_contract_ids(self):
+        return set(self.review_contract_ids)
+
     def get(self, artifact_id):
         return self.rows.get(artifact_id)
 
@@ -64,7 +73,9 @@ class MemoryStore:
         ]
 
     def publication_reconciliation_bundle(self):
-        return PublicationReconciliationBundle(tuple(self.rows.values()), ())
+        return PublicationReconciliationBundle(
+            tuple(self.rows.values()), (), tuple(self.review_contract_ids),
+        )
 
 
 def skill_md(slug, version="1.0.0"):
@@ -102,10 +113,23 @@ def _scan(sv, stage, *, status="passed", hard_fail=False):
 
 def _chain(store, *, slug="dv-x", version="1.0.0", missing_stage=None,
            judge_status="passed", judge_required=True, hard_fail=False, findings=(),
-           reviewer="reviewer", fixer="fixer", permissions_label="team"):
-    sv = store.append(build_skill_version(
+           reviewer=None, fixer=None, permissions_label="team"):
+    candidate = build_skill_version(
         skill_md=skill_md(slug, version), actor="author", permissions_label=permissions_label,
-    ))
+    )
+    sv = next((
+        artifact for artifact in store.by_type(ArtifactType.SKILL_VERSION)
+        if artifact.payload.get("slug") == slug
+        and payload_fingerprint(artifact.payload) == payload_fingerprint(candidate.payload)
+    ), None) or store.append(candidate)
+    prior_review = max((
+        artifact for artifact in store.by_type(ArtifactType.REVIEW)
+        if artifact.payload.get("review_kind") == "content_review"
+        and artifact.payload.get("slug") == slug
+        and artifact.permissions_label == sv.permissions_label
+        and artifact.payload.get("role") == sv.payload.get("role")
+        and artifact.payload.get("level") == sv.payload.get("level")
+    ), key=lambda artifact: artifact.payload.get("attempt", 0), default=None)
     scans = []
     for stage in range(1, 6):
         if stage == missing_stage:
@@ -125,13 +149,11 @@ def _chain(store, *, slug="dv-x", version="1.0.0", missing_stage=None,
                  "scan_artifact_ids": [str(scan.artifact_id) for scan in scans]},
     ).with_eval_score(1.0)
     security = store.append(replace(security, permissions_label=sv.permissions_label))
-    content = make_content_review(
-        skill_version=sv,
-        phase="recheck",
-        prompt_version="P5-RECHECK-CALIBRATED@2",
+    content = append_test_content_review(
+        store,
+        sv,
         run_id=f"run:{uuid.uuid4()}",
         batch_id="batch-1",
-        attempt=1,
         reviewer_identity=reviewer,
         fixer_identity=fixer,
         checks={
@@ -141,8 +163,8 @@ def _chain(store, *, slug="dv-x", version="1.0.0", missing_stage=None,
             "artifact_reconciliation": {"passed": True, "evidence": "refs:matched"},
         },
         findings=findings,
+        prior_review=prior_review,
     )
-    content = store.append(content)
     return sv, security, content, scans
 
 
@@ -202,8 +224,8 @@ def test_open_blocking_finding_and_identity_collision_are_refused(store):
     }]
     with pytest.raises(PublishRefused, match="content review is not ready"):
         decide(store, _chain(store, slug="dv-blocked", findings=blocking))
-    with pytest.raises(PublishRefused, match="content review is not ready"):
-        decide(store, _chain(store, slug="dv-collision", reviewer="same", fixer="same"))
+    with pytest.raises(BatchRejected, match="not independent"):
+        _chain(store, slug="dv-collision", reviewer="same", fixer="same")
 
 
 @pytest.mark.integration
@@ -216,13 +238,11 @@ def test_omitted_prior_blocker_cannot_be_laundered_by_a_later_recheck(store):
     skill, security, first, scans = _chain(
         store, slug="dv-omitted-blocker", findings=blocking,
     )
-    second = store.append(make_content_review(
-        skill_version=skill,
-        phase="recheck",
-        prompt_version="P5-RECHECK-CALIBRATED@2",
+    second = append_test_content_review(
+        store,
+        skill,
         run_id="run:second",
         batch_id="batch-1",
-        attempt=2,
         reviewer_identity="reviewer-2",
         fixer_identity="fixer-2",
         checks={
@@ -233,7 +253,7 @@ def test_omitted_prior_blocker_cannot_be_laundered_by_a_later_recheck(store):
         },
         findings=[],
         prior_review=first,
-    ))
+    )
     with pytest.raises(PublishRefused, match="content review is not ready"):
         decide(store, (skill, security, second, scans))
 
@@ -260,7 +280,7 @@ def test_actuator_enforces_registry_facets_and_policy_derived_judge_sampling(sto
     with pytest.raises(psycopg.errors.CheckViolation, match="verified publication contract"):
         decide(store, _chain(store, slug="dv-not-in-registry"))
     with pytest.raises(psycopg.errors.CheckViolation, match="verified publication contract"):
-        decide(store, _chain(store, slug="dv-signal-trace-localisation"))
+        decide(store, _chain(store, slug="dv-repo-orientation"))
     with pytest.raises(psycopg.errors.CheckViolation, match="verified publication contract"):
         decide(store, _chain(
             store,
@@ -420,8 +440,8 @@ def test_unpublish_does_not_reset_verified_semver_history(store, pg_dsn):
         environment="test",
     )
 
-    with pytest.raises(PublishRefused, match="every verified publication epoch"):
-        decide(store, _chain(store, slug="dv-epoch", version="1.0.0"))
+    with pytest.raises(BatchRejected, match="monotonic semver bump"):
+        _chain(store, slug="dv-epoch", version="1.0.0")
     with pytest.raises(PublishRefused, match="every verified publication epoch"):
         decide(store, _chain(store, slug="dv-epoch", version="2.0.0"))
 

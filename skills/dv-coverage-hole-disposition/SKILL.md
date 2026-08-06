@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-04-30
   semiskill-tags: coverage, covergroup, bins, exclusions, waivers, closure, cross-coverage
 ---

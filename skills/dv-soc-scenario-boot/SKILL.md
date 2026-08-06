@@ -10,7 +10,7 @@ metadata:
   semiskill-role: soc-dv-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-16
   semiskill-tags: soc, scenario, virtual-sequence, boot, firmware, interconnect, register-trace, debug
 ---

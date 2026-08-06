@@ -10,7 +10,7 @@ metadata:
   semiskill-role: applications-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-07-09
   semiskill-tags: customer, deployment, proof-of-concept, vip, integration, handover, time-box
 ---

@@ -10,7 +10,7 @@ metadata:
   semiskill-role: formal-verification
   semiskill-level: senior-staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-03-16
   semiskill-tags: formal, model-checking, planning, scoping, abstraction, effort-estimation
 ---

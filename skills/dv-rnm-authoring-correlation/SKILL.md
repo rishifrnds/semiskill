@@ -10,7 +10,7 @@ metadata:
   semiskill-role: ams-verification-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-05-13
   semiskill-tags: rnm, real-number-model, mixed-signal, correlation, wreal, nettype, model-release
 ---

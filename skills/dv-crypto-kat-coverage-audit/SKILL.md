@@ -10,7 +10,7 @@ metadata:
   semiskill-role: security-verification-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-02-19
   semiskill-tags: crypto, known-answer-test, vectors, algorithm-matrix, coverage-audit, sign-off, gaps
 ---

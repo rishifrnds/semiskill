@@ -247,11 +247,16 @@ def _repository_identity(repo_root: Path) -> tuple[str, bool]:
 
 def _skills_tree_sha256(root: Path) -> str:
     """Recompute the canonical source material used by the scoreboard tree identity."""
-    from semiskill.capture.intake import build_skill_version, load_skill_dir
+    from semiskill.capture.intake import (
+        build_skill_version,
+        load_skill_source,
+        shared_bundle_for_skills_root,
+    )
 
     rows: dict[str, str] = {}
+    shared_bundle = shared_bundle_for_skills_root(root)
     for skill_path in sorted(root.rglob("SKILL.md")):
-        skill_md, files = load_skill_dir(skill_path.parent)
+        skill_md, files = load_skill_source(skill_path.parent, shared_bundle=shared_bundle)
         payload = build_skill_version(
             skill_md=skill_md, actor="export-scope-tree", files=files,
         ).payload
@@ -391,9 +396,14 @@ def make_export_scope(
 
 
 class _ArtifactSubset:
-    def __init__(self, artifacts: tuple[Artifact, ...]):
+    def __init__(
+        self,
+        artifacts: tuple[Artifact, ...],
+        verified_review_contract_ids: tuple[uuid.UUID, ...],
+    ):
         self._rows = artifacts
         self._by_id = {artifact.artifact_id: artifact for artifact in artifacts}
+        self._verified_review_contract_ids = frozenset(verified_review_contract_ids)
 
     def get(self, artifact_id: uuid.UUID) -> Artifact | None:
         return self._by_id.get(artifact_id)
@@ -403,6 +413,20 @@ class _ArtifactSubset:
 
     def by_type(self, artifact_type: ArtifactType) -> list[Artifact]:
         return [row for row in self._rows if row.artifact_type is artifact_type]
+
+    def verified_review_contract_ids(self) -> set[uuid.UUID]:
+        return set(self._verified_review_contract_ids)
+
+    def review_contract_verified(
+        self, contract_id: uuid.UUID, permissions_label: str,
+    ) -> bool:
+        artifact = self._by_id.get(contract_id)
+        return (
+            contract_id in self._verified_review_contract_ids
+            and artifact is not None
+            and artifact.artifact_type is ArtifactType.GATE_DECISION
+            and artifact.permissions_label == permissions_label
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -434,7 +458,7 @@ def load_scoped_publications(store, scope: ExportScope) -> tuple[ScopedPublicati
     artifact_ids = [artifact.artifact_id for artifact in bundle.artifacts]
     if len(artifact_ids) != len(set(artifact_ids)):
         raise ExportRefused("scoped publication bundle contains duplicate artifact IDs")
-    if len(bundle.artifacts) > 7100:
+    if len(bundle.artifacts) > 20100:
         raise ExportRefused("scoped publication bundle exceeds its evidence bound")
     if any(
         artifact.permissions_label != scope.permission_label for artifact in bundle.artifacts
@@ -458,8 +482,16 @@ def load_scoped_publications(store, scope: ExportScope) -> tuple[ScopedPublicati
     if actual_heads != expected_heads or len(actual_heads) != len(bundle.heads):
         raise ExportRefused("active publication heads no longer match the export snapshot")
 
-    subset = _ArtifactSubset(bundle.artifacts)
+    verified_contract_ids = tuple(bundle.verified_review_contract_ids)
+    if len(verified_contract_ids) != len(set(verified_contract_ids)):
+        raise ExportRefused("scoped publication bundle contains duplicate contract witnesses")
+    subset = _ArtifactSubset(bundle.artifacts, verified_contract_ids)
+    for contract_id in verified_contract_ids:
+        contract = subset.get(contract_id)
+        if contract is None or contract.artifact_type is not ArtifactType.GATE_DECISION:
+            raise ExportRefused("scoped publication bundle has an invalid contract witness")
     reachable: set[uuid.UUID] = set()
+    reachable_contracts: set[uuid.UUID] = set()
     for ref in scope.publications:
         if len(ref.scan_artifact_ids) != len(set(ref.scan_artifact_ids)):
             raise ExportRefused(f"{ref.slug}: export snapshot has duplicate scan IDs")
@@ -475,18 +507,42 @@ def load_scoped_publications(store, scope: ExportScope) -> tuple[ScopedPublicati
             visited.add(review_id)
             review = subset.get(review_id)
             if review is None or review.artifact_type is not ArtifactType.REVIEW:
-                break
+                raise ExportRefused(f"{ref.slug}: content-review lineage is missing")
+            if not isinstance(review.payload, dict) or (
+                review.payload.get("review_kind") != "content_review"
+                or review.payload.get("schema_version") != 2
+            ):
+                raise ExportRefused(f"{ref.slug}: content-review lineage is malformed")
             prior_ref = review.payload.get("prior_review_ref") if isinstance(
                 review.payload, dict
             ) else None
+            expected_refs = 2 if prior_ref is None else 3
+            if len(review.input_refs) != expected_refs:
+                raise ExportRefused(f"{ref.slug}: content-review lineage is malformed")
+            reviewed_skill_id = review.input_refs[0]
+            contract_id = review.input_refs[1]
+            reviewed_skill = subset.get(reviewed_skill_id)
+            contract = subset.get(contract_id)
+            if (
+                reviewed_skill is None
+                or reviewed_skill.artifact_type is not ArtifactType.SKILL_VERSION
+                or contract is None
+                or contract.artifact_type is not ArtifactType.GATE_DECISION
+                or contract_id not in set(verified_contract_ids)
+            ):
+                raise ExportRefused(f"{ref.slug}: review skill or contract evidence is missing")
+            reachable.update((reviewed_skill_id, contract_id))
+            reachable_contracts.add(contract_id)
             if prior_ref is None:
                 break
-            if len(review.input_refs) != 2:
-                raise ExportRefused(f"{ref.slug}: content-review lineage is malformed")
-            review_id = review.input_refs[1]
+            review_id = review.input_refs[2]
+            if str(review_id) != prior_ref:
+                raise ExportRefused(f"{ref.slug}: content-review prior reference disagrees")
             reachable.add(review_id)
         else:
             raise ExportRefused(f"{ref.slug}: content-review lineage exceeds 64 attempts")
+    if set(verified_contract_ids) != reachable_contracts:
+        raise ExportRefused("scoped publication bundle has missing or unrelated contract witnesses")
     if set(artifact_ids) != reachable:
         raise ExportRefused("scoped publication bundle contains missing or unrelated evidence")
     rows: list[ScopedPublication] = []

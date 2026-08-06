@@ -117,7 +117,10 @@ def test_adoption_is_exact_audited_atomic_and_allows_future_suffix(legacy_databa
     assert plan["tracked_prefix"] == [
         next(migration_dir.glob(f"{prefix}*.sql")).name for prefix in LEGACY_FILENAMES
     ]
-    assert plan["repository_manifest"][-1]["filename"].startswith("001")
+    assert plan["repository_manifest"][-1]["filename"] == max(
+        row["filename"] for row in plan["repository_manifest"]
+    )
+    assert plan["repository_manifest"][-1]["filename"][:4].isdigit()
 
     result = _adopt(dsn, database, migration_dir, plan)
     assert result["plan_sha256"] == plan["plan_sha256"]
@@ -145,7 +148,7 @@ def test_adoption_is_exact_audited_atomic_and_allows_future_suffix(legacy_databa
                 "UPDATE artifacts SET payload='{}' WHERE artifact_id=%s", (audit[1]["adoption_id"],)
             )
         conn.rollback()
-        with pytest.raises(psycopg.Error, match="append-only"):
+        with pytest.raises(psycopg.Error, match="referenced in a foreign key constraint"):
             conn.execute("TRUNCATE public.artifacts")
         conn.rollback()
         with pytest.raises(psycopg.Error, match="append-only"):

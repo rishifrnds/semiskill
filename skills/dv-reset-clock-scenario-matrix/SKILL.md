@@ -10,7 +10,7 @@ metadata:
   semiskill-role: soc-dv-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-14
   semiskill-tags: reset, clock-gating, clock-mux, frequency-scaling, low-power, cdc, rdc, verification-plan
 ---

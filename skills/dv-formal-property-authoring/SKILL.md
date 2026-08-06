@@ -10,7 +10,7 @@ metadata:
   semiskill-role: formal-verification
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-06-17
   semiskill-tags: formal, sva, assertions, assumptions, cover, over-constraint, review
 ---

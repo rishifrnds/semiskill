@@ -7,8 +7,8 @@ import pytest
 from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import ArtifactType
 from semiskill.artifacts.store import PostgresArtifactStore
-from semiskill.authoring.gate import make_content_review
 from semiskill.context.retrieve import search_catalog
+from tests.support import append_test_content_review
 from semiskill.wave import (
     AWAITING_APPROVAL,
     AWAITING_REVIEW,
@@ -58,12 +58,12 @@ A wrong answer names a cascade line as the cause.
 """ + ("Filler prose to keep the body a realistic length. " * 10)
 
 
-def skill_md(name: str, *, body=BODY, tools="Read Grep Glob"):
+def skill_md(name: str, *, body=BODY, tools="Read Grep Glob", version="1.0.0"):
     return (
         f"---\nname: {name}\ndescription: Does {name}. Use when you need {name}.\n"
         f"allowed-tools: {tools}\nmetadata:\n  semiskill-title: {name}\n"
         "  semiskill-function: design-verification\n  semiskill-role: dv-engineer\n"
-        "  semiskill-level: intermediate\n  semiskill-version: 1.0.0\n---\n"
+        f"  semiskill-level: intermediate\n  semiskill-version: {version}\n---\n"
         f"{body}"
     )
 
@@ -73,6 +73,15 @@ def write_skill(root, name, **kwargs):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "SKILL.md").write_text(skill_md(name, **kwargs), encoding="utf-8")
     return directory
+
+
+def write_shared(root, *, profile="profile-v1\n"):
+    shared = root / "_shared"
+    shared.mkdir(exist_ok=True)
+    (shared / "team-profile.md").write_bytes(profile.encode("utf-8"))
+    (shared / "failure-signature-schema.md").write_bytes(b"schema\n")
+    (shared / "handoff-vocabulary.md").write_bytes(b"vocabulary\n")
+    return shared
 
 
 def clean_security(_submission):
@@ -89,19 +98,16 @@ def checks():
 
 
 def append_ready_review(store, skill_version, *, findings=()):
-    review = make_content_review(
-        skill_version=skill_version,
-        phase="recheck",
-        prompt_version="P5-RECHECK-CALIBRATED@2",
+    return append_test_content_review(
+        store,
+        skill_version,
         run_id=f"run:{skill_version.artifact_id}",
         batch_id="batch-1",
-        attempt=1,
         reviewer_identity=f"reviewer:{skill_version.artifact_id}",
         fixer_identity=f"fixer:{skill_version.artifact_id}",
         checks=checks(),
         findings=findings,
     )
-    return store.append(review)
 
 
 def run(store, dsn, root, **kwargs):
@@ -122,6 +128,53 @@ def test_load_wave_finds_skills_and_hash_is_content_sensitive(tmp_path):
     assert first[0].payload_sha256 == load_wave(tmp_path)[0].payload_sha256
     write_skill(tmp_path, "dv-a", body=BODY + "\nChanged.\n")
     assert load_wave(tmp_path)[0].payload_sha256 != first[0].payload_sha256
+
+
+def test_load_wave_binds_one_full_shared_snapshot_into_every_skill(tmp_path):
+    shared = write_shared(tmp_path, profile="shared-v1\n")
+    write_skill(tmp_path, "dv-a")
+    write_skill(tmp_path, "dv-b")
+
+    first = load_wave(tmp_path)
+    assert all(item.files["_shared/team-profile.md"] == "shared-v1\n" for item in first)
+    hashes = {item.slug: item.payload_sha256 for item in first}
+    (shared / "team-profile.md").write_bytes(b"shared-v2\n")
+    second = load_wave(tmp_path)
+    assert all(item.payload_sha256 != hashes[item.slug] for item in second)
+
+
+def test_load_wave_reads_the_shared_tree_once_per_batch(tmp_path, monkeypatch):
+    write_shared(tmp_path)
+    write_skill(tmp_path, "dv-a")
+    write_skill(tmp_path, "dv-b")
+    from semiskill import wave
+
+    real_loader = wave.shared_bundle_for_skills_root
+    calls = []
+
+    def tracked(root):
+        calls.append(root)
+        return real_loader(root)
+
+    monkeypatch.setattr(wave, "shared_bundle_for_skills_root", tracked)
+    items = load_wave(tmp_path)
+    assert len(items) == 2
+    assert calls == [tmp_path]
+
+
+def test_repository_wave_has_exact_84_skill_payloads_with_canonical_shared_inventory():
+    items = load_wave("skills")
+    assert len(items) == 84
+    expected = {
+        "_shared/failure-signature-schema.md",
+        "_shared/handoff-vocabulary.md",
+        "_shared/team-profile.md",
+    }
+    assert len({item.slug for item in items}) == 84
+    assert all(
+        {path for path in item.files if path.startswith("_shared/")} == expected
+        for item in items
+    )
 
 
 def test_hash_ignores_store_fields_but_includes_exact_skill_source():
@@ -149,6 +202,21 @@ def test_dry_run_writes_nothing(tmp_path):
         store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path), dry_run=True,
     )
     assert report.items[0].status == WOULD_CAPTURE and report.ok
+
+
+def test_write_wave_refuses_more_than_ten_skills_before_touching_store(tmp_path):
+    for index in range(11):
+        write_skill(tmp_path, f"dv-{index:02d}")
+
+    class Exploding:
+        def __getattr__(self, _name):
+            raise AssertionError("oversized wave must not touch the store")
+
+    with pytest.raises(ValueError, match="limited to 10 skills"):
+        run_wave(
+            store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path),
+            security_audit_runner=clean_security,
+        )
 
 
 @pytest.mark.integration
@@ -219,13 +287,58 @@ def test_content_edit_invalidates_old_review_hash(pg_store, pg_dsn, tmp_path):
     write_skill(tmp_path, "dv-stale")
     first = run(pg_store, pg_dsn, tmp_path).items[0]
     append_ready_review(pg_store, pg_store.get(first.skill_version_id))
-    write_skill(tmp_path, "dv-stale", body=BODY + "\nA source edit.\n")
+    write_skill(tmp_path, "dv-stale", body=BODY + "\nA source edit.\n", version="1.0.1")
 
     changed = run(pg_store, pg_dsn, tmp_path).items[0]
 
     assert changed.skill_version_id != first.skill_version_id
     assert changed.status == REVIEW_BLOCKED and changed.gate == "stale"
     assert "payload hash" in changed.error
+
+
+@pytest.mark.integration
+def test_shared_edit_invalidates_ready_review_and_security_chain(pg_store, pg_dsn, tmp_path):
+    write_skill(tmp_path, "dv-shared-stale")
+    shared = write_shared(tmp_path)
+    first = run(pg_store, pg_dsn, tmp_path).items[0]
+    append_ready_review(pg_store, pg_store.get(first.skill_version_id))
+    ready = run(pg_store, pg_dsn, tmp_path).items[0]
+    assert ready.status == AWAITING_APPROVAL and ready.gate == "recheck-ready"
+
+    (shared / "team-profile.md").write_bytes(b"profile-v2\n")
+    write_skill(tmp_path, "dv-shared-stale", version="1.0.1")
+    changed = run(pg_store, pg_dsn, tmp_path).items[0]
+
+    assert changed.payload_sha256 != first.payload_sha256
+    assert changed.skill_version_id != first.skill_version_id
+    assert changed.automated_review_id != first.automated_review_id
+    assert changed.scan_artifact_ids != first.scan_artifact_ids
+    assert changed.status == REVIEW_BLOCKED and changed.gate == "stale"
+    assert "payload hash" in changed.error
+    assert pg_store.by_type(ArtifactType.APPROVAL) == []
+
+
+@pytest.mark.integration
+def test_same_version_changed_payload_is_refused_before_pipeline(pg_store, pg_dsn, tmp_path):
+    write_skill(tmp_path, "dv-version-collision")
+    run(pg_store, pg_dsn, tmp_path)
+    before = {
+        artifact_type: len(pg_store.by_type(artifact_type))
+        for artifact_type in (
+            ArtifactType.SKILL_VERSION,
+            ArtifactType.SCAN_RUN,
+            ArtifactType.INJECTION_TEST,
+            ArtifactType.REVIEW,
+        )
+    }
+    write_skill(tmp_path, "dv-version-collision", body=BODY + "\nChanged without a bump.\n")
+
+    refused = run(pg_store, pg_dsn, tmp_path).items[0]
+    after = {artifact_type: len(pg_store.by_type(artifact_type)) for artifact_type in before}
+
+    assert refused.status == "error"
+    assert "bump semiskill-version" in refused.error
+    assert refused.skill_version_id is None and before == after
 
 
 @pytest.mark.integration

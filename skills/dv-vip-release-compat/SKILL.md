@@ -10,7 +10,7 @@ metadata:
   semiskill-role: vip-engineer
   semiskill-level: senior-staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-04-14
   semiskill-tags: vip, release, api-stability, compatibility, deprecation, migration, installed-base
 ---

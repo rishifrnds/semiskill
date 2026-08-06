@@ -1,7 +1,9 @@
-# Team profile — fill this in once
+# Team profile — author once, vendor per skill
 
-Every skill in this pack needs a handful of the same facts about how your team works. They live
-**here**, once, rather than being asked for again in each skill.
+Every skill in this pack needs a handful of the same facts about how your team works. The source is
+authored **here**, once, rather than being independently guessed in each skill. Capture then vendors
+the exact candidate/source snapshot bytes under each skill's own `_shared/` directory because Agent Skills resolves
+relative references from the skill root.
 
 Fill this file in first. It takes about twenty minutes and it is the difference between a pack that
 knows the method and a pack that knows your flow. Individual skills add their own extra slots for
@@ -83,5 +85,7 @@ cannot know who signs off, and it should be asking you rather than answering tha
 
 ## Keeping it current
 
-When a fact here changes — a new log location, a different regression wrapper — change it once here.
-Skills read this file; they do not carry their own copies.
+When a source fact changes — a new log location, a different regression wrapper — change it once
+here, then propagate it only by capturing, scanning, independently reviewing, and approving new
+skill versions. Installed skills are self-contained and do carry byte-identical approval-bound
+copies; editing one installed copy does not update its siblings and makes that local fork unverified.

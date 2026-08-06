@@ -10,7 +10,7 @@ metadata:
   semiskill-role: safety-verification-engineer
   semiskill-level: principal
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-07-14
   semiskill-tags: functional-safety, safety-manual, assumptions-of-use, seooc, traceability, sign-off
 ---

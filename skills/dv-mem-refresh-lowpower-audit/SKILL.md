@@ -10,7 +10,7 @@ metadata:
   semiskill-role: memory-ip-dv-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-04-16
   semiskill-tags: memory, dram, refresh, self-refresh, power-down, low-power, trace-audit, protocol
 ---

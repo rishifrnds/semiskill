@@ -10,7 +10,7 @@ metadata:
   semiskill-role: soc-dv-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-04-09
   semiskill-tags: vip, integration, protocol, checkers, coverage, link-up, bring-up
 ---

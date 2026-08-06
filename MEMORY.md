@@ -821,8 +821,26 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010c1] resolve the approval-bound `_shared` payload topology without widening published bytes
-  or permitting review/approval evidence to drift from the exact dependency closure.
+- [J-010c1] 2026-08-06T23:47:36Z  status: done
+  what: bound every skill version to its exact shared dependency closure; replaced mutable review
+  readiness with authenticated append-only one-skill leases, typed review lineage and deterministic
+  publication-safe readiness; added atomic <=10-contract collection, semantic retry, database root
+  uniqueness, strict coordinator privileges and migration adoption through 0023
+  delayed: true, reason: the shared-payload correction exposed contradictory historical review state,
+  and the required SQL/Python authority consolidation plus adversarial retry/concurrency coverage
+  exceeded the atomic checkpoint ceiling; no historical claim was allowed to retain credit
+  artifacts: this J-010c1 checkpoint, ADR-023/024, migrations 0016-0023,
+  semiskill/authoring/gate.py, semiskill/authoring/review_collection.py,
+  semiskill/artifacts/store.py, semiskill/artifacts/migrate.py, tools/collect_wave.py, all 84
+  current skill payloads; 51 migration/adoption/privilege tests and 75 collector/gate/publication
+  tests passed in separate serial runs; focused Ruff, Python compilation and diff checks passed
+  next: J-010c2 add coordinator-only operator issuance and expose its authoritative queue on
+  scoreboard v3
+
+
+## In-Flight Step
+- [J-010c2] add coordinator-only operator issuance for independent one-skill review contracts, then
+  expose the authoritative review queue and freshness on scoreboard v3.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

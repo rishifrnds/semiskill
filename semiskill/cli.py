@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from semiskill.config import Config
 from semiskill.artifacts.schema import ArtifactType, SourceSystem
-from semiskill.capture.intake import load_skill_dir, build_skill_version
+from semiskill.capture.intake import build_skill_version, load_skill_source
 
 _LABELS = ["public", "team", "need-to-know", "regulated"]
 
@@ -54,7 +54,7 @@ def _export_scope_from_args(args, store):
 
 
 def cmd_submit(args, store, out) -> int:
-    skill_md, files = load_skill_dir(args.path)
+    skill_md, files = load_skill_source(args.path)
     art = build_skill_version(skill_md=skill_md, actor=args.actor,
                               source_system=SourceSystem.CLI,
                               permissions_label=args.label, files=files)
@@ -263,6 +263,22 @@ def cmd_wave(args, store, out) -> int:
     if not items:
         print(f"no SKILL.md found under {args.path}", file=out)
         return 1
+    only = None
+    if args.only is not None:
+        requested = [slug.strip() for slug in args.only.split(",") if slug.strip()]
+        if not requested:
+            print("wave refused: --only must contain at least one slug", file=out)
+            return 2
+        if len(requested) != len(set(requested)):
+            print("wave refused: --only contains duplicate slugs", file=out)
+            return 2
+        available = {item.slug for item in items}
+        unknown = sorted(set(requested) - available)
+        if unknown:
+            print("wave refused: unknown --only slugs: " + ", ".join(unknown), file=out)
+            return 2
+        only = set(requested)
+    selected = [item for item in items if only is None or item.slug in only]
 
     # Build the store from the RESOLVED dsn, not the environment default — otherwise --dsn would
     # steer the pipeline's corpus probe while artifacts silently landed in a different database.
@@ -271,13 +287,14 @@ def cmd_wave(args, store, out) -> int:
         store = PostgresArtifactStore(dsn)
 
     if args.command == "wave-plan" or args.dry_run:
-        for i in items:
+        for i in selected:
             print(f"{i.slug}\t{i.payload_sha256[:12]}\t{i.path}", file=out)
-        print(f"\n{len(items)} skill(s) would be captured/scanned against {dsn}; "
+        print(f"\n{len(selected)} skill(s) would be captured/scanned against {dsn}; "
               "wave would create zero approvals and zero publications.", file=out)
         return 0
 
-    report = run_wave(store=store, dsn=dsn, items=items, permissions_label=args.label,
+    report = run_wave(store=store, dsn=dsn, items=items, only=only,
+                      permissions_label=args.label,
                       on_duplicate=args.on_duplicate,
                       journal_path=Path(args.reports) / "journal.jsonl" if args.reports else None)
     print(render_report(report, style="markdown"), file=out)
@@ -521,6 +538,10 @@ def build_parser() -> argparse.ArgumentParser:
         w.add_argument("--on-duplicate", default="supersede",
                        choices=["supersede", "skip", "fail"], dest="on_duplicate")
         w.add_argument("--reports", default="reports", help="where to write the wave report")
+        w.add_argument(
+            "--only", default=None,
+            help="comma-separated exact slugs; write waves are limited to 10 skills",
+        )
         w.add_argument("--dry-run", action="store_true")
         w.add_argument("--no-lint-first", dest="lint_first", action="store_false", default=True,
                        help="skip the pre-flight lint (not recommended)")

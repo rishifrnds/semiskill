@@ -10,7 +10,7 @@ metadata:
   semiskill-role: vip-engineer
   semiskill-level: principal
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-07-09
   semiskill-tags: spec, ambiguity, protocol, vip, interop, errata, ledger, sign-off
 ---

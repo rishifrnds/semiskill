@@ -1,7 +1,6 @@
 import io
 import json
 import pytest
-from pathlib import Path
 from types import SimpleNamespace
 from semiskill.artifacts.schema import Artifact, ArtifactType
 from semiskill.artifacts.store import PublicationReconciliationBundle
@@ -124,8 +123,6 @@ def test_migration_adoption_production_fails_closed_before_database_access():
 
 
 def test_migration_adoption_defaults_to_read_only_plan(monkeypatch):
-    import semiskill.cli as cli
-
     observed = {}
     def plan(*args, **kwargs):
         observed.update(kwargs)
@@ -160,7 +157,6 @@ def test_migration_adoption_never_falls_back_to_runtime_database_url(monkeypatch
 
 
 def test_migration_adoption_execute_binds_plan_identity_and_reason(monkeypatch):
-    import semiskill.cli as cli
     from semiskill.governance.identity import AuthenticatedHuman
 
     digest = "sha256:" + "2" * 64
@@ -382,6 +378,36 @@ def test_a_wave_is_not_stopped_by_pack_level_warnings(tmp_path):
     rc = main(["wave-plan", str(tmp_path)], store=None, out=out)
     assert rc == 0
     assert "before any artifact was written" not in out.getvalue()
+
+
+def test_wave_plan_only_accepts_known_unique_exact_slugs(tmp_path):
+    import io
+    from semiskill.cli import main
+    _clean_skill(tmp_path, "dv-one")
+    _clean_skill(tmp_path, "dv-two")
+
+    out = io.StringIO()
+    rc = main([
+        "wave-plan", str(tmp_path), "--only", "dv-two",
+    ], store=None, out=out)
+    assert rc == 0
+    assert "dv-two" in out.getvalue() and "dv-one" not in out.getvalue()
+
+    out = io.StringIO()
+    rc = main([
+        "wave-plan", str(tmp_path), "--only", "dv-one,dv-one",
+    ], store=None, out=out)
+    assert rc == 2 and "duplicate slugs" in out.getvalue()
+
+    out = io.StringIO()
+    rc = main([
+        "wave-plan", str(tmp_path), "--only", "dv-missing",
+    ], store=None, out=out)
+    assert rc == 2 and "unknown --only slugs" in out.getvalue()
+
+    out = io.StringIO()
+    rc = main(["wave-plan", str(tmp_path), "--only", ","], store=None, out=out)
+    assert rc == 2 and "must contain at least one slug" in out.getvalue()
 
 
 def _scoreboard_inputs(tmp_path):

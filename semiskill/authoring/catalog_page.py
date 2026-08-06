@@ -192,6 +192,8 @@ Security boundary:
 - Before writing, enumerate only the exact destinations listed below.
 - If a destination exists with different bytes, stop and report the collision; do not overwrite it.
 - Write exact UTF-8 bytes without a BOM, preserve final-newline state, then verify every byte count and SHA-256.
+- This skill is self-contained. Its `_shared/` files are exact approval-bound support copies for
+  this skill, not a global writable store.
 
 Exact destinations:
 {inventory}
@@ -250,7 +252,7 @@ def collect(store: ArtifactStore, *, scope: ExportScope) -> ScopedCatalog:
 
 def _matrix(entries: list[CatalogEntry]) -> tuple[list[str], list[str], dict]:
     roles = sorted({e.role for e in entries if e.role})
-    levels = [l for l in LEVEL_ORDER if any(e.level == l for e in entries)]
+    levels = [level for level in LEVEL_ORDER if any(e.level == level for e in entries)]
     cells: dict[str, list[str]] = {}
     for e in entries:
         cells.setdefault(f"{e.role}|{e.level}", []).append(e.slug)
@@ -294,8 +296,8 @@ def render_markdown(catalog: ScopedCatalog) -> str:
           "|---" * (len(levels) + 1) + "|"]
     for r in roles:
         row = [r]
-        for l in levels:
-            got = cells.get(f"{r}|{l}", [])
+        for level in levels:
+            got = cells.get(f"{r}|{level}", [])
             row.append("✅ " + ", ".join(f"`{s}`" for s in got) if got else "—")
         L.append("| " + " | ".join(row) + " |")
 

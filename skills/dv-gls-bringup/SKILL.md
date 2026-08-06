@@ -10,7 +10,7 @@ metadata:
   semiskill-role: ip-dv-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-08-12
   semiskill-tags: gls, gate-level, sdf, timing-checks, x-propagation, netlist, bring-up
 ---

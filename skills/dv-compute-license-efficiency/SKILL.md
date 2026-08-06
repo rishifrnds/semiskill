@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-infra-engineer
   semiskill-level: principal
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-09-03
   semiskill-tags: regression, cost, licences, farm, coverage-ranking, seeds, tiering, efficiency
 ---

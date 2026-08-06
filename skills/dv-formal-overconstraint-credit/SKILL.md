@@ -10,7 +10,7 @@ metadata:
   semiskill-role: formal-verification
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-02-24
   semiskill-tags: formal, assumptions, over-constraint, vacuity, bounded-proof, coverage-credit, sign-off
 ---

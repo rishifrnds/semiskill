@@ -10,7 +10,7 @@ metadata:
   semiskill-role: applications-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-04-09
   semiskill-tags: runtime, performance, profiling, memory, turnaround, regression
 ---

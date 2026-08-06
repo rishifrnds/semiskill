@@ -10,7 +10,7 @@ metadata:
   semiskill-role: soc-dv-engineer
   semiskill-level: fresher
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-03-12
   semiskill-tags: integration, connectivity, ip-xact, tie-off, address-map, soc, check-generation
 ---

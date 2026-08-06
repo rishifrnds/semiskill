@@ -10,7 +10,7 @@ metadata:
   semiskill-role: eda-product-validation-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-04-21
   semiskill-tags: conformance, standards, coverage, traceability, gap-analysis, test-suite, release-claim
 ---

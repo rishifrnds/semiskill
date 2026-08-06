@@ -11,6 +11,11 @@ from dataclasses import dataclass, replace
 
 from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.authoring.gate import make_content_review
+from semiskill.authoring.review_collection import (
+    ReviewBatchContract,
+    ReviewCellContract,
+    issue_review_batch_contract,
+)
 from semiskill.capture.intake import payload_fingerprint
 from semiskill.governance.identity import AuthenticatedHuman
 from semiskill.governance.publish import decide_publication
@@ -42,6 +47,87 @@ def content_checks() -> dict:
         "source_hash": {"passed": True, "evidence": "test:hash:matched"},
         "artifact_reconciliation": {"passed": True, "evidence": "test:refs:matched"},
     }
+
+
+def append_test_content_review(
+    store,
+    skill_version: Artifact,
+    *,
+    findings=(),
+    prior_review: Artifact | None = None,
+    reviewer_identity: str | None = None,
+    fixer_identity: str | None = None,
+    run_id: str | None = None,
+    batch_id: str = "test-batch",
+    phase: str = "recheck",
+    prompt_version: str = "P5-RECHECK-CALIBRATED@2",
+    checks: dict | None = None,
+) -> Artifact:
+    """Append a content review through the same immutable lease used by production collection."""
+    if prior_review is None and phase == "recheck":
+        prior_review = append_test_content_review(
+            store,
+            skill_version,
+            findings=findings,
+            reviewer_identity=(
+                f"{reviewer_identity}:p1" if reviewer_identity else f"test-reviewer:{uuid.uuid4()}"
+            ),
+            fixer_identity=(
+                f"{fixer_identity}:p1" if fixer_identity else f"test-fixer:{uuid.uuid4()}"
+            ),
+            run_id=f"{run_id or f'test-run:{uuid.uuid4()}'}:p1",
+            batch_id=f"{batch_id}:p1",
+            phase="review",
+            prompt_version="P1-ADVERSARIAL-REVIEW@2",
+            checks=checks,
+        )
+    attempt = int(prior_review.payload["attempt"]) + 1 if prior_review is not None else 1
+    lineage_id = (
+        prior_review.payload["lineage_id"] if prior_review is not None else str(uuid.uuid4())
+    )
+    reviewer = reviewer_identity or f"test-reviewer:{uuid.uuid4()}"
+    fixer = fixer_identity or f"test-fixer:{uuid.uuid4()}"
+    evidence = checks or content_checks()
+    run = run_id or f"test-run:{uuid.uuid4()}"
+    identity_reader = getattr(store, "review_coordinator_authentication_context", None)
+    authentication_context = (
+        identity_reader()
+        if callable(identity_reader)
+        else {"provider": "test", "subject_sha256": "sha256:" + "a" * 64}
+    )
+    contract = ReviewBatchContract(
+        batch_id=batch_id,
+        run_id=run,
+        phase=phase,
+        prompt_version=prompt_version,
+        attempt=attempt,
+        cells={skill_version.payload["slug"]: ReviewCellContract(
+            skill_version=skill_version,
+            reviewer_identity=reviewer,
+            fixer_identity=fixer,
+            checks=evidence,
+            lineage_id=lineage_id,
+            prior_review_ref=prior_review.artifact_id if prior_review is not None else None,
+        )},
+        issuer_identity="test-review-coordinator",
+        authentication_context=authentication_context,
+    )
+    issued = issue_review_batch_contract(store=store, contract=contract)
+    return store.append(make_content_review(
+        skill_version=skill_version,
+        phase=phase,
+        prompt_version=prompt_version,
+        run_id=run,
+        batch_id=batch_id,
+        attempt=attempt,
+        reviewer_identity=reviewer,
+        fixer_identity=fixer,
+        lineage_id=lineage_id,
+        contract_artifact=issued.contract_artifact,
+        checks=evidence,
+        findings=findings,
+        prior_review=prior_review,
+    ))
 
 
 def publish_test_skill(
@@ -80,19 +166,8 @@ def publish_test_skill(
     automated = replace(
         automated, permissions_label=skill_version.permissions_label, objective_tag="safety",
     )
-    content = make_content_review(
-        skill_version=skill_version,
-        phase="recheck",
-        prompt_version="P5-RECHECK-CALIBRATED@2",
-        run_id=f"test-run:{uuid.uuid4()}",
-        batch_id="test-batch",
-        attempt=1,
-        reviewer_identity=f"test-reviewer:{uuid.uuid4()}",
-        fixer_identity=f"test-fixer:{uuid.uuid4()}",
-        checks=content_checks(),
-        findings=[],
-    )
-    store.append_many([*scans, automated, content])
+    store.append_many([*scans, automated])
+    content = append_test_content_review(store, skill_version)
     approval = decide_publication(
         store=store,
         skill_version_id=skill_version.artifact_id,
@@ -109,11 +184,16 @@ def publish_test_skill(
 
 def publish_wave_sources(store, root) -> list[PublishedFixture]:
     """Capture every source directory and publish each through the valid test chain."""
-    from semiskill.capture.intake import build_skill_version, load_skill_dir
+    from semiskill.capture.intake import (
+        build_skill_version,
+        load_skill_source,
+        shared_bundle_for_skills_root,
+    )
 
     fixtures = []
+    shared_bundle = shared_bundle_for_skills_root(root)
     for skill_path in sorted(root.rglob("SKILL.md")):
-        skill_md, files = load_skill_dir(skill_path.parent)
+        skill_md, files = load_skill_source(skill_path.parent, shared_bundle=shared_bundle)
         skill_version = store.append(build_skill_version(
             skill_md=skill_md,
             actor="test-author",

@@ -24,12 +24,17 @@ from semiskill.artifacts.schema import ArtifactType
 from semiskill.artifacts.store import ArtifactStore
 from semiskill.authoring.gate import (
     READY,
-    REVIEWED,
+    REVIEWED,  # noqa: F401 - retained as part of the legacy scoreboard import surface
     UNREVIEWED,
     readiness_for_review,
     readiness_for_version,
 )
-from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
+from semiskill.capture.intake import (
+    build_skill_version,
+    load_skill_source,
+    payload_fingerprint,
+    shared_bundle_for_skills_root,
+)
 from semiskill.governance.publish import resolve_frozen_approval_evidence
 from semiskill.wave import _published_index
 
@@ -113,6 +118,7 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
     registry = load_registry(registry_path)
     published = _published_index(store)
     root = Path(skills_root)
+    shared_bundle = shared_bundle_for_skills_root(root)
 
     lint_by_slug: dict[str, tuple[str, int]] = {}
     if lint:
@@ -127,7 +133,7 @@ def build_scoreboard(*, store: ArtifactStore, registry_path: str | Path,
         directory = root / slug
         if not (directory / "SKILL.md").exists():
             return UNREVIEWED
-        skill_md, files = load_skill_dir(directory)
+        skill_md, files = load_skill_source(directory, shared_bundle=shared_bundle)
         candidate = build_skill_version(skill_md=skill_md, actor="scoreboard", files=files)
         fingerprint = payload_fingerprint(candidate.payload)
         versions = [
@@ -248,7 +254,7 @@ def render(sb: Scoreboard, *, style: str = "text") -> str:
     lines: list[str] = []
     if style == "markdown":
         lines += [f"### Catalog coverage — {sb.totals[PUBLISHED]}/{sb.totals['planned']} published", "",
-                  f"| Role | Published | Target | Status |", "|---|---|---|---|"]
+                  "| Role | Published | Target | Status |", "|---|---|---|---|"]
         for r in sb.roles:
             note = f" (+{r.declined} declined)" if r.declined else ""
             lines.append(f"| {r.role} | {r.published}{note} | {r.target} | "

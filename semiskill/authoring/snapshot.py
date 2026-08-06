@@ -717,12 +717,17 @@ def build_scoreboard_snapshot(
     from semiskill.authoring import facets
     from semiskill.authoring.consistency import RegistryError, check_pack
     from semiskill.authoring.gate import (
-        CONTENT_REVIEW_KIND, INVALID, READY, REVIEWED, STALE, UNREVIEWED,
+        CONTENT_REVIEW_KIND, INVALID, READY, STALE, UNREVIEWED,
         readiness_for_review, readiness_for_version,
     )
     from semiskill.authoring.lint import lint_wave_dir
     from semiskill.authoring.scoreboard import load_registry
-    from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
+    from semiskill.capture.intake import (
+        build_skill_version,
+        load_skill_source,
+        payload_fingerprint,
+        shared_bundle_for_skills_root,
+    )
     from semiskill.governance.publish import (
         APPROVAL_SCHEMA, ApprovalChainInvalid, resolve_frozen_rejection_evidence,
     )
@@ -912,9 +917,10 @@ def build_scoreboard_snapshot(
     source_payloads: dict[str, dict] = {}
     source_hashes: dict[str, str] = {}
     source_errors: dict[str, str] = {}
+    shared_bundle = shared_bundle_for_skills_root(root)
     for slug in sorted(disk_slugs):
         try:
-            skill_md, files = load_skill_dir(root / slug)
+            skill_md, files = load_skill_source(root / slug, shared_bundle=shared_bundle)
             candidate = build_skill_version(skill_md=skill_md, actor="scoreboard", files=files)
             source_payloads[slug] = candidate.payload
             source_hashes[slug] = payload_fingerprint(candidate.payload)

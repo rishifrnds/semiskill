@@ -10,7 +10,7 @@ metadata:
   semiskill-role: emulation-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-04-09
   semiskill-tags: emulation, prototyping, visibility, trigger, waveform, checkpoint, debug
 ---

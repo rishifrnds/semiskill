@@ -10,7 +10,7 @@ metadata:
   semiskill-role: ams-verification-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-04-09
   semiskill-tags: mixed-signal, real-number-modelling, checkers, tolerance, settling, monotonicity, hysteresis
 ---

@@ -67,12 +67,13 @@ no skill.
    much it actually covered, and which slots were unfilled. An unstated shortcut is far worse than a
    stated one.
 
-9. **Pack-wide facts live in `skills/_shared/team-profile.md`** — log locations, fatal/pass/infra
-   markers, run identity, known-issue list, area-to-owner map, sign-off, simulator, filelist
-   convention. Reference them; do not re-ask them. If your skill needs something **narrower** than
-   the profile records, say exactly how it is narrower. Never claim two differently-named facts are
-   "the same fact" unless they genuinely are — that error propagated wrong marker strings across two
-   skills.
+9. **Pack-wide facts are authored once in `skills/_shared/team-profile.md`** — log locations,
+   fatal/pass/infra markers, run identity, known-issue list, area-to-owner map, sign-off, simulator,
+   and filelist convention. Reference them; do not re-ask them. Capture vendors the exact three-file
+   canonical shared snapshot into each skill-version payload, and an installed skill carries those
+   approval-bound copies under its own `_shared/` directory. If your skill needs something
+   **narrower** than the profile records, say exactly how it is narrower. Never claim two
+   differently-named facts are "the same fact" unless they genuinely are.
 
 10. **Signatures** come from `skills/_shared/failure-signature-schema.md`. Use its field names and
     rules as written rather than re-deriving them. Cite the file; do not restate it, or the two
@@ -223,7 +224,9 @@ the first:
 - **NON-BLOCKING** — real, but it would not mislead anyone: narrower-than-ideal phrasing, a nit, a
   style point, a "could also mention", a `semiskill-review-by` collision.
 
-**`ready: true` if and only if the BLOCKING list is empty.**
+An agent may classify findings, but it does not decide readiness. Deterministic code marks a version
+`recheck-ready` if and only if all required checks pass, exact hashes/facets/lineage match, fixer and
+reviewer identities are independent, and no blocking finding remains open or disputed.
 
 Do not inflate a nit into a blocker to look rigorous, and do not demote a real defect to look
 generous. A pack that never ships helps nobody; a pack that ships a wrong instruction is worse than
@@ -237,16 +240,22 @@ construction**.
 
 ## 9. The gate
 
-```
-author → lint 1.000 → adversarial review → fix → INDEPENDENT recheck → REVIEW.json → publish
+```text
+author -> lint 1.000 -> security scan -> adversarial review -> fix -> INDEPENDENT recheck
+       -> deterministic readiness -> authenticated human approval -> verified publication
 ```
 
 - The recheck reviewer must **not** have seen the fixer's reasoning. Every earlier round that was
   rechecked by the lineage that produced the fix shipped a new bug.
-- Nobody certifies their own fix. Writing `ready: true` on your own edit is the exact failure this
-  gate exists to prevent.
-- The gate record is a **file** (`skills/<slug>/REVIEW.json`), not a claim in a chat log, because
-  "was this actually reviewed?" must be a queryable fact.
-- `semiskill wave` refuses to publish a skill whose REVIEW.json is missing or not `ready`. The
-  escape hatch `--allow-ungated` is recorded by name in the wave report.
+- Nobody certifies their own fix. The collector records typed observations; deterministic code owns
+  readiness.
+- Initial reviews and rechecks are immutable `review` artifacts bound to the exact skill-version ID,
+  shared-inclusive payload hash, prompt/run/batch/attempt, registry facets, and runtime identities.
+  Legacy `REVIEW.json` files are migration provenance only; new ones are forbidden inside payloads.
+- `semiskill wave` captures/scans and queues exact evidence, but always creates zero approvals and
+  zero publications. `--allow-ungated` is retired.
+- Publication requires an explicit authenticated human decision naming the exact version/hash,
+  automated review, independent content review, decision, reason, and authentication context.
+- A canonical shared-source change invalidates the affected hashes. It requires a semver bump, new
+  scans, a fresh recheck, and a new approval; export never reads mutable source as a fallback.
 - Expect **more than one fix round**. One fix pass followed by a strict recheck converged on zero.

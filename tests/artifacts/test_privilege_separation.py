@@ -111,11 +111,15 @@ def test_runtime_clearance_and_actuator_are_distinct_least_privilege_logins(pg_d
                 export.execute("SELECT * FROM export_scoped_publication_bundle_v1('public')")
             export.rollback()
             export.execute("SET ROLE semiskill_export_reader")
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                export.execute("SELECT * FROM export_scoped_publication_bundle_v1('public')")
+            export.rollback()
+            export.execute("SET ROLE semiskill_export_reader")
             assert export.execute(
-                "SELECT count(*) FROM export_scoped_publication_bundle_v1('public')"
+                "SELECT count(*) FROM export_scoped_publication_bundle_v2('public')"
             ).fetchone()[0] >= 0
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
-                export.execute("SELECT * FROM export_scoped_publication_bundle_v1('regulated')")
+                export.execute("SELECT * FROM export_scoped_publication_bundle_v2('regulated')")
             export.rollback()
             assert export.execute(
                 "SELECT pg_has_role(session_user,'semiskill_approval_actuator','MEMBER')"

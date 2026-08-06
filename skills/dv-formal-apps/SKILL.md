@@ -10,7 +10,7 @@ metadata:
   semiskill-role: formal-verification
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-07-07
   semiskill-tags: formal, connectivity, registers, unreachability, equivalence, eco, coverage-exclusion
 ---

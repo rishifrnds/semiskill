@@ -10,7 +10,7 @@ metadata:
   semiskill-role: vip-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-14
   semiskill-tags: ecn, errata, spec-revision, impact-analysis, vip, sizing, verification-plan, coverage
 ---

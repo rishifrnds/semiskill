@@ -10,7 +10,7 @@ metadata:
   semiskill-role: security-verification-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-02-17
   semiskill-tags: security, assets, information-flow, formal, properties, threat-model, debug-unlock, scan
 ---

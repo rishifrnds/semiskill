@@ -26,7 +26,13 @@ import yaml
 
 from semiskill.authoring import facets
 from semiskill.authoring.lint_body import ERROR, WARN, ADVISORY, BodyFinding, lint_body
-from semiskill.capture.intake import build_skill_version, load_skill_dir, parse_skill_md
+from semiskill.capture.intake import (
+    SharedBundle,
+    build_skill_version,
+    load_skill_source,
+    parse_skill_md,
+    shared_bundle_for_skills_root,
+)
 from semiskill.governance.policy import ALLOWED_SKILL_TOOLS, DANGEROUS_SKILL_TOOLS, tool_risk
 from semiskill.scanners.base import SkillSubmission
 from semiskill.scanners.secret_pii import SecretPiiScanner
@@ -263,14 +269,19 @@ def lint_text(*, text: str, path: str = "<memory>", files: dict[str, str] | None
                       aggregate, verdict, stage3_authoritative, sha, tuple(findings))
 
 
-def lint_skill_dir(path: str | Path, **kw) -> LintReport:
+def lint_skill_dir(
+    path: str | Path,
+    *,
+    shared_bundle: SharedBundle | None = None,
+    **kw,
+) -> LintReport:
     d = Path(path)
     skill_md = d / "SKILL.md" if d.is_dir() else d
     files: dict[str, str] = {}
     if d.is_dir():
-        skill_text, files = load_skill_dir(d)
+        skill_text, files = load_skill_source(d, shared_bundle=shared_bundle)
     else:
-        skill_text = skill_md.read_text(encoding="utf-8")
+        skill_text, files = load_skill_source(skill_md.parent, shared_bundle=shared_bundle)
     return lint_text(text=skill_text, path=str(skill_md),
                      files=files or None, **kw)
 
@@ -278,7 +289,18 @@ def lint_skill_dir(path: str | Path, **kw) -> LintReport:
 def lint_wave_dir(root: str | Path, **kw) -> WaveLintReport:
     r = Path(root)
     skill_files = sorted(r.rglob("SKILL.md")) if r.is_dir() else [r]
-    reports = tuple(lint_skill_dir(f.parent if f.name == "SKILL.md" else f, **kw)
+    if r.is_file():
+        source_root = r.parent.parent
+    elif (r / "SKILL.md").is_file():
+        source_root = r.parent
+    else:
+        source_root = r
+    shared_bundle = shared_bundle_for_skills_root(source_root)
+    reports = tuple(lint_skill_dir(
+        f.parent if f.name == "SKILL.md" else f,
+        shared_bundle=shared_bundle,
+        **kw,
+    )
                     for f in skill_files)
 
     by_slug: dict[str, list[str]] = {}

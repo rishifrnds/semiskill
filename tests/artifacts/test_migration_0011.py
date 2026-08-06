@@ -42,7 +42,7 @@ metadata:
 
 
 class RawOnlyStore:
-    """Test proxy that can append audit artifacts but has no actuator method."""
+    """Test proxy with verified reviews but no approval actuator method."""
 
     def __init__(self, store):
         self._store = store
@@ -55,6 +55,12 @@ class RawOnlyStore:
 
     def append_approval(self, artifact):
         return self._store.append(artifact)
+
+    def append_review_contract(self, artifact):
+        return self._store.append_review_contract(artifact)
+
+    def verified_review_contract_ids(self):
+        return self._store.verified_review_contract_ids()
 
     def get(self, artifact_id):
         return self._store.get(artifact_id)

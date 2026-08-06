@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-infra-engineer
   semiskill-level: fresher
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-06-11
   semiskill-tags: onboarding, repo-map, filelists, build-flow, regression, coverage
 ---

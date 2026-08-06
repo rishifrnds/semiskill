@@ -15,10 +15,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable
 
-from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind
+from semiskill.artifacts.schema import Artifact, ArtifactType
 from semiskill.artifacts.store import ArtifactStore
-from semiskill.authoring.gate import READY, readiness_for_version
-from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
+from semiskill.authoring.gate import readiness_for_version
+from semiskill.capture.intake import (
+    build_skill_version,
+    load_skill_source,
+    payload_fingerprint,
+    shared_bundle_for_skills_root,
+)
 from semiskill.spine.pipeline import PipelineResult, run_pipeline
 
 # Queue states. Old publication names remain exported as tombstone constants so imports fail by
@@ -39,6 +44,7 @@ GATE_MISSING = AWAITING_REVIEW    # compatibility alias
 GATE_NOT_READY = REVIEW_BLOCKED   # compatibility alias
 
 SUCCESS = frozenset({AWAITING_REVIEW, AWAITING_APPROVAL, SKIPPED_IDENTICAL, WOULD_CAPTURE})
+MAX_WAVE_BATCH_SIZE = 10
 
 
 class WaveAborted(RuntimeError):
@@ -50,6 +56,7 @@ class WaveItem:
     path: str
     slug: str
     name: str
+    version: str
     skill_md: str
     files: dict[str, str]
     payload_sha256: str
@@ -110,14 +117,16 @@ def load_wave(root: str | Path) -> list[WaveItem]:
     """Load every skill directory under ``root``; embedded governance metadata fails closed."""
     root_path = Path(root)
     items: list[WaveItem] = []
+    shared_bundle = shared_bundle_for_skills_root(root_path)
     for skill_md_path in sorted(root_path.rglob("SKILL.md")):
         directory = skill_md_path.parent
-        skill_md, files = load_skill_dir(directory)
+        skill_md, files = load_skill_source(directory, shared_bundle=shared_bundle)
         payload = build_skill_version(skill_md=skill_md, actor="wave-loader", files=files).payload
         items.append(WaveItem(
             path=str(directory),
             slug=payload["slug"],
             name=payload["name"],
+            version=payload["version"],
             skill_md=skill_md,
             files=files,
             payload_sha256=payload_hash(payload),
@@ -145,9 +154,9 @@ def _published_index(store: ArtifactStore) -> dict[str, tuple[Artifact, Artifact
     }
 
 
-def _exact_version(store: ArtifactStore, item: WaveItem) -> Artifact | None:
+def _exact_version(versions: Iterable[Artifact], item: WaveItem) -> Artifact | None:
     versions = [
-        artifact for artifact in store.by_type(ArtifactType.SKILL_VERSION)
+        artifact for artifact in versions
         if isinstance(artifact.payload, dict)
         and artifact.payload.get("slug") == item.slug
         and payload_hash(artifact.payload) == item.payload_sha256
@@ -216,6 +225,10 @@ def run_wave(
         raise ValueError(f"on_duplicate must be supersede|skip|fail, got {on_duplicate!r}")
 
     selected = [item for item in items if only is None or item.slug in only]
+    if not dry_run and len(selected) > MAX_WAVE_BATCH_SIZE:
+        raise ValueError(
+            f"wave batches are limited to {MAX_WAVE_BATCH_SIZE} skills; select an explicit batch"
+        )
     wave_id = f"wave-{uuid.uuid4().hex[:8]}"
     started = _iso(now())
     results: list[WaveItemResult] = []
@@ -293,9 +306,21 @@ def _run_one(
             error="dry run - nothing was written",
         )
 
-    skill_version = _exact_version(store, item)
+    skill_versions = store.by_type(ArtifactType.SKILL_VERSION)
+    skill_version = _exact_version(skill_versions, item)
     already_captured = skill_version is not None
     if skill_version is None:
+        collisions = [
+            artifact for artifact in skill_versions
+            if isinstance(artifact.payload, dict)
+            and artifact.payload.get("slug") == item.slug
+            and artifact.payload.get("version") == item.version
+        ]
+        if collisions:
+            raise ValueError(
+                f"{item.slug}: semantic version {item.version} already exists with different "
+                "payload bytes; bump semiskill-version before capture"
+            )
         skill_version = store.append(build_skill_version(
             skill_md=item.skill_md,
             actor=actor,

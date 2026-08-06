@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-infra-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-08-27
   semiskill-tags: migration, tool-version, uvm, vip, re-baseline, coverage, performance, regression
 ---

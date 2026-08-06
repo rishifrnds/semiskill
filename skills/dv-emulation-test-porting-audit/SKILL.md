@@ -10,7 +10,7 @@ metadata:
   semiskill-role: emulation-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-07-09
   semiskill-tags: emulation, acceleration, porting, test-selection, transactors, planning
 ---

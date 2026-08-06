@@ -10,7 +10,7 @@ metadata:
   semiskill-role: verification-lead
   semiskill-level: lead
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-07-09
   semiskill-tags: testplan, vplan, coverage, traceability, review, milestone, sign-off
 ---

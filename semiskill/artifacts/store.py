@@ -50,6 +50,7 @@ class PublicationProjectionRow:
 class PublicationReconciliationBundle:
     artifacts: tuple[Artifact, ...]
     projections: tuple[PublicationProjectionRow, ...]
+    verified_review_contract_ids: tuple[uuid.UUID, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,17 +69,23 @@ class ScopedPublicationBundle:
 
     heads: tuple[VerifiedPublicationHead, ...]
     artifacts: tuple[Artifact, ...]
+    verified_review_contract_ids: tuple[uuid.UUID, ...] = ()
 
 
 class ArtifactStore(Protocol):
     def append(self, a: Artifact) -> Artifact: ...
     def append_approval(self, a: Artifact) -> Artifact: ...
+    def append_review_contract(self, a: Artifact) -> Artifact: ...
     def activate_approval(self, approval_id: uuid.UUID) -> uuid.UUID: ...
     def append_many(self, artifacts: list[Artifact]) -> list[Artifact]: ...
     def get(self, artifact_id: uuid.UUID) -> Artifact | None: ...
     def get_many(self, artifact_ids: list[uuid.UUID]) -> list[Artifact]: ...
     def by_type(self, t: ArtifactType) -> list[Artifact]: ...
     def verified_publication_ids(self) -> set[uuid.UUID]: ...
+    def verified_review_contract_ids(self) -> set[uuid.UUID]: ...
+    def review_contract_verified(
+        self, contract_id: uuid.UUID, permissions_label: str,
+    ) -> bool: ...
     def publication_reconciliation_bundle(self) -> PublicationReconciliationBundle: ...
     def publication_registry_entry(self, slug: str) -> dict | None: ...
     def scoped_publication_bundle(self, permissions_label: str) -> ScopedPublicationBundle: ...
@@ -106,6 +113,14 @@ class ReconciledArtifactStore:
         self._by_id = by_id
         self._projections = projections
         self._projected_ids = frozenset(projection_ids)
+        contract_ids = tuple(bundle.verified_review_contract_ids)
+        if len(contract_ids) != len(set(contract_ids)):
+            raise ValueError("publication reconciliation bundle has duplicate contract witnesses")
+        for contract_id in contract_ids:
+            contract = by_id.get(contract_id)
+            if contract is None or contract.artifact_type is not ArtifactType.GATE_DECISION:
+                raise ValueError("publication reconciliation bundle has an invalid contract witness")
+        self._verified_review_contract_ids = frozenset(contract_ids)
 
     def get(self, artifact_id: uuid.UUID) -> Artifact | None:
         return self._by_id.get(artifact_id)
@@ -118,6 +133,20 @@ class ReconciledArtifactStore:
 
     def verified_publication_ids(self) -> set[uuid.UUID]:
         return set(self._projected_ids)
+
+    def verified_review_contract_ids(self) -> set[uuid.UUID]:
+        return set(self._verified_review_contract_ids)
+
+    def review_contract_verified(
+        self, contract_id: uuid.UUID, permissions_label: str,
+    ) -> bool:
+        artifact = self._by_id.get(contract_id)
+        return (
+            contract_id in self._verified_review_contract_ids
+            and artifact is not None
+            and artifact.artifact_type is ArtifactType.GATE_DECISION
+            and artifact.permissions_label == permissions_label
+        )
 
     def publication_projections(self) -> tuple[PublicationProjectionRow, ...]:
         return self._projections
@@ -193,7 +222,7 @@ class PostgresArtifactStore:
     new rows linked by corrects_ref; the DB trigger blocks UPDATE/DELETE regardless)."""
 
     def __init__(self, dsn: str, *, approval_dsn: str | None = None,
-                 export_dsn: str | None = None):
+                 review_contract_dsn: str | None = None, export_dsn: str | None = None):
         self._dsn = dsn
         configured_approval_dsn = approval_dsn or os.environ.get(
             "SEMISKILL_APPROVAL_DATABASE_URL"
@@ -211,6 +240,26 @@ class PostgresArtifactStore:
         self._approval_dsn = configured_approval_dsn or (
             dsn if database_name.lower().endswith("_test") else None
         )
+        configured_review_dsn = review_contract_dsn or os.environ.get(
+            "SEMISKILL_REVIEW_COORDINATOR_DATABASE_URL"
+        )
+        if configured_review_dsn and not database_name.lower().endswith("_test"):
+            review_info = psycopg.conninfo.conninfo_to_dict(configured_review_dsn)
+            if review_info.get("dbname") != database_name:
+                raise ValueError("review coordinator must target the catalog database")
+            runtime_user = runtime_info.get("user")
+            review_user = review_info.get("user")
+            if not runtime_user or not review_user or runtime_user == review_user:
+                raise ValueError("review coordinator requires a distinct database identity")
+            approval_user = (
+                psycopg.conninfo.conninfo_to_dict(configured_approval_dsn).get("user")
+                if configured_approval_dsn else None
+            )
+            if approval_user and review_user == approval_user:
+                raise ValueError("review coordinator and approval actuator identities must differ")
+        self._review_contract_dsn = configured_review_dsn or (
+            dsn if database_name.lower().endswith("_test") else None
+        )
         configured_export_dsn = export_dsn or os.environ.get("SEMISKILL_EXPORT_DATABASE_URL")
         if configured_export_dsn and not database_name.lower().endswith("_test"):
             export_info = psycopg.conninfo.conninfo_to_dict(configured_export_dsn)
@@ -226,6 +275,12 @@ class PostgresArtifactStore:
             )
             if approval_user and export_user == approval_user:
                 raise ValueError("export reader and approval actuator identities must differ")
+            review_user = (
+                psycopg.conninfo.conninfo_to_dict(configured_review_dsn).get("user")
+                if configured_review_dsn else None
+            )
+            if review_user and export_user == review_user:
+                raise ValueError("export reader and review coordinator identities must differ")
         self._export_dsn = configured_export_dsn or (
             dsn if database_name.lower().endswith("_test") else None
         )
@@ -284,6 +339,24 @@ class PostgresArtifactStore:
         safe["identity_sha256"] = "sha256:" + hashlib.sha256(digest_input).hexdigest()
         return safe
 
+    def review_coordinator_authentication_context(self) -> dict[str, str]:
+        """Return the non-secret identity claim bound to the dedicated coordinator login."""
+        if self._review_contract_dsn is None:
+            raise RuntimeError("dedicated review coordinator database identity is not configured")
+        with psycopg.connect(self._review_contract_dsn) as conn:
+            session_user, authorized = conn.execute(
+                "SELECT session_user,"
+                "pg_has_role(session_user,'semiskill_review_coordinator','MEMBER')"
+            ).fetchone()
+        if authorized is not True:
+            raise RuntimeError("review coordinator database identity lacks its capability")
+        return {
+            "provider": "database-role",
+            "subject_sha256": "sha256:" + hashlib.sha256(
+                str(session_user).encode("utf-8")
+            ).hexdigest(),
+        }
+
     def append(self, a: Artifact) -> Artifact:
         with psycopg.connect(self._dsn) as conn:
             conn.execute(
@@ -317,6 +390,27 @@ class PostgresArtifactStore:
         existing = self.get(appended[0])
         if existing is None or existing.artifact_type is not ArtifactType.APPROVAL:
             raise RuntimeError("verified approval actuator returned an unknown idempotent decision")
+        return existing
+
+    def append_review_contract(self, a: Artifact) -> Artifact:
+        """Append a coordinator-issued review contract through its dedicated DB actuator."""
+        if a.artifact_type is not ArtifactType.GATE_DECISION:
+            raise ValueError("append_review_contract requires a gate_decision artifact")
+        if self._review_contract_dsn is None:
+            raise RuntimeError("dedicated review coordinator database identity is not configured")
+        with psycopg.connect(self._review_contract_dsn) as conn:
+            appended = conn.execute(
+                "SELECT append_verified_review_contract(" + ",".join(["%s"] * 16) + ")",
+                _approval_values(a),
+            ).fetchone()
+            if appended is None or not isinstance(appended[0], uuid.UUID):
+                raise RuntimeError("verified review coordinator did not confirm the append")
+            conn.commit()
+        if appended[0] == a.artifact_id:
+            return a
+        existing = self.get(appended[0])
+        if existing is None or existing.artifact_type is not ArtifactType.GATE_DECISION:
+            raise RuntimeError("verified review coordinator returned an unknown idempotent lease")
         return existing
 
     def activate_approval(self, approval_id: uuid.UUID) -> uuid.UUID:
@@ -384,13 +478,32 @@ class PostgresArtifactStore:
             ).fetchall()
         return {row[0] for row in rows}
 
+    def verified_review_contract_ids(self) -> set[uuid.UUID]:
+        with psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT contract_id FROM verified_review_contract_ids_v1()"
+            ).fetchall()
+        return {row[0] for row in rows}
+
+    def review_contract_verified(
+        self, contract_id: uuid.UUID, permissions_label: str,
+    ) -> bool:
+        if permissions_label not in PERMISSIONS_LABELS:
+            return False
+        with psycopg.connect(self._dsn) as conn:
+            row = conn.execute(
+                "SELECT review_contract_verified_v1(%s,%s)",
+                (contract_id, permissions_label),
+            ).fetchone()
+        return bool(row and row[0] is True)
+
     def publication_reconciliation_bundle(self) -> PublicationReconciliationBundle:
         """Read evidence and actuator state from one repeatable-read transaction."""
         with psycopg.connect(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             rows = conn.execute(
                 "SELECT * FROM artifacts WHERE artifact_type IN "
-                "('skill_version','scan_run','injection_test','review','approval') "
+                "('skill_version','scan_run','injection_test','review','approval','gate_decision') "
                 "ORDER BY timestamp_start, artifact_id"
             ).fetchall()
             projected = conn.execute(
@@ -399,9 +512,13 @@ class PostgresArtifactStore:
                 "environment,policy_version,approve_threshold,chain_sha256,activated_at,"
                 "activated_by FROM verified_publication_events ORDER BY activated_at,approval_id"
             ).fetchall()
+            contract_ids = conn.execute(
+                "SELECT contract_id FROM verified_review_contract_ids_v1()"
+            ).fetchall()
         return PublicationReconciliationBundle(
             artifacts=tuple(_row_to_artifact(row) for row in rows),
             projections=tuple(_row_to_projection(row) for row in projected),
+            verified_review_contract_ids=tuple(row["contract_id"] for row in contract_ids),
         )
 
     def publication_registry_entry(self, slug: str) -> dict | None:
@@ -431,13 +548,14 @@ class PostgresArtifactStore:
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             conn.execute("SET LOCAL ROLE semiskill_export_reader")
             rows = conn.execute(
-                "SELECT * FROM export_scoped_publication_bundle_v1(%s)",
+                "SELECT * FROM export_scoped_publication_bundle_v2(%s)",
                 (permissions_label,),
             ).fetchall()
             conn.rollback()
 
         heads_by_slug: dict[str, VerifiedPublicationHead] = {}
         artifacts: dict[uuid.UUID, Artifact] = {}
+        verified_review_contract_ids: set[uuid.UUID] = set()
         for row in rows:
             head = VerifiedPublicationHead(
                 approval_id=row["head_approval_id"],
@@ -454,7 +572,12 @@ class PostgresArtifactStore:
             previous_artifact = artifacts.setdefault(artifact.artifact_id, artifact)
             if previous_artifact != artifact:
                 raise ValueError("scoped export reader returned conflicting artifacts")
+            if row["artifact_is_verified_review_contract"]:
+                if artifact.artifact_type is not ArtifactType.GATE_DECISION:
+                    raise ValueError("scoped export reader returned an invalid contract witness")
+                verified_review_contract_ids.add(artifact.artifact_id)
         return ScopedPublicationBundle(
             heads=tuple(heads_by_slug[key] for key in sorted(heads_by_slug)),
             artifacts=tuple(artifacts[key] for key in sorted(artifacts, key=str)),
+            verified_review_contract_ids=tuple(sorted(verified_review_contract_ids, key=str)),
         )

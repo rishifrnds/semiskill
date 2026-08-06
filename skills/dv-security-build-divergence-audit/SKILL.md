@@ -10,7 +10,7 @@ metadata:
   semiskill-role: security-verification-engineer
   semiskill-level: principal
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-06-09
   semiskill-tags: security, sign-off, build-configuration, stand-in-models, tie-off, force-release, tapeout, escape
 ---

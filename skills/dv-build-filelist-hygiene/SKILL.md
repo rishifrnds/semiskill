@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-infra-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-05-23
   semiskill-tags: build, filelist, compile, elaboration, includes, defines, packages, triage
 ---

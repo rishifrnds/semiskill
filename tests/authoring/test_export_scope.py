@@ -10,6 +10,7 @@ from semiskill.authoring.export_scope import (
     ExportPublicationRef,
     ExportRefused,
     ExportScope,
+    _skills_tree_sha256,
     load_scoped_publications,
     make_export_scope,
 )
@@ -30,8 +31,17 @@ def pg_store(pg_dsn):
 
 def _skill(slug: str, label: str):
     return build_skill_version(
-        skill_md=(f"---\nname: {slug}\nslug: {slug}\nversion: 1.0.0\n"
-                  "function: dv\n---\nA bounded test procedure."),
+        skill_md=(
+            f"---\nname: {slug}\n"
+            f"description: Check {slug}. Use when bounded verification is needed.\n"
+            "allowed-tools: Read Grep Glob\nmetadata:\n"
+            f"  semiskill-title: {slug}\n"
+            "  semiskill-function: design-verification\n"
+            "  semiskill-role: dv-engineer\n"
+            "  semiskill-level: senior\n"
+            "  semiskill-version: 1.0.0\n---\n"
+            "# Procedure\n\n1. Inspect bounded evidence and record the result."
+        ),
         actor="test-author",
         permissions_label=label,
     )
@@ -174,6 +184,24 @@ def test_make_scope_recomputes_the_skills_tree(monkeypatch):
             generated_at="2026-08-06T01:00:00Z", repo_root=".",
             store=_ScopeStore(snapshot),
         )
+
+
+def test_skills_tree_identity_changes_when_shared_bytes_change(tmp_path):
+    skills = tmp_path / "skills"
+    skill = skills / "dv-one"
+    shared = skills / "_shared"
+    skill.mkdir(parents=True)
+    shared.mkdir()
+    (skill / "SKILL.md").write_text(
+        "---\nname: dv-one\nslug: dv-one\nversion: 1.0.0\n---\nbody\n",
+        encoding="utf-8",
+    )
+    (shared / "team-profile.md").write_text("one\n", encoding="utf-8")
+    (shared / "failure-signature-schema.md").write_text("schema\n", encoding="utf-8")
+    (shared / "handoff-vocabulary.md").write_text("vocabulary\n", encoding="utf-8")
+    first = _skills_tree_sha256(skills)
+    (shared / "team-profile.md").write_text("two\n", encoding="utf-8")
+    assert _skills_tree_sha256(skills) != first
 
 
 def test_production_scope_requires_entra(monkeypatch):

@@ -10,7 +10,7 @@ metadata:
   semiskill-role: verification-lead
   semiskill-level: lead
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-04-14
   semiskill-tags: status, reporting, milestone, coverage, regression, cross-block, sign-off
 ---

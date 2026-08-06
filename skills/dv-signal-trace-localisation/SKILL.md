@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-07-29
   semiskill-tags: waveform, signal-trace, localisation, fan-in-cone, x-propagation, handoff, debug
 ---

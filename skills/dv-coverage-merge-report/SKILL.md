@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-infra-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-05-28
   semiskill-tags: coverage, merge, seeds, configurations, engines, exclusions, trend, weekly-report
 ---

@@ -1,14 +1,16 @@
-import pytest
 import os
 import stat
 from types import SimpleNamespace
+
+import pytest
+
 import semiskill.capture.intake as intake
 from semiskill.artifacts.schema import ArtifactType, ActorKind
 from semiskill.capture.intake import (
     MAX_PAYLOAD_DEPTH, MAX_PAYLOAD_ENTRIES, MAX_PAYLOAD_FILES,
     MAX_PAYLOAD_FILE_BYTES, MAX_PAYLOAD_TOTAL_BYTES,
-    _is_link_or_reparse, build_skill_version, load_skill_dir, parse_skill_md,
-    payload_fingerprint,
+    _is_link_or_reparse, build_skill_version, load_shared_bundle, load_skill_dir,
+    load_skill_source, parse_skill_md, payload_fingerprint,
 )
 
 SKILL_MD = """---
@@ -267,6 +269,119 @@ def test_load_skill_dir(tmp_path):
         "notes.json": '{"submitter":"payload"}',
         "scripts/gen.py": "print('hi')",
     }
+
+
+def test_load_skill_source_binds_the_exact_canonical_shared_bundle(tmp_path):
+    skills = tmp_path / "skills"
+    skill = skills / "dv-one"
+    shared = skills / "_shared"
+    skill.mkdir(parents=True)
+    shared.mkdir()
+    (skill / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
+    (shared / "team-profile.md").write_bytes(b"profile-v1\n")
+    (shared / "failure-signature-schema.md").write_bytes(b"schema-v1\n")
+    (shared / "handoff-vocabulary.md").write_bytes(b"vocabulary-v1\n")
+
+    skill_md, files = load_skill_source(skill)
+    first = build_skill_version(skill_md=skill_md, actor="test", files=files)
+    assert files == {
+        "_shared/failure-signature-schema.md": "schema-v1\n",
+        "_shared/handoff-vocabulary.md": "vocabulary-v1\n",
+        "_shared/team-profile.md": "profile-v1\n",
+    }
+
+    (shared / "handoff-vocabulary.md").write_bytes(b"vocabulary-v2\n")
+    skill_md, files = load_skill_source(skill)
+    second = build_skill_version(skill_md=skill_md, actor="test", files=files)
+    assert payload_fingerprint(first.payload) != payload_fingerprint(second.payload)
+
+
+def test_load_skill_source_reuses_one_exact_shared_bundle_across_a_batch(tmp_path):
+    skills = tmp_path / "skills"
+    shared = skills / "_shared"
+    shared.mkdir(parents=True)
+    (shared / "team-profile.md").write_bytes(b"approved snapshot\n")
+    (shared / "failure-signature-schema.md").write_bytes(b"schema\n")
+    (shared / "handoff-vocabulary.md").write_bytes(b"vocabulary\n")
+    for slug in ("dv-one", "dv-two"):
+        skill = skills / slug
+        skill.mkdir()
+        (skill / "SKILL.md").write_text(SKILL_MD.replace("dv/uvm-testbench", slug), encoding="utf-8")
+
+    bundle = load_shared_bundle(shared)
+    (shared / "team-profile.md").write_bytes(b"later bytes\n")
+    first = load_skill_source(skills / "dv-one", shared_bundle=bundle)[1]
+    second = load_skill_source(skills / "dv-two", shared_bundle=bundle)[1]
+    assert first["_shared/team-profile.md"] == second["_shared/team-profile.md"] == "approved snapshot\n"
+    assert load_skill_source(skills / "dv-one")[1]["_shared/team-profile.md"] == "later bytes\n"
+
+
+def test_load_skill_source_enforces_the_combined_local_and_shared_budget(tmp_path, monkeypatch):
+    skills = tmp_path / "skills"
+    skill = skills / "dv-one"
+    shared = skills / "_shared"
+    skill.mkdir(parents=True)
+    shared.mkdir()
+    (skill / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
+    (skill / "notes.md").write_bytes(b"local-note\n")
+    for name in ("team-profile.md", "failure-signature-schema.md", "handoff-vocabulary.md"):
+        (shared / name).write_bytes(b"shared-support-bytes\n")
+    local_bytes = len(SKILL_MD.encode("utf-8")) + len(b"local-note\n")
+    monkeypatch.setattr(intake, "MAX_PAYLOAD_TOTAL_BYTES", local_bytes + 1)
+
+    with pytest.raises(ValueError, match="total byte limit"):
+        load_skill_source(skill)
+
+
+def test_load_skill_source_rejects_local_shadow_and_missing_shared_reference(tmp_path):
+    skills = tmp_path / "skills"
+    skill = skills / "dv-one"
+    shared = skills / "_shared"
+    local_shared = skill / "_shared"
+    local_shared.mkdir(parents=True)
+    shared.mkdir()
+    (skill / "SKILL.md").write_text(
+        SKILL_MD + "\nRead `_shared/missing.md`.\n", encoding="utf-8",
+    )
+    (local_shared / "team-profile.md").write_text("shadow\n", encoding="utf-8")
+    (shared / "team-profile.md").write_bytes(b"canonical\n")
+    (shared / "failure-signature-schema.md").write_bytes(b"schema\n")
+    (shared / "handoff-vocabulary.md").write_bytes(b"vocabulary\n")
+    with pytest.raises(ValueError, match="shadows the canonical shared bundle"):
+        load_skill_source(skill)
+
+    (local_shared / "team-profile.md").unlink()
+    with pytest.raises(ValueError, match="unresolved shared dependencies"):
+        load_skill_source(skill)
+
+
+def test_load_shared_bundle_rejects_link_escape(tmp_path):
+    shared = tmp_path / "_shared"
+    shared.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("must not enter the payload", encoding="utf-8")
+    (shared / "team-profile.md").write_text("profile\n", encoding="utf-8")
+    (shared / "handoff-vocabulary.md").write_text("vocabulary\n", encoding="utf-8")
+    try:
+        (shared / "failure-signature-schema.md").symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"symlink creation is unavailable: {exc}")
+    with pytest.raises(ValueError, match="links/reparse points are forbidden"):
+        load_shared_bundle(shared)
+
+
+def test_load_shared_bundle_rejects_unregistered_or_missing_files(tmp_path):
+    shared = tmp_path / "_shared"
+    shared.mkdir()
+    for name in ("team-profile.md", "failure-signature-schema.md", "handoff-vocabulary.md"):
+        (shared / name).write_text(f"{name}\n", encoding="utf-8")
+    (shared / "future-secret.md").write_text("must not widen public payloads\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="unregistered shared files"):
+        load_shared_bundle(shared)
+    (shared / "future-secret.md").unlink()
+    (shared / "team-profile.md").unlink()
+    with pytest.raises(ValueError, match="missing canonical shared files"):
+        load_shared_bundle(shared)
 
 
 @pytest.mark.parametrize("filename", ["REVIEW.json", "review.JSON"])

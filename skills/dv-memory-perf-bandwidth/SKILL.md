@@ -10,7 +10,7 @@ metadata:
   semiskill-role: memory-ip-dv-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-09-24
   semiskill-tags: performance, bandwidth, latency, efficiency, ddr, memory-controller, regression
 ---

@@ -535,6 +535,35 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   non-strict XPASS outcomes remain visible rather than being rewritten as perfect coverage.
 - Related: ADR-017, ADR-021, J-010b3e2a; semiskill/verification/; semiskill/cli.py
 
+## [ADR-023] Canonical shared source is vendored into every approval-bound skill payload
+- Date: 2026-08-07
+- Status: accepted
+- Context: All 84 DV skills depend on three top-level `_shared` source files, but those bytes were
+  previously outside the per-skill payload hash, scanners, content review and approval chain. Agent
+  Skills resolves resource references relative to the directory containing `SKILL.md`, so a single
+  sibling pack-root copy would not be portable or specification-compatible.
+- Decision: Exactly `failure-signature-schema.md`, `handoff-vocabulary.md`, and `team-profile.md`
+  form the allowlisted canonical shared source. One safely read immutable snapshot is vendored under
+  `_shared/` in every captured skill payload; its paths and bytes therefore participate in hashing,
+  scanning, reviews, approvals, publication, catalog install inventory and export verification.
+  Missing, extra, linked, shadowed, unresolved, oversized or mixed-snapshot bundles fail closed.
+- Alternatives considered:
+  - Keep top-level shared files outside approval — rejected because mutable unscanned prose could
+    change the behavior of a nominally verified skill without changing its badge.
+  - Emit one deduplicated `_shared` directory at the pack root — rejected because standard Agent
+    Skills resource paths resolve from each skill root, and it would require nonstandard loading or
+    rewriting references before approval.
+  - Create a separate shared-approval artifact and database migration — deferred because vendoring
+    exact bytes into the existing immutable `skill_version.payload.files` already binds every
+    downstream evidence check without a second authority.
+- Consequences: Source is authored once but releases intentionally contain byte-identical per-skill
+  copies. Any shared-byte change invalidates affected hashes and requires monotonic semver, new
+  scans, fresh independent review and new human approval. A pack refuses individually valid skills
+  from different shared epochs before writing output, and its v3 manifest records the frozen bundle
+  digest. Personalizing an installed copy creates an unverified local fork.
+- Related: ADR-010, ADR-014, J-010c1; semiskill/capture/intake.py;
+  semiskill/authoring/pack.py; docs/WORKFLOW.md; docs/PROMPT_LIBRARY.md
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

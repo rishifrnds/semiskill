@@ -10,7 +10,7 @@ metadata:
   semiskill-role: static-signoff-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-04-09
   semiskill-tags: cdc, rdc, static-signoff, clock-domain, reset-domain, waivers, constraints, triage
 ---

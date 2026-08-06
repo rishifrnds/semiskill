@@ -11,13 +11,12 @@ import pytest
 
 from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.store import PostgresArtifactStore
-from semiskill.authoring.gate import make_content_review
 from semiskill.authoring.scoreboard import (
-    DECLINED, FAILING_LINT, MISSING, PUBLISHED, READY, REVIEWED, UNPUBLISHED, UNREVIEWED,
+    DECLINED, FAILING_LINT, MISSING, PUBLISHED, READY, REVIEWED, UNPUBLISHED,
     build_scoreboard, load_registry, render,
 )
 from semiskill.capture.intake import build_skill_version, load_skill_dir
-from tests.support import content_checks, publish_wave_sources
+from tests.support import append_test_content_review, content_checks, publish_wave_sources
 
 MIG = Path("semiskill/artifacts/migrations")
 BODY = ("# Title\n\nA procedure with enough substance to be a skill.\n\n"
@@ -196,18 +195,18 @@ def test_an_adversarial_review_is_reviewed_not_ready(pg_store, pg_dsn, tmp_path)
     skill_version = pg_store.append(build_skill_version(
         skill_md=skill_md, actor="test-author", permissions_label="public", files=files,
     ))
-    pg_store.append(make_content_review(
-        skill_version=skill_version,
-        phase="adversarial",
-        prompt_version="P1-ADVERSARIAL@1",
+    append_test_content_review(
+        pg_store,
+        skill_version,
+        phase="review",
+        prompt_version="P1-ADVERSARIAL-REVIEW@3",
         run_id="test-run",
         batch_id="test-batch",
-        attempt=1,
         reviewer_identity="test-reviewer",
         fixer_identity="test-fixer",
         checks=content_checks(),
         findings=[],
-    ))
+    )
     reg = write_registry(tmp_path, [{"slug": "dv-a", "role": "dv-engineer", "level": "senior"}])
 
     sb = build_scoreboard(store=pg_store, registry_path=reg, skills_root=root, target=1,

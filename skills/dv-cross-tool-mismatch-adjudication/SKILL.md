@@ -10,7 +10,7 @@ metadata:
   semiskill-role: eda-product-validation-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-07-06
   semiskill-tags: cross-tool, language-standard, adjudication, tool-validation, semantics, interop, conformance
 ---

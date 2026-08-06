@@ -10,7 +10,7 @@ metadata:
   semiskill-role: safety-verification-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-24
   semiskill-tags: fault-injection, functional-safety, safe-faults, fault-campaign, safety-mechanism, closure
 ---

@@ -10,7 +10,7 @@ metadata:
   semiskill-role: verification-lead
   semiskill-level: manager
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-24
   semiskill-tags: release, sign-off, gate, exit-criteria, waivers, rollback, evidence, ip, vip
 ---

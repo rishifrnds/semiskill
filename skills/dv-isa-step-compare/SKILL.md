@@ -10,7 +10,7 @@ metadata:
   semiskill-role: processor-ip-dv-engineer
   semiskill-level: senior
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-04-14
   semiskill-tags: processor, isa, reference-model, step-and-compare, co-simulation, trace, triage
 ---

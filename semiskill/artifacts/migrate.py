@@ -532,7 +532,8 @@ def _schema_attestations(conn, *, trusted: dict) -> dict[str, bool]:
         "semiskill_app", "semiskill_submitter", "semiskill_pipeline",
     }
     pending_roles = {
-        "semiskill_approval_actuator", "semiskill_acl_reader", "semiskill_export_reader",
+        "semiskill_approval_actuator", "semiskill_review_coordinator",
+        "semiskill_acl_reader", "semiskill_export_reader",
         "semiskill_export_label_public", "semiskill_export_label_team",
         "semiskill_export_label_need_to_know", "semiskill_export_label_regulated",
     }
@@ -560,11 +561,16 @@ def _schema_attestations(conn, *, trusted: dict) -> dict[str, bool]:
     )
     pending_objects = (
         "publication_trust_policy", "publication_skill_registry", "verified_publication_events",
-        "one_verified_correction_per_head",
+        "verified_review_contracts", "verified_review_contract_cells",
+        "one_verified_correction_per_head", "content_review_v2_one_root_per_slug",
     )
     pending_functions = (
         "activate_verified_publication(uuid)", "verified_active_publication_heads_v1()",
-        "export_scoped_publication_bundle_v1(text)",
+        "export_scoped_publication_bundle_v2(text)",
+        "append_verified_review_contract(uuid,source_system,text,actor_kind,timestamp with time zone,"
+        "timestamp with time zone,uuid[],uuid[],text,text,text,numeric,jsonb,numeric,uuid,jsonb)",
+        "review_contract_authentication_valid_v1(uuid)",
+        "review_contract_matches_v1(uuid,uuid,uuid)",
     )
     table_owner_is_session = conn.execute(
         "SELECT pg_get_userbyid(relowner)=session_user FROM pg_class "
@@ -724,7 +730,8 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         "semiskill_acl_reader", "semiskill_app", "semiskill_approval_actuator",
         "semiskill_export_label_need_to_know", "semiskill_export_label_public",
         "semiskill_export_label_regulated", "semiskill_export_label_team",
-        "semiskill_export_reader", "semiskill_pipeline", "semiskill_submitter",
+        "semiskill_export_reader", "semiskill_pipeline", "semiskill_review_coordinator",
+        "semiskill_submitter",
     ]
     role_rows = [tuple(row) for row in conn.execute(
         "SELECT rolname,rolinherit,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,"
@@ -753,7 +760,8 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         "n.nspname,p.proname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid "
         "JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace n ON n.oid=p.pronamespace "
         "WHERE NOT t.tgisinternal AND c.relname IN "
-        "('artifacts','verified_publication_events') ORDER BY c.relname,t.tgname"
+        "('artifacts','verified_publication_events','verified_review_contracts',"
+        "'verified_review_contract_cells') ORDER BY c.relname,t.tgname"
     )]
     index_row = conn.execute(
         "SELECT x.indexdef,i.indisunique,i.indisvalid,i.indisready,i.indislive,"
@@ -763,9 +771,18 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         "WHERE x.schemaname='public' AND n.nspname='public' "
         "AND x.indexname='one_verified_correction_per_head'"
     ).fetchone()
+    review_root_index = conn.execute(
+        "SELECT x.indexdef,i.indisunique,i.indisvalid,i.indisready,i.indislive,"
+        "t.oid='public.artifacts'::regclass FROM pg_indexes x "
+        "JOIN pg_class c ON c.relname=x.indexname JOIN pg_namespace n ON n.oid=c.relnamespace "
+        "JOIN pg_index i ON i.indexrelid=c.oid JOIN pg_class t ON t.oid=i.indrelid "
+        "WHERE x.schemaname='public' AND n.nspname='public' "
+        "AND x.indexname='content_review_v2_one_root_per_slug'"
+    ).fetchone()
     required_relations = conn.execute(
-        "SELECT count(*)=3 FROM unnest(ARRAY['publication_trust_policy',"
-        "'publication_skill_registry','verified_publication_events']) name "
+        "SELECT count(*)=5 FROM unnest(ARRAY['publication_trust_policy',"
+        "'publication_skill_registry','verified_publication_events',"
+        "'verified_review_contracts','verified_review_contract_cells']) name "
         "WHERE to_regclass('public.'||name) IS NOT NULL"
     ).fetchone() == (True,)
     required_functions = all(conn.execute(
@@ -775,13 +792,20 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         "verified_active_publication_heads_v1()",
         "publication_registry_entry_v1(text)",
         "content_review_ready_v1(uuid,uuid)",
+        "content_review_publication_safe_v1(uuid)",
+        "review_contract_authentication_valid_v1(uuid)",
+        "review_contract_matches_v1(uuid,uuid,uuid)",
+        "review_contract_verified_v1(uuid,text)",
+        "append_verified_review_contract(uuid,source_system,text,actor_kind,timestamp with time zone,"
+        "timestamp with time zone,uuid[],uuid[],text,text,text,numeric,jsonb,numeric,uuid,jsonb)",
         "approval_v1_projection_valid(uuid)",
-        "export_scoped_publication_bundle_v1(text)",
+        "export_scoped_publication_bundle_v2(text)",
     ))
     direct_table_boundary = conn.execute(
         "SELECT "
         "NOT EXISTS (SELECT 1 FROM unnest(ARRAY['semiskill_app','semiskill_pipeline',"
-        "'semiskill_approval_actuator','semiskill_acl_reader','semiskill_export_reader']) r "
+        "'semiskill_approval_actuator','semiskill_review_coordinator',"
+        "'semiskill_acl_reader','semiskill_export_reader']) r "
         "CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE',"
         "'REFERENCES','TRIGGER']) p WHERE has_table_privilege(r,'public.artifacts',p)),"
         "has_table_privilege('semiskill_submitter','public.artifacts','INSERT'),"
@@ -790,9 +814,14 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         "'semiskill_submitter','public.artifacts',p)),"
         "NOT EXISTS (SELECT 1 FROM unnest(%s::text[]) r CROSS JOIN "
         "unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p "
-        "WHERE has_table_privilege(r,'public.verified_publication_events',p))",
-        (capability_roles,),
-    ).fetchone() == (True, True, True, True)
+        "WHERE has_table_privilege(r,'public.verified_publication_events',p)),"
+        "NOT EXISTS (SELECT 1 FROM unnest(%s::text[]) r CROSS JOIN "
+        "unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p "
+        "CROSS JOIN unnest(ARRAY['public.verified_review_contracts',"
+        "'public.verified_review_contract_cells']) relation "
+        "WHERE has_table_privilege(r,relation,p))",
+        (capability_roles, capability_roles),
+    ).fetchone() == (True, True, True, True, True)
     function_boundary = conn.execute(
         "SELECT "
         "has_function_privilege('semiskill_approval_actuator',"
@@ -800,10 +829,22 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         "NOT has_function_privilege('semiskill_app',"
         "'public.activate_verified_publication(uuid)','EXECUTE'),"
         "has_function_privilege('semiskill_export_reader',"
-        "'public.export_scoped_publication_bundle_v1(text)','EXECUTE'),"
+        "'public.export_scoped_publication_bundle_v2(text)','EXECUTE'),"
         "NOT has_function_privilege('semiskill_app',"
-        "'public.export_scoped_publication_bundle_v1(text)','EXECUTE')"
-    ).fetchone() == (True, True, True, True)
+        "'public.export_scoped_publication_bundle_v2(text)','EXECUTE'),"
+        "has_function_privilege('semiskill_review_coordinator',"
+        "'public.append_verified_review_contract(uuid,source_system,text,actor_kind,timestamp with "
+        "time zone,timestamp with time zone,uuid[],uuid[],text,text,text,numeric,jsonb,numeric,uuid,"
+        "jsonb)','EXECUTE'),"
+        "NOT has_function_privilege('semiskill_app',"
+        "'public.append_verified_review_contract(uuid,source_system,text,actor_kind,timestamp with "
+        "time zone,timestamp with time zone,uuid[],uuid[],text,text,text,numeric,jsonb,numeric,uuid,"
+        "jsonb)','EXECUTE'),"
+        "NOT has_function_privilege('semiskill_review_coordinator',"
+        "'public.append_verified_review_contract_v2_unbound(uuid,source_system,text,actor_kind,"
+        "timestamp with time zone,timestamp with time zone,uuid[],uuid[],text,text,text,numeric,"
+        "jsonb,numeric,uuid,jsonb)','EXECUTE')"
+    ).fetchone() == (True, True, True, True, True, True, True)
     return {
         "required_relations_present": required_relations,
         "required_functions_present": required_functions,
@@ -813,7 +854,11 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         and index_row[1:] == (True, True, True, True, True),
         "authority_triggers_exact": hashlib.sha256(
             _canonical_bytes(triggers)
-        ).hexdigest() == "c02a3ec826208f6f45e9e9f66b07234573bcefdacfdba5b38f067174c0ff960c",
+        ).hexdigest() == "974c05ade72e1690f77510a6ae2de34c0e8b7df8df7fe68a91117992568ad5f0",
+        "review_root_index_exact": bool(review_root_index) and hashlib.sha256(
+            review_root_index[0].encode("utf-8")
+        ).hexdigest() == "ab4b6a5560b1f5a2ed942e91420146b404d3f22b45231069ab3f32940ebf691b"
+        and review_root_index[1:] == (True, True, True, True, True),
         "capability_roles_hardened": role_rows == expected_role_rows,
         "capability_memberships_exact": memberships == expected_memberships,
         "security_definer_paths_hardened": conn.execute(
@@ -826,7 +871,9 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         "function_boundary_exact": function_boundary,
         "projection_and_policy_start_empty": conn.execute(
             "SELECT (SELECT count(*) FROM public.verified_publication_events)=0 "
-            "AND (SELECT count(*) FROM public.publication_trust_policy)=0"
+            "AND (SELECT count(*) FROM public.publication_trust_policy)=0 "
+            "AND (SELECT count(*) FROM public.verified_review_contracts)=0 "
+            "AND (SELECT count(*) FROM public.verified_review_contract_cells)=0"
         ).fetchone() == (True,),
         "public_schema_create_revoked": conn.execute(
             "SELECT NOT has_schema_privilege('public','public','CREATE')"

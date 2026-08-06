@@ -10,7 +10,7 @@ metadata:
   semiskill-role: ip-dv-engineer
   semiskill-level: senior-staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-09-22
   semiskill-tags: ecc, ras, error-injection, poison, crc, parity, retry, fault-campaign
 ---

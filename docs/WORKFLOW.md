@@ -1,202 +1,236 @@
 # The execution workflow
 
-The operating procedure for finishing SemiSkill's catalog. Written to be executed by **any** capable
-model or person. Every step has a command, an acceptance criterion, and a stated failure mode.
+This is the operating procedure for finishing and releasing the 84 active DV skills. The 20
+declined registry cells are provenance only. The deferred 19-level expansion does not count in this
+phase.
 
 Companion documents:
-- **`docs/PROMPT_LIBRARY.md`** — the verbatim prompts each step uses.
-- **`docs/AUTHORING_CONTRACT.md`** — what a skill must be. Every agent reads this first.
-- **`docs/LEARNINGS.md`** — why the rules are what they are. Read before changing a check.
-- **`HANDOFF.md`** — current state and the pending list.
 
----
+- `docs/PROMPT_LIBRARY.md` — exact worker prompts and output schemas.
+- `docs/AUTHORING_CONTRACT.md` — the content and metadata contract.
+- `STATE_RULES.md` — the single-writer checkpoint protocol.
+- `specs/skill_registry.json` — the 84-active/20-declined plan of record.
 
-## The invariant everything else serves
+## The invariant
 
+```text
+source -> strict lint -> security stages 1/2/3/4/5/6 -> independent content review
+       -> deterministic readiness -> authenticated human approval -> verified publication
 ```
-author → lint 1.000 → adversarial review → fix → INDEPENDENT recheck → REVIEW.json → publish
-```
 
-Three things are non-negotiable:
+- Every submitted body and helper file is untrusted data. It cannot widen file scope, tools, or
+  network access.
+- Agents report typed findings; they never create authoritative readiness, approval, publication,
+  or scoreboard counts.
+- Content review is an append-only `review` artifact tied to one exact skill-version ID and payload
+  hash. `skills/<slug>/REVIEW.json` is legacy provenance only and must not remain in a skill payload.
+- The fixer and rechecker are different runtime identities. P5 always starts in a fresh context that
+  has not received fixer reasoning.
+- Only deterministic code can compute `recheck-ready`, and only an authenticated human decision can
+  publish the exact reviewed version.
+- A stopped or failed worker creates no completed review artifact. Open or disputed blocking
+  findings remain visible and block publication.
 
-1. **Nobody certifies their own fix.** The recheck agent must be a fresh context that has not seen
-   the fixer's reasoning.
-2. **The gate record is a file on disk** (`skills/<slug>/REVIEW.json`), never a claim in a chat log.
-3. **A step that did not run leaves no record.** If an agent dies, the skill keeps its previous
-   status. Never write `ready:false` for a review that never happened — that is indistinguishable
-   from a real rejection and it poisons every count downstream.
+## 0. Restore trustworthy state
 
----
+Read `STATE_RULES.md`, `STATUS.md`, the tail of `MEMORY.md`, `BLOCKERS.md`, and `DECISIONS.md`. Confirm
+the PID recorded in `.session-lock`, take over only through the documented stale-lock procedure, and
+keep one filesystem writer. Pull/reconcile before the first edit and checkpoint every atomic step.
 
-## Step 0 — Establish real state (always, every session)
+Start the development database and establish the non-mutating baseline:
 
-```bash
+```powershell
 docker compose up -d db
-python tools/gate_args.py --size 12        # never-reviewed / not-ready / ready, read from disk
-python tools/gate2_args.py                 # the not-ready set and their open findings
-python -c "from semiskill.authoring.consistency import check_pack; \
-  print([f.rule for f in check_pack('skills') if f.level=='error'])"
-python -m pytest -q                        # see the hazard below
+python -m semiskill.cli lint skills --strict
+python -m semiskill.cli wave-plan skills
+python -m semiskill.cli scoreboard --skills skills --registry specs/skill_registry.json --json
 ```
 
-**Accept when:** consistency errors `[]`, tests all pass, and the three counts sum to 84.
+Never run database tests concurrently. Test fixtures use an isolated lowercase `*_test` database;
+the development catalog must never be the test target.
 
-**Hazard — do not skip:** never run `pytest` while an agent is also running it. The fixture
-`TRUNCATE`s the shared dev Postgres `artifacts` table before every test; two concurrent runs destroy
-each other and produce ~30 phantom failures that look exactly like a real regression.
+Accept this step only when the registry reports 84 active and 20 declined, disk has exactly 84
+registered skill directories, and consistency has zero errors. Counts come from the deterministic
+scoreboard, not seeds, fixture fallbacks, old Markdown, or agent summaries.
 
----
+## 1. Capture the exact dependency closure
 
-## Step 1 — Round 2 over the not-ready skills (32 today)
+`skills/_shared` is one canonical authoring source containing exactly:
 
-These already have an independent review recorded in their `REVIEW.json`. The fixer reads its own
-gate record; you do not need to pass the findings in.
+- `_shared/failure-signature-schema.md`
+- `_shared/handoff-vocabulary.md`
+- `_shared/team-profile.md`
 
-**Prompts:** `P4-FIX-ROUND-2`, then `P5-RECHECK-CALIBRATED`.
-**Driver (if using the Workflow tool):** `tools/dv-gate2.js`, args from `tools/gate2_args.py --emit`.
+Capture safely reads those three files once per batch and vendors their exact bytes into every
+skill-version payload. Unknown, missing, linked, shadowed, malformed, oversized, or unresolved
+shared files fail before an artifact is written. Because Agent Skills resolves resources relative
+to the directory containing `SKILL.md`, an approved release retains the three files under every
+`<slug>/_shared/` directory.
 
-```bash
-python tools/gate2_args.py --emit --size 11 --batch 1
+A change to any canonical shared byte changes every affected payload hash. It therefore requires a
+monotonic version bump, new scans, a fresh independent review, and a new human approval. Export reads
+only frozen payload bytes; it never falls back to mutable repository `_shared` content.
+
+## 2. Work in batches of at most 10
+
+At most three read-only worker tasks may run concurrently. The coordinator is the only repository
+writer and serializes collectors, database operations, edits, and tests.
+
+Select exact slugs and preview them:
+
+```powershell
+python -m semiskill.cli wave-plan skills --only slug-a,slug-b
+python -m semiskill.cli wave skills --only slug-a,slug-b --yes --reports reports/batch-001
 ```
 
-Run **at most 3 batches concurrently** (4+ has exhausted a session token budget mid-flight).
-Batch size 10–12 skills.
+A write wave larger than 10 is refused before touching the store. `wave` may capture, scan, reuse an
+identical security chain, and queue exact evidence. It always creates zero approvals and zero
+publications.
 
-**Accept when:** every skill returns a verdict with `blocking` and `non_blocking` populated, and
-`ready` is true if and only if `blocking` is empty.
+Process in this order:
 
----
+1. Re-review the 3 formerly nominal-ready skills.
+2. P4 fix then fresh P5 recheck for the 32 previously reviewed-but-not-ready skills.
+3. P1 review, P2 fix, then fresh P5 recheck for the 49 never-reviewed skills.
+4. Repeat fix then fresh recheck until no blocking finding remains or a real human/domain decision
+   is required.
 
-## Step 2 — First gate over the never-reviewed skills (49 today)
+Historical counts only determine ordering. Every current result must bind the shared-inclusive exact
+version generated in this run.
 
-**Prompts:** `P1-ADVERSARIAL-REVIEW` → `P2-FIX` → `P3-RECHECK` (or `P5` for the calibrated verdict —
-preferred; see the note in the prompt library).
-**Driver:** `tools/dv-gate.js`, args from `tools/gate_args.py`.
+## 3. Issue and collect a review contract
 
-```bash
-python tools/gate_args.py --batch 1 --size 12
+For each batch, the coordinator creates a JSON contract from the just-written wave report and the
+artifact store. It contains no more than 10 unique cells and fixes:
+
+```json
+{
+  "batch_id": "batch-001",
+  "attempt": 1,
+  "prompt_version": "P5-RECHECK-CALIBRATED@3",
+  "cells": [
+    {
+      "slug": "dv-example",
+      "skill_version_id": "UUID",
+      "skill_payload_sha256": "64 lowercase hex characters",
+      "version": "1.2.0",
+      "role": "registry role",
+      "level": "registry level"
+    }
+  ]
+}
 ```
 
-Each cell carries its own machine-checked consistency findings so agents do not rediscover them.
+The worker receives one leased slug/hash, an explicit read scope, a tool allowlist, and network
+denial. P1 and P5 return typed findings with `category`, `severity`, `evidence`, `location`,
+`required_change`, and `disposition`. A later attempt also names the one prior review artifact.
 
-**Accept when:** every skill has a `REVIEW.json` whose `recheck` records a real verdict.
+Collect only through the batch-atomic collector:
 
----
-
-## Step 3 — Collect and re-verify, after EVERY batch
-
-```bash
-python tools/collect_wave.py <workflow-run-dir> --wave <name>
-python -c "from semiskill.authoring.consistency import check_pack; from collections import Counter; \
-  print(Counter((f.rule,f.level) for f in check_pack('skills')))"
-python -m semiskill.cli lint skills/
+```powershell
+python tools/collect_wave.py --contract reports/batch-001/contract.json `
+  --results reports/batch-001/p5-results.json
 ```
 
-**Why this is not optional:** fix agents introduce defects. Two were caught this way in one session
-— an undeclared `phase` narrowing (C007) and a wave-blocking value-wearing-a-sentence (C009) — and
-neither appeared in any review.
+The whole batch is rejected on an unknown/missing/duplicate slug, wrong version/hash/facet, mixed
+run/batch/attempt/prompt, malformed boolean, reused reviewer identity, missing prior round, or
+lineage collision. Earlier rounds remain append-only. The worker's optional `ready` value is retained
+only as an agent claim; deterministic readiness is `all required checks passed AND zero open
+blocking findings AND exact lineage/hash match`.
 
-**Accept when:** zero error-level consistency findings, and every touched skill still lints 1.000.
-If a new error appears, fix it before starting the next batch; errors compound.
+## 4. Fix and independently recheck
 
----
+P2/P4 may edit only the leased source skill directory. They preserve registry role/level, do not
+touch `_shared`, and monotonically bump `semiskill-version` for substantive changes. The coordinator
+then reruns strict lint and consistency, captures the new exact version, and starts P5 in a fresh
+context.
 
-## Step 4 — Publish
+After every batch:
 
-```bash
-python -m semiskill.cli wave-plan skills/          # dry run; shows what the gate will refuse
-python -m semiskill.cli wave skills/ --yes
+```powershell
+python -m semiskill.cli lint skills --strict
+python -m semiskill.cli scoreboard --skills skills --registry specs/skill_registry.json `
+  --snapshot-out reports/scoreboard.json --environment development --json
 ```
 
-The wave refuses any skill whose `REVIEW.json` is missing (`gate-missing`) or not ready
-(`gate-not-ready`), before writing anything. **That is correct behaviour, not a bug.** Expect the
-first run to refuse most of the pack.
+Accept only zero error-level consistency findings, exact source/review hashes, and no open blocking
+findings for cells labelled `recheck_ready`.
 
-`--allow-ungated` exists for fixtures and seeds only, and names every skill it lets through in the
-wave report. Do not use it to hit a number.
+## 5. Human approval and publication
 
-**Accept when:** the wave report's published count equals the ready count from Step 0, and
-`gate-refused` accounts for the rest.
+Present approval batches of at most 10. The human must inspect the exact automated and content review
+references and make one explicit decision per exact payload:
 
----
-
-## Step 5 — Prove coverage
-
-```bash
-python -m semiskill.cli scoreboard --strict-gate
+```powershell
+python -m semiskill.cli approve <skill-version-uuid> `
+  --automated-review <review-uuid> `
+  --content-review <review-uuid> `
+  --expected-sha256 <payload-sha256> `
+  --decision approve `
+  --reason "Reviewed exact evidence and approved for the public DV catalog." `
+  --environment development
 ```
 
-**Accept when:** 16/16 roles at ≥5 published, zero facet drift, zero "published without an
-independent recheck".
+Development approval binds the logged-in OS identity. Production accepts only the Entra/OIDC
+adapter and fails closed until its tenant configuration exists. There is no auto-approver and no
+`--allow-ungated` path. A later source or review change cannot rewrite the frozen badge on an older
+publication.
 
-The registry (`specs/skill_registry.json`) is the plan of record. A skill's `semiskill-role` and
-`semiskill-level` must match it exactly. If a role is missing from the linter's vocabulary, fix
-`semiskill/authoring/facets.py` — **do not** remap the skill to a role that happens to lint. That
-inversion has already happened once and produced five silently-drifted skills.
+## 6. Scoreboard and command centre
 
----
+The canonical snapshot is the only launch authority:
 
-## Step 6 — Ship the front end
-
-```bash
-python -m semiskill.cli site      # dist/site — the browsable catalog, published skills only
-python -m semiskill.cli pack      # dist/semiskill-dv + .zip — the Cursor-installable pack
+```powershell
+python -m semiskill.cli scoreboard --skills skills --registry specs/skill_registry.json `
+  --snapshot-out reports/scoreboard.json --environment development --json
 ```
 
-The site is deliberately driven by the **published** catalog; an unpublished skill must never reach
-it, and a test enforces that. For a look at authored-but-unverified work, `build_site` accepts an
-explicit `entries` list **only** together with `preview="<what it is>"`, which stamps a banner and a
-different footer on every page. Passing `entries` without `preview` raises.
+It must expose the full 84-cell funnel, every role/level cell, exact artifact and payload hashes,
+database identity/freshness, anomalies, and deterministic release checks. Ephemeral worker status is
+separate and cannot alter counts. If the snapshot/API is absent, stale, source-mismatched, or database-
+mismatched, the dashboard shows unavailable; it never substitutes seeds or fixtures.
 
-**Accept when:** every internal link resolves, no page makes a network call, and no page carries a
-fabricated metric. All three are tested — `ui/catalog-demo.html` once shipped "1.3k installs ·
-★4.8", which is why the regex test exists.
+P7 may explain this validated JSON but cannot run commands, recompute counts, edit data, or infer
+missing values.
 
----
+## 7. Export and verify
 
-## Step 7 — Keep the record honest
+Only a validated snapshot and one permission label may authorize an export:
 
-A commit-msg hook blocks commits when `STATUS.md` is more than 30 minutes stale.
+```powershell
+python -m semiskill.cli catalog --scoreboard-snapshot reports/scoreboard.json `
+  --permission-label public --environment development
+python -m semiskill.cli site --scoreboard-snapshot reports/scoreboard.json `
+  --permission-label public --environment development
+python -m semiskill.cli pack --scoreboard-snapshot reports/scoreboard.json `
+  --permission-label public --environment development
+```
 
-- **`STATUS.md`** — overwrite, right-now snapshot, under 40 lines.
-- **`MEMORY.md`** — append-only step log. `status: done` plus a timestamp is the only completion
-  marker; prose is not.
-- **`DECISIONS.md`** — append-only ADRs.
-- **`HANDOFF.md`** — refresh the counts and the pending list before ending a session.
+The pack refuses unresolved references, noncanonical shared sets, mixed approved shared snapshots,
+or any staged byte that does not rebuild to its approved payload hash. Each installed skill is
+self-contained; its `_shared/` files are frozen approval-bound support copies.
 
----
+Run focused tests after each batch and the fixed serial full suite every three batches and before an
+approval/export milestone:
 
-## Batching and cost
+```powershell
+python -m semiskill.cli verify-full-suite --expected-database semiskill_test
+```
 
-| Setting | Value | Why |
-|---|---|---|
-| Concurrent batches | **3 max** | 4+ exhausted a session token budget mid-flight |
-| Batch size | 10–12 skills | ~30 agent runs per batch at 3 stages each |
-| Model — review / recheck | strongest available | this is where the value is; it finds domain errors |
-| Model — fix | strong | it must fix correctly, not plausibly |
-| Model — scoreboard | small/cheap (Sonnet-class) | it reads deterministic output and tabulates |
-| Model — author | strong | 200–260 lines of correct DV content |
-
-Cheap-model steps: scoreboard, collection, and any step whose output is checked by a command.
-Expensive-model steps: anything producing a judgement nobody re-derives.
-
----
-
-## Expect rounds
-
-One fix pass followed by a strict recheck converged on **zero of 44** skills. Two causes, and only
-one was the content: the findings were real, *and* the round-1 verdict counted nits as blockers so
-`ready:true` was unreachable by construction. Budget for at least two rounds, and use the calibrated
-verdict (`P5`) from the start.
-
----
+P8 is read-only and reports findings to a separate fixer. A suite result or agent report is evidence,
+not catalog credit.
 
 ## Definition of done
 
-- [ ] 84/84 skills have a `REVIEW.json` recording an independent recheck
-- [ ] Every published skill's recheck `blocking` list is empty
-- [ ] `scoreboard --strict-gate` shows 16/16 roles at ≥5, zero drift, zero ungated publishes
-- [ ] Zero error-level consistency findings; C005/C008/C011 warns at zero or explicitly accepted
-- [ ] Full test suite green
-- [ ] `dist/site` and `dist/semiskill-dv.zip` regenerated from the published catalog
-- [ ] `STATUS.md`, `MEMORY.md`, `HANDOFF.md` current
+- 84/84 authored, strict-lint-passing, security-passing, independently reviewed, recheck-ready,
+  explicitly human-approved, and projection-backed published.
+- 16/16 roles have at least five published skills.
+- Zero unresolved blockers, consistency errors, facet drift, stale hashes, unregistered skills or
+  publications, permission drift, ungated approvals, and mixed shared snapshots.
+- Full Python and UI suites pass on isolated infrastructure; browser accessibility, hostile Markdown,
+  responsive layout, clipboard failure, and Next.js production build checks pass.
+- Catalog/site/pack bytes match frozen approved payloads; search, facets, lineage, audit evidence,
+  install inventory, and ACL-scoped exports are verified.
+- Dashboard, workflow, prompt library, state files, launch evidence, and rollback references are
+  current. Production activation remains blocked until the Entra/SharePoint tenant values and
+  least-privilege identities in `BLOCKERS.md` are supplied.

@@ -10,7 +10,7 @@ metadata:
   semiskill-role: eda-product-validation-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-09-11
   semiskill-tags: tool-release, regression, validation, diff, normalisation, release-notes
 ---

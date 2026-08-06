@@ -10,7 +10,7 @@ metadata:
   semiskill-role: dv-engineer
   semiskill-level: fresher
   semiskill-owner: dv-guild
-  semiskill-version: 1.4.0
+  semiskill-version: 1.4.1
   semiskill-review-by: 2027-08-05
   semiskill-tags: logs, triage, debug, regression, reproducer
 ---

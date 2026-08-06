@@ -10,7 +10,7 @@ metadata:
   semiskill-role: ip-dv-engineer
   semiskill-level: principal
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-04-14
   semiskill-tags: configuration, parameters, coverage, pairwise, release-review, sign-off, ip
 ---

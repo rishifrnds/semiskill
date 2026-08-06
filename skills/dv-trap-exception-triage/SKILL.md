@@ -10,7 +10,7 @@ metadata:
   semiskill-role: processor-ip-dv-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.1.1
   semiskill-review-by: 2027-03-12
   semiskill-tags: traps, exceptions, interrupts, privilege, csr, processor, triage, debug
 ---

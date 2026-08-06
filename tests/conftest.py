@@ -13,6 +13,7 @@ MIG = Path("semiskill/artifacts/migrations")
 
 _TEST_CAPABILITY_ROLES = (
     "semiskill_approval_actuator",
+    "semiskill_review_coordinator",
     "semiskill_acl_reader",
     "semiskill_export_reader",
     "semiskill_export_label_public",
@@ -22,6 +23,7 @@ _TEST_CAPABILITY_ROLES = (
 )
 _TEST_REQUIRED_CAPABILITIES = frozenset({
     "semiskill_approval_actuator",
+    "semiskill_review_coordinator",
     "semiskill_acl_reader",
     "semiskill_export_reader",
     "semiskill_export_label_public",
@@ -161,7 +163,26 @@ def pg_dsn(_migrated_db) -> str:
                 "ALTER TABLE verified_publication_events DISABLE TRIGGER "
                 "verified_publication_events_block_truncate"
             )
-            conn.execute("TRUNCATE verified_publication_events, artifacts")
+            conn.execute(
+                "ALTER TABLE verified_review_contracts DISABLE TRIGGER "
+                "verified_review_contracts_block_truncate"
+            )
+            conn.execute(
+                "ALTER TABLE verified_review_contract_cells DISABLE TRIGGER "
+                "verified_review_contract_cells_block_truncate"
+            )
+            conn.execute(
+                "TRUNCATE verified_review_contract_cells, verified_review_contracts, "
+                "verified_publication_events, artifacts"
+            )
+            conn.execute(
+                "ALTER TABLE verified_review_contract_cells ENABLE TRIGGER "
+                "verified_review_contract_cells_block_truncate"
+            )
+            conn.execute(
+                "ALTER TABLE verified_review_contracts ENABLE TRIGGER "
+                "verified_review_contracts_block_truncate"
+            )
             conn.execute(
                 "ALTER TABLE verified_publication_events ENABLE TRIGGER "
                 "verified_publication_events_block_truncate"

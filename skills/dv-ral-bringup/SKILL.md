@@ -10,7 +10,7 @@ metadata:
   semiskill-role: soc-dv-engineer
   semiskill-level: junior
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-06-18
   semiskill-tags: ral, registers, uvm, bring-up, adapter, predictor, debug
 ---

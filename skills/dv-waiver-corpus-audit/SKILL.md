@@ -10,7 +10,7 @@ metadata:
   semiskill-role: static-signoff-engineer
   semiskill-level: senior-staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-09-17
   semiskill-tags: waivers, lint, cdc, rdc, static-signoff, audit, rtl-drop, exclusions
 ---

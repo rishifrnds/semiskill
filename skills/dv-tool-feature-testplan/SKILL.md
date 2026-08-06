@@ -10,7 +10,7 @@ metadata:
   semiskill-role: eda-product-validation-engineer
   semiskill-level: intermediate
   semiskill-owner: dv-guild
-  semiskill-version: 1.2.0
+  semiskill-version: 1.2.1
   semiskill-review-by: 2027-05-06
   semiskill-tags: tool-validation, conformance, standards, golden, traceability, test-authoring
 ---

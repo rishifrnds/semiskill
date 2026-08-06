@@ -10,7 +10,7 @@ metadata:
   semiskill-role: safety-verification-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.0.0
+  semiskill-version: 1.0.1
   semiskill-review-by: 2027-10-02
   semiskill-tags: iso26262, functional-safety, fault-injection, fault-list, diagnostic-coverage, safety-mechanism, evidence
 ---
