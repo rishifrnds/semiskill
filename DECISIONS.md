@@ -309,6 +309,34 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-011, ADR-012, J-010a7; semiskill/artifacts/migrate.py;
   semiskill/artifacts/legacy_migration_manifest.json
 
+## [ADR-014] Dashboard catalog credit requires an observation-bound live trust witness
+- Date: 2026-08-06
+- Status: accepted
+- Context: A semantically self-consistent scoreboard could be restamped, sourced from another path,
+  outlive its Git/database state, or omit top-level `_shared` bytes. The browser also compared an
+  abbreviated commit itself while still rendering counts, and migration adoption was display-only
+  historical evidence rather than a current schema gate.
+- Decision: `semiskill.scoreboard/v2` binds `generated_at` into its identity and records both
+  per-skill payload and complete `skills/**` input-tree hashes. The DV command centre accepts only
+  the fixed 84-active/20-declined/16-role scope, canonical paths, an exact clean HEAD checked before
+  and after live recomputation, the configured database state, an exact migration tracker and
+  current structural attestations. Scoreboard/progress age is bounded by
+  `SEMISKILL_SCOREBOARD_MAX_AGE_SECONDS` and `SEMISKILL_PROGRESS_MAX_AGE_SECONDS` (15-3600 seconds).
+  Only an allowlisted migration/adoption projection reaches the browser.
+- Alternatives considered:
+  - Keep v1 and apply age checks outside its hash — rejected because a copied file could be
+    restamped without changing its purported observation identity.
+  - Let the browser compare Git/database labels — rejected because presentation code is not a trust
+    boundary and already rendered authoritative counts after mismatch.
+  - Hash only discovered skill payloads — rejected because shared instructions affect all 84 skills
+    and must invalidate the source witness even before their approval topology is resolved.
+- Consequences: Every v1 report is non-crediting and must be regenerated; an expired report or dirty
+  worktree intentionally hides catalog counts. State-only commits also require a fresh snapshot.
+  The separate `_shared` approval topology remains release-blocking until its bytes are part of every
+  affected scan/review/approval chain.
+- Related: ADR-011, ADR-013, J-010a9; dashboard/server.py;
+  semiskill/authoring/snapshot.py
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

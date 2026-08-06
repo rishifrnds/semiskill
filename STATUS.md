@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T15:03:53Z_
+_Last updated: 2026-08-06T15:06:20Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010a9: final focused verification and checkpoint of the observation-bound, live-recomputed
-  dashboard scoreboard plus current schema/migration/adoption witness.
+- J-010b: remove direct dashboard process/test execution and fabricated planning credit, then harden
+  all feedback controls into a same-origin, CSRF-bound append-only task queue.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -31,8 +31,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   tracker 15/15, current structural attestations 10/10, adoption attestations 11/11, projection 0.
 
 ## Immediate order
-1. Commit J-010a9, regenerate a clean v2 snapshot, and prove the live dashboard fails closed/open.
-2. Remove unsafe dashboard run actuators and fabricated/curated launch credit; harden task queuing.
+1. Remove unsafe dashboard run actuators and fabricated/curated launch credit; harden task queuing.
+2. Run the full isolated suite and browser contract against the checkpointed command centre.
 3. Resolve the approval-bound `_shared` payload topology and build the production Next.js catalog.
 4. Re-review/fix/recheck all 84, human-approve in batches <=10, publish and verify 84/84.
 
@@ -46,8 +46,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   remains fail-closed on BLK-001 until distinct identities and tenant configuration exist.
 
 ## Last implementation commit
-- 2c0b3b5 - commit-bound migration adoption, exact legacy/schema witness, hardened 0013-0015
-  authority boundaries, and transactional isolated-test capability leasing; 771/4/1 full gate.
+- ff70fce - observation-bound v2 scoreboard, complete input-tree/live DB/schema witness, sanitized
+  adoption projection and server-authoritative dashboard provenance; 101 focused tests.
 
 ## Last checkpoint commit
 - 65413ee: recorded the exact development migration adoption and current live baseline.

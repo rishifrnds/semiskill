@@ -636,9 +636,23 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a9 make dashboard source/database/freshness validation fail closed
 
 
+- [J-010a9] 2026-08-06T15:06:20Z  status: done
+  what: made the command centre accept only an observation-bound v2 scoreboard for the exact clean
+  DV-84 source and live database state; every skills byte including `_shared`, current schema and
+  migration tracker, sanitized legacy adoption, causal progress and a final Git witness now gate
+  catalog visibility, with no client-side or fixture authority
+  delayed: true, reason: the interrupted step failed its checkpoint self-check and was repaired by
+  completing the trust contract, focused regression gate and clean runtime validation before resuming
+  artifacts: ff70fce, ADR-014, dashboard/server.py, dashboard/index.html,
+  semiskill/authoring/snapshot.py, 101 focused tests passed; live tracker 15/15, structural
+  attestations 10/10, adoption attestations 11/11; v2 snapshot
+  sha256:430ab94ebd8590d123b8e23944b462ed38883e4c89275ff6d320b0522bdce06d
+  next: J-010b remove unsafe dashboard actuators and fabricated launch credit
+
+
 ## In-Flight Step
-- [J-010a9] reject stale-commit, dirty-tree, database-drift and expired dashboard snapshots, expose
-  the migration witness, and verify the live command centre against the current source and database.
+- [J-010b] remove direct HTTP process/test actuators and fabricated planning metrics, then replace
+  them with a same-origin, CSRF-bound append-only task queue and evidence-typed launch views.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
