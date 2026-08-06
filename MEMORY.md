@@ -526,9 +526,23 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-009c1 close the SQL catalog projection and skill-directory containment defects found by QA
 
 
+- [J-009c1] 2026-08-06T10:33:52Z  status: done
+  what: made publication a typed append-only SQL projection over exact frozen evidence and immutable
+  registry policy, added pure reconciliation and separated runtime/clearance/actuator identities;
+  hardened review continuity, payload hashing, filesystem containment and local/Entra identity
+  binding; a causal activation timestamp fixed the only full-suite regression
+  delayed: true, reason: the security checkpoint accumulated across the prior long-running turn and
+  was repaired immediately when the checkpoint self-check detected the dirty tree
+  artifacts: 0c0ec18, ADR-011, semiskill/artifacts/migrations/0011_verified_publication_projection.sql,
+  semiskill/governance/reconciliation.py, semiskill/capture/intake.py,
+  tests/artifacts/test_privilege_separation.py, recreated isolated semiskill_test database,
+  657 passed, 4 skipped, 1 xpassed
+  next: J-009d remove dashboard fixture fallbacks and consume only validated canonical snapshots
+
+
 ## In-Flight Step
-- [J-009c1] make the SQL catalog projection depend on verified exact evidence, reject symlink and
-  binary payload escapes during ingestion, and bind production Entra claims to configured trust.
+- [J-009d] make the dashboard consume validated canonical scoreboard/progress documents only,
+  refresh within 15 seconds, and expose provenance/freshness without seeds or inferred counts.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

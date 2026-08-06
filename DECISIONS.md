@@ -227,6 +227,35 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   string only until they are archived (they are superseded by `semiskill site`).
 - Related: ADR-002, ADR-008; semiskill/api.py; semiskill/context/retrieve.py; cursor.com/docs/skills
 
+## [ADR-011] Project verified publication through a capability-separated append-only actuator
+- Date: 2026-08-06
+- Status: accepted
+- Context: Approval JSON stored beside ordinary artifacts was mutable only by convention and catalog
+  readers could mistake a forged, stale or contradictory record for an active publication. Runtime,
+  ACL clearance and approval operations also shared one database identity, so application code held
+  more authority than its read path required.
+- Decision: The catalog recognizes only rows in `verified_publication_events`, written atomically by
+  a `SECURITY DEFINER` actuator after deterministic validation of the exact skill hash, registry
+  facets, immutable scan/review chain, authenticated human decision, environment policy and monotonic
+  correction lineage. Runtime, clearance and actuator use distinct login capabilities; production
+  requires Entra/OIDC claim binding, while local OS identity is development-only. The test-only
+  unregistered-fixture exception is constrained to a database whose name ends in `_test`.
+- Alternatives considered:
+  - Treat any well-shaped approval artifact as published — rejected because an ordinary artifact
+    append could forge a badge or detach it from evidence.
+  - Let application code choose the newest approval — rejected because duplicate heads, branches and
+    clock/order ambiguity require deterministic quarantine, not a heuristic winner.
+  - Share one database login and rely on call-site discipline — rejected because a compromised read
+    path would inherit publication and ACL authority.
+- Consequences: Every catalog consumer reconciles typed projection rows with frozen artifacts and
+  fails closed on orphan, drift, duplicate-head or topology anomalies. Approval activation needs a
+  separately configured actuator DSN outside tests; production stays unavailable until Entra and
+  capability credentials are supplied. Migration checksum adoption is explicit and never silently
+  blesses legacy NULL checksums.
+- Related: ADR-002, ADR-005, ADR-009, J-009c1;
+  semiskill/artifacts/migrations/0011_verified_publication_projection.sql;
+  semiskill/governance/reconciliation.py
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>
