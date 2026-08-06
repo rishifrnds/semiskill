@@ -419,9 +419,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008b implement hash-bound canonical review artifacts and deterministic readiness
 
 
+- [J-008b] 2026-08-06T06:57:54Z  status: done
+  what: implemented canonical content-review/v1 evidence bound to the exact installable payload,
+  typed findings, continuous attempt lineage, independent fixer/reviewer identities and four
+  required checks; readiness ignores agent claims and is derived from valid evidence with zero open
+  blocking findings; security reviews have a separate discriminator and batch appends are atomic
+  artifacts: d1b5b39, semiskill/authoring/gate.py, semiskill/capture/intake.py,
+  semiskill/artifacts/store.py, semiskill/spine/pipeline.py, tests/authoring/test_gate_artifacts.py
+  next: J-008c implement strict atomic collection and non-authoritative legacy migration
+
+
 ## In-Flight Step
-- [J-008b] implement hash-bound content-review artifacts, typed findings, legacy migration and
-  deterministic readiness before changing the explicit approval boundary.
+- [J-008c] implement strict atomic review collection, legacy import/archive, and fail-closed removal
+  of review metadata from skill payload directories.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
