@@ -592,9 +592,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a5 remove unexecuted red-team fixture claims from the live dashboard
 
 
+- [J-010a5] 2026-08-06T11:50:31Z  status: done
+  what: converted the red-team fixture into non-crediting input inventory, removed fabricated
+  blocked/zero-escape outcomes from API and UI, downgraded feature/launch/analytics credit until a
+  corpus-bound result exists, and restarted the live dashboard on the corrected contract
+  artifacts: 81f4e9f, dashboard/server.py, dashboard/index.html, dashboard/model.json,
+  dashboard/README.md, tests/dashboard/test_dashboard.py, 10 tests passed,
+  live dashboard http://127.0.0.1:8899 process 31268
+  next: J-010a6 run the full isolated verification gate for the export/dashboard tranche
+
+
 ## In-Flight Step
-- [J-010a5] remove unexecuted red-team fixture claims and false credit from the live dashboard,
-  exposing input inventory as not executed until an immutable result artifact exists.
+- [J-010a6] run the full Python suite serially against isolated semiskill_test, reconcile the live
+  dashboard, and audit the export/dashboard tranche before vendoring shared dependencies.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

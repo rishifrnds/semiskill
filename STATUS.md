@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T11:50:09Z_
+_Last updated: 2026-08-06T11:50:31Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010a5: remove unexecuted red-team fixture claims and false credit from the live dashboard,
-  exposing input inventory as not executed until an immutable result artifact exists.
+- J-010a6: run the full Python suite serially against isolated semiskill_test and audit the
+  export/dashboard tranche before vendoring shared dependencies.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -42,9 +42,9 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   those dependencies are vendored into each exact payload and rescanned.
 
 ## Last implementation commit
-- 5ea37da - exact-scope frozen-byte pack release, deterministic ZIP/evidence manifest, shared-file
-  fail-closed checks and explicit snapshot/label CLI contracts.
+- 81f4e9f - non-crediting red-team inventory, explicit not-executed UI/API state and corrected
+  feature, launch and analytics status; live dashboard restarted on process 31268.
 
 ## Last checkpoint commit
-- 5ea37da: 86 scoped export/pack/CLI tests passed on isolated semiskill_test; canonical
+- 81f4e9f: 10 dashboard tests plus inline JavaScript/API contract checks passed; canonical
   development counts remain 84/0/0/0/0 authored/reviewed/ready/approved/published.
