@@ -483,6 +483,33 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-016, ADR-019, J-010b3d; dashboard/action_queue.py; dashboard/server.py;
   dashboard/model.json
 
+## [ADR-021] Operational dashboard observations require exact typed source evidence
+- Date: 2026-08-06
+- Status: accepted
+- Context: Repository, state-file, ADR and database panels previously accepted loosely shaped data,
+  exposed partial fallback values and let a fresh response timestamp obscure older source evidence.
+  Development database defaults also had to remain convenient without silently extending to a
+  production identity.
+- Decision: Every operational source uses the exact `available | stale | unavailable` envelope with
+  source-specific identity, scope, timestamp, freshness and semantic validation. Source failures are
+  isolated from the canonical scoreboard; non-development database observation requires an explicit
+  `DATABASE_URL`, stays read-only and bounded, and the browser invalidates expired, hidden or failed
+  transport rather than retaining last-good claims.
+- Alternatives considered:
+  - Fill missing operational values with empty rows or zeroes — rejected because absence is not a
+    measured zero and could manufacture clean, healthy or launch-ready presentation.
+  - Reuse the response generation timestamp for every source — rejected because envelope freshness
+    cannot refresh an older Git, file or database observation.
+  - Permit the loopback development DSN in every environment — rejected because production would
+    silently observe the wrong database instead of failing closed on missing configuration.
+- Consequences: `/api/state` consumers must handle typed per-source availability and no partial data.
+  Git and file sources are exact hash/commit bound with final race checks; database queries use
+  read-only transactions and statement/lock timeouts. Client refreshes are ordered and abortable,
+  preserve current focus/scroll only across synchronous rerenders, and never change canonical skill
+  counts. Full-suite and browser run evidence remain separate producers and earn no catalog credit.
+- Related: ADR-014, ADR-017, ADR-020, J-010b3e1; dashboard/server.py; dashboard/index.html;
+  dashboard/README.md
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

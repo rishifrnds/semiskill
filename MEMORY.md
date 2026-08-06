@@ -731,9 +731,25 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   clean-tree, source-bound isolated full-suite run artifact
 
 
+- [J-010b3e1] 2026-08-06T20:09:53Z  status: done
+  what: made repository, project-state, ADR and runtime database observations typed, identity-bound,
+  source-validated, freshness-aware and fault-isolated; the browser now invalidates stale transport,
+  preserves only current user interaction across ordered refreshes, and exposes accessible source and
+  coverage detail without converting absent evidence into zero, clean, green or launch credit
+  delayed: true, reason: adversarial source-shape, TOCTOU, browser-race, mobile and accessibility
+  reviews expanded the regression matrix and the repository hook required a fresh STATUS witness in
+  the implementation commit after the atomic checkpoint ceiling was crossed
+  artifacts: e6b6509, ADR-021, dashboard/server.py, dashboard/index.html, dashboard/README.md,
+  tests/dashboard/test_dashboard.py; 189 dashboard tests and 30 targeted
+  pipeline/scoreboard/reconciliation tests; Ruff, Python, JavaScript, JSON, exact model-pin and diff
+  checks passed; two independent exact-byte audits found zero P0/P1/P2 and Chrome verified all 11
+  views at 375px with focus, scroll, refresh ordering, invalidation and console checks green
+  next: J-010b3e2 persist clean-tree, source-bound isolated full-suite run evidence
+
+
 ## In-Flight Step
-- [J-010b3e] fail closed on unavailable repository, state-file, ADR and runtime observations; add an
-  append-only clean-tree, source-bound isolated full-suite run artifact and file-only dashboard reader.
+- [J-010b3e2] persist an append-only clean-tree, source-bound isolated full-suite run artifact and
+  expose it through a strict file-only dashboard reader without affecting canonical skill credit.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
