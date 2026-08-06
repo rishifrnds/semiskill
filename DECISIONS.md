@@ -280,6 +280,35 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   semiskill/artifacts/migrations/0012_scoped_export_reader.sql;
   semiskill/authoring/export_scope.py
 
+## [ADR-013] Legacy migration adoption is a commit-bound witnessed operation
+- Date: 2026-08-06
+- Status: accepted
+- Context: The development database predates checksum tracking: migrations 0001-0010 are recorded
+  with NULL hashes and a historical test probe appears in the tracker. Silently filling those hashes
+  would bless unknown history, while generic migration bootstrap previously had enough authority to
+  touch a catalog database.
+- Decision: Legacy adoption is a two-step human operation: a read-only plan binds an exact clean Git
+  commit, tracked migration set, trusted raw hashes, deep pre-schema witness, database/environment
+  identity and optional exact empty probe removal; execution requires the plan digest, replans under
+  locks, applies the pending suffix and appends one immutable gate-decision artifact in one transaction.
+  Generic `apply_migrations` is test-database-only. The explicit contract is
+  `SEMISKILL_MIGRATION_DATABASE_URL`, `SEMISKILL_MIGRATOR_ROLE`,
+  `SEMISKILL_DEVELOPMENT_DATABASE_NAME` and `SEMISKILL_PRODUCTION_DATABASE_NAME`.
+- Alternatives considered:
+  - Backfill NULL hashes automatically on startup - rejected because current files cannot prove the
+    bytes that created historical state and a tampered tracker would become trusted silently.
+  - Edit the tracker and remove the probe manually - rejected because cleanup, pending DDL and audit
+    could diverge or partially commit.
+  - Reuse the runtime `DATABASE_URL` - rejected because migration authority must be explicit and must
+    fail closed on a wrong environment or database identity.
+- Consequences: Migrations 0013-0015 protect authoritative tables from TRUNCATE, remove ambient
+  capability memberships, revoke public schema creation, pin every SECURITY DEFINER search path and
+  protect the publication projection. Loopback development may use the owner for this one witnessed
+  adoption but earns no production-separation credit; production remains blocked until a dedicated
+  migrator and Entra/OIDC identity are configured.
+- Related: ADR-011, ADR-012, J-010a7; semiskill/artifacts/migrate.py;
+  semiskill/artifacts/legacy_migration_manifest.json
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

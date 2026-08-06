@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T13:28:48Z_
+_Last updated: 2026-08-06T13:29:31Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,9 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010a7: add explicit audited adoption for legacy migration checksums, apply pending migrations
-  0011-0015 to development, and regenerate a current canonical scoreboard snapshot. The adoption
-  implementation and rollback boundary are verified; the development database is still untouched.
+- J-010a8: execute the committed read-only development adoption plan, apply migrations 0011-0015
+  atomically, reconcile the database, and regenerate a current canonical scoreboard snapshot.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -31,7 +30,7 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   conservation true, anomalies zero, release blocked on the five expected downstream checks.
 
 ## Immediate order
-1. Checkpoint the audited adoption, apply 0011-0015 to development, and refresh the live snapshot.
+1. Plan and execute the exact audited 0011-0015 development adoption; refresh the live snapshot.
 2. Close five export P1 findings and resolve the approval-bound `_shared` payload topology.
 3. Build ACL/provenance-bound catalog API and production Next.js list/detail UI.
 4. Re-review 3 nominal-ready, fix/recheck 32 not-ready, review/fix/recheck 49 untouched.
@@ -47,8 +46,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   migration or cleanup occurs until the committed source yields an exact reviewed plan digest.
 
 ## Last implementation commit
-- 81f4e9f - non-crediting red-team inventory, explicit not-executed UI/API state and corrected
-  feature, launch and analytics status; live dashboard restarted on process 31268.
+- 2c0b3b5 - commit-bound migration adoption, exact legacy/schema witness, hardened 0013-0015
+  authority boundaries, and transactional isolated-test capability leasing; 771/4/1 full gate.
 
 ## Last checkpoint commit
 - c3dc355: full isolated gate passed 711/4/1; three read-only audits confirmed deterministic

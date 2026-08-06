@@ -611,9 +611,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a7 add explicit audited legacy migration-checksum adoption and refresh development state
 
 
+- [J-010a7] 2026-08-06T13:29:31Z  status: done
+  what: implemented a two-step, commit-bound legacy migration adoption gate with exact schema and
+  history attestation, explicit environment/database/migrator identity, safe orphan-fixture removal,
+  atomic pending-DDL/audit rollback, hardened authority triggers and transactional test isolation
+  delayed: true, reason: the security review and full-suite order regression crossed the checkpoint
+  ceiling; the commit hook stopped the stale checkpoint and state was repaired without bypassing it
+  artifacts: 2c0b3b5, ADR-013, semiskill/artifacts/migrate.py,
+  semiskill/artifacts/legacy_migration_manifest.json, migrations 0013-0015,
+  tests/artifacts/test_migration_adoption.py, 771 passed, 4 skipped, 1 xpassed;
+  two independent read-only audits found no scoped local-development P0/P1
+  next: J-010a8 execute the exact development adoption plan and regenerate canonical live state
+
+
 ## In-Flight Step
-- [J-010a7] add explicit audited adoption for legacy migration checksums, apply pending migrations
-  0011/0012 to development, and regenerate the canonical scoreboard snapshot.
+- [J-010a8] execute the committed read-only adoption plan against development, apply migrations
+  0011-0015 atomically, reconcile the resulting database, and regenerate the canonical snapshot.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
