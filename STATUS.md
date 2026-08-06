@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T21:23:38Z_
+_Last updated: 2026-08-06T21:24:11Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3e3b: commit the browser-discovered favicon correction, then rerun the fixed serial suite on
-  the final clean source and verify its exact dashboard projection.
+- J-010b3e3c: produce the final immutable run against the favicon-corrected checkpoint and repeat
+  the live Quality/Launch browser verification without further source edits.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -52,8 +52,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   remains fail-closed on BLK-001 until distinct identities and tenant configuration exist.
 
 ## Last implementation commit
-- 814187e - two environment-sensitive unit tests now explicitly isolate pinned privileged adapter
-  DSNs; both pass under the exact runner environment that exposed them.
+- a673e39 - added an inline dashboard icon and regression after isolated Chrome identified the only
+  console error as a missing favicon request; the page now loads with zero console/network errors.
 
 ## Last checkpoint commit
-- 814187e: committed the J-010b3e3a test-isolation correction with a fresh STATUS witness.
+- a673e39: committed the J-010b3e3b browser correction with a fresh STATUS witness.

@@ -791,8 +791,23 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010b3e3b] rerun the fixed serial suite on the corrected clean committed source and verify the
-  dashboard's exact file-only projection.
+- [J-010b3e3b] 2026-08-06T21:24:11Z  status: done
+  what: reran the complete suite to a source-bound PASS, proved the strict dashboard projection at
+  desktop/mobile widths, and fixed the only browser finding - a missing favicon request - with an
+  inline icon that adds no route or external dependency
+  artifacts: a673e39, dashboard/runs/full-suite/runs/219ba923-2db4-443a-a3fc-9b70aafcf4ae.json,
+  sha256:35878b3738f4a62fe174e60e0c81f5bf49cc1b67ea18b0c2d3b59bb772c781af,
+  dashboard/index.html, tests/dashboard/test_dashboard.py; immutable run on `d58b488` recorded
+  989 passed, 0 failed, 0 errors, 6 skipped and 1 xpassed; file-only projection matched its exact
+  commit/tree/database/run hashes; isolated Chrome at 1440px and 375px found no overflow and the
+  favicon correction removed the sole 404 with a clean console/network recheck
+  next: J-010b3e3c produce the final immutable run against the favicon-corrected checkpoint and repeat
+  the live Quality/Launch browser verification without further source edits
+
+
+## In-Flight Step
+- [J-010b3e3c] produce the final immutable run against the favicon-corrected checkpoint and repeat
+  the live Quality/Launch browser verification without further source edits.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
