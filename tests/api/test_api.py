@@ -2,6 +2,7 @@ import json
 import threading
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
 import pytest
 from pathlib import Path
 from semiskill.api import serve
@@ -9,6 +10,7 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, ActorKind
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.capture.intake import build_skill_version
+from semiskill.authoring.snapshot import SnapshotUnavailable, finalize_scoreboard
 from tests.support import publish_test_skill
 
 MIG = Path("semiskill/artifacts/migrations")
@@ -43,6 +45,40 @@ def _get(base, path, labels="team"):
         return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read())
+
+
+def _get_with_headers(base, path):
+    try:
+        response = urllib.request.urlopen(base + path, timeout=5)
+        return response.status, json.loads(response.read()), response.headers
+    except urllib.error.HTTPError as error:
+        return error.code, json.loads(error.read()), error.headers
+
+
+def _snapshot():
+    return finalize_scoreboard({
+        "scope": {"phase": "dv-84"},
+        "sources": {"database": {"database_name": "semiskill_test"}},
+        "registry": {"active": 84, "declined": 20, "roles": 16},
+        "funnel": {"authored": 84, "published": 0},
+        "conservation": {"passed": True, "checks": {}},
+        "roles": [], "cells": [], "anomalies": {},
+        "release_gate": {"passed": False, "checks": []},
+    }, generated_at="2026-08-06T00:00:00Z")
+
+
+@contextmanager
+def _snapshot_server(scoreboard_provider, progress_provider=None):
+    httpd = serve(
+        port=0, dsn="postgresql://unreachable:secret@127.0.0.1:1/never_used",
+        scoreboard_provider=scoreboard_provider, progress_provider=progress_provider,
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{httpd.server_address[1]}"
+    finally:
+        httpd.shutdown()
 
 
 @pytest.mark.integration
@@ -88,3 +124,65 @@ def test_unpublished_skill_detail_404(server):
     draft = [a for a in store.by_type(AT.SKILL_VERSION) if a.payload.get("slug") == "dv/draft"][0]
     code, _ = _get(base, f"/skill/{draft.artifact_id}", labels="team")
     assert code == 404
+
+
+def test_scoreboard_returns_validated_injected_document_without_database():
+    snapshot = _snapshot()
+    with _snapshot_server(lambda: snapshot) as base:
+        code, body, headers = _get_with_headers(base, "/scoreboard")
+    assert code == 200 and body == snapshot
+    assert headers["Cache-Control"] == "no-store"
+
+
+def test_progress_is_bound_to_the_current_scoreboard_snapshot():
+    snapshot = _snapshot()
+    received = []
+
+    def progress(snapshot_id):
+        received.append(snapshot_id)
+        return {
+            "schema_version": "semiskill.progress/v1",
+            "scoreboard_snapshot_id": snapshot_id,
+            "generated_at": "2026-08-06T00:00:01Z",
+            "workers": [],
+        }
+
+    with _snapshot_server(lambda: snapshot, progress) as base:
+        code, body, headers = _get_with_headers(base, "/progress")
+    assert code == 200 and body["scoreboard_snapshot_id"] == snapshot["snapshot_id"]
+    assert received == [snapshot["snapshot_id"]]
+    assert headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("path", ["/scoreboard", "/progress"])
+def test_snapshot_endpoints_fail_closed_without_leaking_or_falling_back(path):
+    def unavailable():
+        raise SnapshotUnavailable(
+            "C:/private/reports/scoreboard.json postgresql://user:secret@db/catalog"
+        )
+
+    with _snapshot_server(unavailable) as base:
+        code, body, headers = _get_with_headers(base, path)
+    encoded = json.dumps(body)
+    assert code == 503
+    assert body == {"error": {"code": "SNAPSHOT_UNAVAILABLE",
+                               "message": "authoritative scoreboard snapshot unavailable"}}
+    assert "private" not in encoded and "secret" not in encoded
+    assert "results" not in body and "seeds" not in body and "funnel" not in body
+    assert headers["Cache-Control"] == "no-store"
+
+
+def test_mismatched_progress_provider_is_503():
+    snapshot = _snapshot()
+
+    def mismatched(_snapshot_id):
+        return {
+            "schema_version": "semiskill.progress/v1",
+            "scoreboard_snapshot_id": "sha256:" + "0" * 64,
+            "generated_at": "2026-08-06T00:00:01Z",
+            "workers": [],
+        }
+
+    with _snapshot_server(lambda: snapshot, mismatched) as base:
+        code, body, _headers = _get_with_headers(base, "/progress")
+    assert code == 503 and body["error"]["code"] == "SNAPSHOT_UNAVAILABLE"

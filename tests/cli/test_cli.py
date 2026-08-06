@@ -1,6 +1,9 @@
 import io
+import json
 import pytest
+from pathlib import Path
 from semiskill.artifacts.schema import Artifact, ArtifactType
+from semiskill.authoring.snapshot import load_scoreboard_snapshot
 from semiskill.cli import build_parser, main
 
 SKILL_MD = """---
@@ -187,5 +190,70 @@ def test_a_wave_is_not_stopped_by_pack_level_warnings(tmp_path):
     rc = main(["wave-plan", str(tmp_path)], store=None, out=out)
     assert rc == 0
     assert "before any artifact was written" not in out.getvalue()
+
+
+def _scoreboard_inputs(tmp_path):
+    root = tmp_path / "skills"
+    _clean_skill(root, "dv-one")
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({"target_per_role": 1, "cells": [{
+        "slug": "dv-one", "role": "dv-engineer", "level": "intermediate",
+    }]}), encoding="utf-8")
+    return root, registry
+
+
+def test_scoreboard_snapshot_is_explicit_loadable_and_written_when_incomplete(tmp_path):
+    root, registry = _scoreboard_inputs(tmp_path)
+    target = tmp_path / "reports" / "scoreboard.json"
+    out = io.StringIO()
+    rc = main([
+        "scoreboard", "--registry", str(registry), "--skills", str(root),
+        "--dsn", "postgresql://unused/semiskill_dev", "--fail-under", "1",
+        "--snapshot-out", str(target),
+    ], store=FakeStore(), out=out)
+    snapshot = load_scoreboard_snapshot(target)
+    assert rc == 1 and snapshot["release_gate"]["passed"] is False
+    assert snapshot["registry"]["active"] == 1
+    assert str(target) in out.getvalue() and snapshot["snapshot_id"] in out.getvalue()
+
+
+def test_scoreboard_without_snapshot_out_has_no_file_side_effect(tmp_path):
+    root, registry = _scoreboard_inputs(tmp_path)
+    rc = main([
+        "scoreboard", "--registry", str(registry), "--skills", str(root),
+        "--dsn", "postgresql://unused/semiskill_dev", "--fail-under", "1",
+    ], store=FakeStore(), out=io.StringIO())
+    assert rc == 1 and not (tmp_path / "reports").exists()
+
+
+@pytest.mark.parametrize("extra", [["--snapshot-out", "-"],
+                                    ["--snapshot-out", "out.json", "--no-lint"]])
+def test_scoreboard_refuses_non_atomic_or_lintless_snapshot(tmp_path, extra):
+    root, registry = _scoreboard_inputs(tmp_path)
+    out = io.StringIO()
+    rc = main([
+        "scoreboard", "--registry", str(registry), "--skills", str(root),
+        "--dsn", "postgresql://unused/semiskill_dev", *extra,
+    ], store=FakeStore(), out=out)
+    assert rc == 2 and "snapshot refused" in out.getvalue()
+
+
+def test_snapshot_generation_failure_preserves_prior_file(tmp_path, monkeypatch):
+    root, registry = _scoreboard_inputs(tmp_path)
+    target = tmp_path / "scoreboard.json"
+    target.write_text("prior-complete-snapshot", encoding="utf-8")
+
+    def fail(**_kwargs):
+        raise RuntimeError("private database detail")
+
+    monkeypatch.setattr("semiskill.authoring.snapshot.build_scoreboard_snapshot", fail)
+    out = io.StringIO()
+    rc = main([
+        "scoreboard", "--registry", str(registry), "--skills", str(root),
+        "--dsn", "postgresql://unused/semiskill_dev",
+        "--snapshot-out", str(target),
+    ], store=FakeStore(), out=out)
+    assert rc == 2 and target.read_text(encoding="utf-8") == "prior-complete-snapshot"
+    assert "private database detail" not in out.getvalue()
 
 

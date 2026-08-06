@@ -7,7 +7,9 @@ X-Principal-Labels header (comma-separated); absent ⇒ 'public' only.
 """
 from __future__ import annotations
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Callable
 from urllib.parse import urlparse, parse_qs
 from semiskill.config import Config
 from semiskill.artifacts.store import PostgresArtifactStore
@@ -41,20 +43,57 @@ def _card(c) -> dict:
             "role": c.role, "level": c.level, "install": _install(c.slug)}
 
 
-def make_handler(dsn: str):
-    store = PostgresArtifactStore(dsn)
+def make_handler(
+    dsn: str,
+    *,
+    scoreboard_provider: Callable[[], dict] | None = None,
+    progress_provider: Callable[[str], dict] | None = None,
+):
+    from semiskill.authoring.snapshot import (
+        SnapshotUnavailable,
+        load_progress,
+        load_scoreboard_snapshot,
+        validate_progress_snapshot,
+        validate_scoreboard_snapshot,
+    )
+
+    def canonical_scoreboard() -> dict:
+        if scoreboard_provider is not None:
+            return validate_scoreboard_snapshot(scoreboard_provider())
+        path = os.environ.get("SEMISKILL_SCOREBOARD_SNAPSHOT")
+        if not path:
+            raise SnapshotUnavailable("scoreboard snapshot path is not configured")
+        return load_scoreboard_snapshot(path)
+
+    def current_progress(snapshot_id: str) -> dict:
+        if progress_provider is not None:
+            return validate_progress_snapshot(progress_provider(snapshot_id), snapshot_id)
+        path = os.environ.get("SEMISKILL_PROGRESS_SNAPSHOT")
+        if not path:
+            raise SnapshotUnavailable("progress snapshot path is not configured")
+        return load_progress(path, snapshot_id)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # keep the test output quiet
             pass
 
-        def _send(self, code: int, body: dict):
+        def _send(self, code: int, body: dict, *, no_store: bool = False):
             data = json.dumps(body).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
+            if no_store:
+                self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(data)
+
+        def _snapshot_unavailable(self):
+            return self._send(503, {
+                "error": {
+                    "code": "SNAPSHOT_UNAVAILABLE",
+                    "message": "authoritative scoreboard snapshot unavailable",
+                },
+            }, no_store=True)
 
         def do_GET(self):
             u = urlparse(self.path)
@@ -64,6 +103,19 @@ def make_handler(dsn: str):
             try:
                 if u.path == "/health":
                     return self._send(200, {"status": "ok"})
+                if u.path == "/scoreboard":
+                    try:
+                        return self._send(200, canonical_scoreboard(), no_store=True)
+                    except Exception:  # provider details must not cross the API boundary
+                        return self._snapshot_unavailable()
+                if u.path == "/progress":
+                    try:
+                        snapshot = canonical_scoreboard()
+                        return self._send(
+                            200, current_progress(snapshot["snapshot_id"]), no_store=True,
+                        )
+                    except Exception:  # provider details must not cross the API boundary
+                        return self._snapshot_unavailable()
                 if u.path == "/catalog":
                     cards = search_catalog(dsn=dsn, principal=principal, query=q.get("q", [""])[0],
                                            function=q.get("function", [None])[0],
@@ -74,6 +126,7 @@ def make_handler(dsn: str):
                     d = get_skill_detail(dsn=dsn, skill_version_id=parts[1], principal=principal)
                     return self._send(200 if d else 404, d or {"error": "not found or not visible"})
                 if u.path == "/queue":
+                    store = PostgresArtifactStore(dsn)
                     return self._send(200, {"queue": [
                         {"skill_version_id": str(i.skill_version_id), "slug": i.slug,
                          "verdict": i.verdict, "aggregate_safety": i.aggregate_safety}
@@ -97,9 +150,18 @@ def make_handler(dsn: str):
     return Handler
 
 
-def serve(host: str = "127.0.0.1", port: int = 8787, dsn: str | None = None) -> ThreadingHTTPServer:
+def serve(
+    host: str = "127.0.0.1",
+    port: int = 8787,
+    dsn: str | None = None,
+    *,
+    scoreboard_provider: Callable[[], dict] | None = None,
+    progress_provider: Callable[[str], dict] | None = None,
+) -> ThreadingHTTPServer:
     dsn = dsn or Config.from_env().database_url
-    return ThreadingHTTPServer((host, port), make_handler(dsn))
+    return ThreadingHTTPServer((host, port), make_handler(
+        dsn, scoreboard_provider=scoreboard_provider, progress_provider=progress_provider,
+    ))
 
 
 def main():

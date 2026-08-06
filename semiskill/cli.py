@@ -242,19 +242,52 @@ def cmd_catalog(args, store, out) -> int:
 def cmd_scoreboard(args, store, out) -> int:
     """Coverage of the planned registry by the PUBLISHED catalog. Deterministic by design — a
     scoreboard that can be talked into optimism is worse than none."""
+    import json
     from datetime import datetime, timezone
     from semiskill.artifacts.store import PostgresArtifactStore
     from semiskill.authoring.scoreboard import build_scoreboard, render
+    from semiskill.authoring.snapshot import build_scoreboard_snapshot, write_json_atomic
 
+    if args.snapshot_out == "-":
+        print("snapshot refused: --snapshot-out requires an atomic filesystem path", file=out)
+        return 2
+    if args.snapshot_out and args.no_lint:
+        print("snapshot refused: canonical snapshots require strict lint evidence", file=out)
+        return 2
     dsn = args.dsn or Config.from_env().database_url
     store = store or PostgresArtifactStore(dsn)
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     sb = build_scoreboard(store=store, registry_path=args.registry, skills_root=args.skills,
                           target=args.fail_under, strict_gate=args.strict_gate,
-                          generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                          generated_at=generated_at,
                           lint=not args.no_lint)
+    snapshot = None
+    if args.snapshot_out:
+        try:
+            snapshot = build_scoreboard_snapshot(
+                store=store,
+                registry_path=args.registry,
+                skills_root=args.skills,
+                generated_at=generated_at,
+                target_per_role=args.fail_under,
+                environment=args.environment,
+            )
+            write_json_atomic(args.snapshot_out, snapshot)
+        except Exception:  # snapshot paths, database details and parser traces stay local
+            print("snapshot generation failed; any prior snapshot was left unchanged", file=out)
+            return 2
     style = "json" if args.json else ("markdown" if args.markdown else "text")
-    print(render(sb, style=style), file=out)
-    return 0 if sb.ok else 1
+    if args.json and snapshot is not None:
+        print(json.dumps(snapshot, indent=2, sort_keys=True), file=out)
+    else:
+        print(render(sb, style=style), file=out)
+        if snapshot is not None:
+            print(
+                f"\nauthoritative snapshot: {args.snapshot_out}\n"
+                f"snapshot id: {snapshot['snapshot_id']}",
+                file=out,
+            )
+    return 0 if (snapshot["release_gate"]["passed"] if snapshot is not None else sb.ok) else 1
 
 
 def cmd_site(args, store, out) -> int:
@@ -357,6 +390,10 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--strict-gate", action="store_true", dest="strict_gate",
                     help="also fail if a published skill has no independent recheck")
     sc.add_argument("--no-lint", action="store_true", dest="no_lint")
+    sc.add_argument("--snapshot-out", default=None,
+                    help="atomically write the canonical scoreboard snapshot (no default side effect)")
+    sc.add_argument("--environment", choices=["development", "test", "production"],
+                    default="development", help="non-secret database identity label")
     sc.add_argument("--json", action="store_true")
     sc.add_argument("--markdown", action="store_true")
     sc.set_defaults(func=cmd_scoreboard, needs_store=False)
