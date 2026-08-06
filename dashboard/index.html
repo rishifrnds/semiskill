@@ -371,7 +371,7 @@ const TITLES = {
   pipeline:  ['Verification Pipeline', 'Six stages, the gate, and the lifecycle'],
   features:  ['Features', 'What is implemented, partial, or a gap — with evidence'],
   quality:   ['Quality & Bugs', 'Test inventory, risks, and open defects'],
-  security:  ['Security', 'Red-team results, invariants and exposure'],
+  security:  ['Security', 'Red-team corpus, execution status, invariants and exposure'],
   catalog:   ['Catalog', 'Published skills, role coverage, reuse'],
   launch:    ['Launch', 'Readiness scoring, blockers and timeline'],
   growth:    ['Growth & GTM', 'ICP, funnel, channels, assets, pricing'],
@@ -389,7 +389,7 @@ function renderAll() {
   $('#page-sub').textContent = `${s} · state generated ${S.generated_at}`;
   $('#n-features').textContent = S.model.features.length;
   $('#n-tests').textContent = S.repo.collected_tests || S.repo.total_tests;
-  $('#n-attacks').textContent = S.attacks.length;
+  $('#n-attacks').textContent = S.redteam.status === 'unavailable' ? '—' : S.redteam.corpus.length;
   const snapshot = canonicalSnapshot();
   $('#n-published').textContent = snapshot ? snapshot.funnel.published : '—';
   $('#n-queue').textContent = S.inbox.filter(i => i.status === 'queued').length;
@@ -418,6 +418,7 @@ function readiness() {
 function vOverview() {
   const f = S.model.features, R = readiness();
   const snapshot = canonicalSnapshot();
+  const redteam = S.redteam;
   const done = f.filter(x => x.status === 'done').length;
   const gaps = f.filter(x => x.status === 'gap').length;
   const partial = f.filter(x => x.status === 'partial').length;
@@ -430,7 +431,9 @@ function vOverview() {
       ${kpi('Build', 'A–G', 'all planned phases complete', { color: hsl('--primary') })}
       ${kpi('Tests', S.repo.collected_tests || S.repo.total_tests, `${S.repo.tests.length} files · ${S.repo.total_loc} LOC · last full green run: Phase G gate`)}
       ${kpi('Features done', `${done}/${f.length}`, `${partial} partial · ${gaps} gaps`, { progress: pct(done, f.length) })}
-      ${kpi('Red-team escapes', '0', `${S.attacks.length} novel attacks + battery blocked`, { color: hsl('--success') })}
+      ${kpi('Red-team escapes', '—', redteam.status === 'not_executed'
+            ? `${redteam.corpus.length} corpus inputs · not executed`
+            : 'authoritative result unavailable')}
       ${kpi('Published skills', snapshot ? snapshot.funnel.published : '—', snapshot
             ? `canonical snapshot · ${freshness(snapshot.generated_at)}`
             : 'authoritative scoreboard unavailable')}
@@ -796,7 +799,8 @@ function vQuality() {
 
 /* ── security ─────────────────────────────────────────────────────────────── */
 function vSecurity() {
-  const a = S.attacks, classes = [...new Set(a.map(x => x.attack_class))];
+  const redteam = S.redteam;
+  const a = redteam.corpus || [], classes = [...new Set(a.map(x => x.attack_class))];
   const invariants = [
     ['Catalog written only by the approval actuator', 'done', 'ADR-002 · tests/governance/test_publish.py'],
     ['Lifecycle state derived, never stored', 'done', 'tests/spine/test_lifecycle.py'],
@@ -812,25 +816,25 @@ function vSecurity() {
 
   $('#view-security').innerHTML = `
     <div class="grid g4">
-      ${kpi('Escapes', '0', 'malicious skills that reached the catalog', { color: hsl('--success') })}
-      ${kpi('Attack classes covered', classes.length, esc(classes.join(', ')))}
+      ${kpi('Escapes', '—', redteam.status === 'not_executed' ? 'not executed' : 'result unavailable')}
+      ${kpi('Corpus classes available', classes.length, esc(classes.join(', ')))}
       ${kpi('Invariants held', invariants.filter(i => i[1] === 'done').length + '/' + invariants.length, 'structurally enforced + tested',
         { progress: pct(invariants.filter(i => i[1] === 'done').length, invariants.length) })}
       ${kpi('Exposure', S.model.risks.filter(r => r.area === 'security').length, 'open security risks', { color: hsl('--destructive') })}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Attack classes blocked', 'Novel LLM-crafted attacks kept as a regression fixture', `<div class="chart-box"><canvas id="c-attacks"></canvas></div>`,
+      ${card('Corpus input composition', 'Adversarial inputs available; no execution outcome is inferred', `<div class="chart-box"><canvas id="c-attacks"></canvas></div>`,
         { action: 'A-10' })}
       ${card('Security invariants', 'The load-bearing properties — each is a test, not a promise',
         `<div class="list" style="max-height:250px;overflow:auto">${invariants.map(([n, s, e]) => `<div class="row">
           <div class="g"><div class="h">${badge(s, s)} ${esc(n)}</div><div class="p mono">${esc(e)}</div></div></div>`).join('')}</div>`, { tight: true })}
     </div>
 
-    <div class="section-head"><h2>Red-team corpus</h2><p class="muted">Every one of these was generated to beat the pipeline — all blocked</p></div>
+    <div class="section-head"><h2>Red-team corpus inputs</h2><p class="muted">Input inventory only — ${esc(redteam.reason)}; outcomes are not executed</p></div>
     ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>Attack</th><th>Class</th><th>Technique</th><th>Outcome</th></tr></thead><tbody>
       ${a.map(x => `<tr><td><b>${esc(x.name)}</b></td><td>${badge(x.attack_class, 'destructive')}</td>
-        <td class="muted" style="max-width:520px">${esc(x.technique)}</td><td>${badge('blocked', 'done')}</td></tr>`).join('')}
+        <td class="muted" style="max-width:520px">${esc(x.technique)}</td><td>${badge('not executed', 'partial')}</td></tr>`).join('')}
     </tbody></table></div>`, { tight: true })}
 
     <div class="section-head"><h2>Security actions</h2></div>

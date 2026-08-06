@@ -20,6 +20,7 @@ caller-supplied strings — and binds to 127.0.0.1.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import subprocess
@@ -277,13 +278,89 @@ def canonical_snapshot_signals() -> dict:
     return {"scoreboard": scoreboard, "progress": progress}
 
 
-def redteam_attacks() -> list[dict]:
-    f = ROOT / "tests" / "redteam" / "fixtures" / "generated_attacks.json"
-    if not f.exists():
-        return []
-    return [{"name": a.get("name", ""), "attack_class": a.get("attack_class", ""),
-             "technique": a.get("technique", ""), "blocked": True}
-            for a in json.loads(f.read_text(encoding="utf-8"))]
+def redteam_signal(path: str | Path | None = None) -> dict:
+    """Expose fixture inputs as inventory, never as evidence that an attack was executed."""
+    fixture = Path(path) if path is not None else (
+        ROOT / "tests" / "redteam" / "fixtures" / "generated_attacks.json"
+    )
+    unavailable = {
+        "status": "unavailable",
+        "reason": "corpus_invalid_or_unavailable",
+        "observed_at": None,
+        "corpus_observed_at": None,
+        "corpus": [],
+        "execution": None,
+    }
+    try:
+        rows = json.loads(fixture.read_text(encoding="utf-8"))
+        if not isinstance(rows, list) or not rows:
+            return unavailable
+        corpus = []
+        names: set[str] = set()
+        digests: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                return unavailable
+            name = row.get("name")
+            attack_class = row.get("attack_class")
+            technique = row.get("technique")
+            skill_md = row.get("skill_md")
+            if not all(isinstance(value, str) and value.strip()
+                       for value in (name, attack_class, technique, skill_md)):
+                return unavailable
+            digest = "sha256:" + hashlib.sha256(skill_md.encode("utf-8")).hexdigest()
+            if name in names or digest in digests:
+                return unavailable
+            names.add(name)
+            digests.add(digest)
+            corpus.append({
+                "name": name,
+                "attack_class": attack_class,
+                "technique": technique,
+                "input_sha256": digest,
+                "outcome": "not_executed",
+            })
+        corpus_observed_at = datetime.fromtimestamp(
+            fixture.stat().st_mtime, timezone.utc,
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        return unavailable
+    return {
+        "status": "not_executed",
+        "reason": "no_authoritative_execution_result",
+        "observed_at": None,
+        "corpus_observed_at": corpus_observed_at,
+        "corpus": corpus,
+        "execution": None,
+    }
+
+
+def _remove_unexecuted_redteam_credit(model: dict, redteam: dict) -> None:
+    if redteam.get("execution") is not None:
+        return
+    for feature in model.get("features", []):
+        if feature.get("id") == "F-L6-06":
+            feature.update(
+                name="Red-team harness and input corpus",
+                status="partial",
+                note=("Harness tests and adversarial inputs exist; no immutable execution result "
+                      "is bound to the current corpus."),
+            )
+    for item in model.get("launch_checklist", []):
+        if item.get("id") == "LC-11":
+            item.update(item="Authoritative corpus-bound red-team execution result", status="todo")
+    for risk in model.get("risks", []):
+        if risk.get("id") == "R-07":
+            risk["detail"] = (
+                "The current red-team escape result is unavailable; the block rate on honest "
+                "skills is also unmeasured, and over-blocking kills adoption."
+            )
+    for metric in model.get("gtm", {}).get("metrics", []):
+        if metric.get("id") == "M-05":
+            metric.update(
+                current="unmeasured",
+                source="authoritative corpus-bound red-team result artifact (not available)",
+            )
 
 
 def adrs() -> list[dict]:
@@ -311,6 +388,8 @@ def read_inbox() -> list[dict]:
 def build_state() -> dict:
     model = json.loads(MODEL.read_text(encoding="utf-8"))
     canonical = canonical_snapshot_signals()
+    redteam = redteam_signal()
+    _remove_unexecuted_redteam_credit(model, redteam)
     return {
         "generated_at": _now(),
         "model": model,
@@ -319,7 +398,7 @@ def build_state() -> dict:
         "runtime": runtime_signals(),
         "scoreboard": canonical["scoreboard"],
         "progress": canonical["progress"],
-        "attacks": redteam_attacks(),
+        "redteam": redteam,
         "adrs": adrs(),
         "inbox": read_inbox(),
         "runs": list(_run_log[-25:]),

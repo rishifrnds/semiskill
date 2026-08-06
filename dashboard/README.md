@@ -18,6 +18,7 @@ python dashboard/server.py        # → http://127.0.0.1:8899 (opens your browse
 | Docker / Postgres / read-API liveness | the 30 prepared task prompts |
 | artifact counts + type mix (when the DB is up) | |
 | validated canonical scoreboard + worker progress snapshots | |
+| red-team input inventory + explicit execution availability | |
 | the action queue itself | |
 
 Configure the authoritative catalog inputs before starting the server:
@@ -32,6 +33,9 @@ The dashboard validates the snapshot's semantic counts, provenance, database env
 snapshot ID. If it is absent or invalid, catalog metrics remain explicitly unavailable; API rows,
 database counts, seeds and test fixtures are never substitutes. Progress is independently validated
 against the loaded scoreboard and may be unavailable while the scoreboard remains available.
+The adversarial fixture is input inventory only. Until a corpus-hash-bound execution result is
+persisted, escape counts and outcomes display **not executed** and receive no feature, launch, or
+analytics credit.
 
 The page auto-refreshes every 15s while it is visible. `model.json` is plain data — edit it and
 reload; nothing in it is code.

@@ -62,7 +62,7 @@
     {"id": "F-L6-03", "layer": "L6", "name": "Stage 3 held-out injection corpus", "status": "done", "tests": 3, "evidence": "tests/scanners/test_injection_probe.py", "note": "Corpus unreadable by the pipeline role \u2014 verified by test."},
     {"id": "F-L6-04", "layer": "L6", "name": "Stage 4 secret / PII scanner", "status": "done", "tests": 7, "evidence": "tests/scanners/test_secret_pii.py", "note": ""},
     {"id": "F-L6-05", "layer": "L6", "name": "Stage 5 live calibrated judge", "status": "partial", "tests": 14, "evidence": "tests/sensor/test_judge_sensor.py", "note": "\u03ba calibration, drift, cross-family guard all tested with FakeJudge. Live judge needs API keys."},
-    {"id": "F-L6-06", "layer": "L6", "name": "Red-team harness (6 classes, zero escapes)", "status": "done", "tests": 4, "evidence": "tests/redteam/test_harness.py", "note": "Plus 7 novel LLM-crafted attacks kept as a regression fixture."},
+    {"id": "F-L6-06", "layer": "L6", "name": "Red-team harness and input corpus", "status": "partial", "tests": 4, "evidence": "tests/redteam/test_harness.py", "note": "Harness tests and adversarial inputs exist; no immutable execution result is bound to the current corpus."},
     {"id": "F-PRD-01", "layer": "Product", "name": "Catalog UI (verification-badge-centric)", "status": "partial", "tests": 0, "evidence": "ui/catalog-demo.html", "note": "Demonstrable HTML artifact + Next.js/shadcn scaffold. Not built/deployed (needs npm)."},
     {"id": "F-PRD-02", "layer": "Product", "name": "SharePoint tenant embedding", "status": "gap", "tests": 0, "evidence": "ADR-004", "note": "Needs an M365 tenant. Hosting model chosen; embedding unproven."},
     {"id": "F-PRD-03", "layer": "Product", "name": "Entra ID / SSO principal binding", "status": "partial", "tests": 12, "evidence": "semiskill/context/acl.py; tests/api/test_api.py", "note": "Verified bearer/group resolution is implemented and caller-supplied labels are ignored. Production remains fail-closed until tenant issuer, tenant ID and resolver credentials are configured."},
@@ -82,7 +82,7 @@
     {"id": "R-04", "title": "No CI, no backups", "severity": "medium", "area": "ops", "detail": "Green tests depend on a human running pytest; the append-only store has no restore path.", "mitigation": "F-OPS-04 + F-OPS-02."},
     {"id": "R-05", "title": "Author feedback loop is not closed", "severity": "medium", "area": "product", "detail": "A submitter gets no notification of a verdict and cannot see why they were blocked without DB access.", "mitigation": "F-PRD-06 + submitter view of the scan report."},
     {"id": "R-06", "title": "Current phase is design-verification only", "severity": "low", "area": "product", "detail": "The fixed registry contains 84 active DV skills; broader taxonomy expansion is deliberately deferred until this release passes its canonical gate.", "mitigation": "Finish the 84-skill release before planning any additional taxonomy."},
-    {"id": "R-07", "title": "False-positive rate unmeasured on real submissions", "severity": "medium", "area": "adoption", "detail": "Zero escapes is proven against a red-team corpus; the block rate on honest skills is unknown, and over-blocking kills adoption.", "mitigation": "Instrument block-rate + appeal rate from day one of the pilot."}
+    {"id": "R-07", "title": "False-positive rate unmeasured on real submissions", "severity": "medium", "area": "adoption", "detail": "The current red-team escape result is unavailable; the block rate on honest skills is also unmeasured, and over-blocking kills adoption.", "mitigation": "Persist corpus-bound red-team results and instrument block-rate + appeal rate from day one of the pilot."}
   ],
 
   "launch_checklist": [
@@ -96,7 +96,7 @@
     {"id": "LC-08", "section": "Security", "item": "Stage 2 live security-audit in an egress sandbox", "status": "todo", "weight": 3, "owner": "eng"},
     {"id": "LC-09", "section": "Security", "item": "Stage 5 live judge + re-run \u03ba calibration", "status": "todo", "weight": 2, "owner": "eng"},
     {"id": "LC-10", "section": "Security", "item": "Six-stage pipeline + gated publish proven end-to-end", "status": "done", "weight": 3, "owner": "eng"},
-    {"id": "LC-11", "section": "Security", "item": "Red-team corpus: zero escapes", "status": "done", "weight": 3, "owner": "eng"},
+    {"id": "LC-11", "section": "Security", "item": "Authoritative corpus-bound red-team execution result", "status": "todo", "weight": 3, "owner": "eng"},
     {"id": "LC-12", "section": "Security", "item": "Security review sign-off from InfoSec", "status": "todo", "weight": 3, "owner": "security"},
     {"id": "LC-13", "section": "Security", "item": "Rollback / unpublish drill re-run against the pilot data", "status": "todo", "weight": 2, "owner": "eng"},
     {"id": "LC-14", "section": "Ops", "item": "Hosted environment colleagues can reach", "status": "todo", "weight": 3, "owner": "eng"},
@@ -166,7 +166,7 @@
       {"id": "M-02", "name": "Skills published / week", "target": "\u2265 5", "current": "see canonical scoreboard", "why": "Supply side of the marketplace.", "source": "verified publication projection"},
       {"id": "M-03", "name": "Median time to publish", "target": "< 24 h", "current": "unmeasured", "why": "Gate friction \u2014 if approval is slow, contribution dies.", "source": "submitted \u2192 published timestamps"},
       {"id": "M-04", "name": "Block rate on honest submissions", "target": "< 10%", "current": "unmeasured", "why": "Over-blocking kills adoption faster than under-blocking kills security.", "source": "hard_fail \u00f7 submissions, minus red-team"},
-      {"id": "M-05", "name": "Escapes (malicious published)", "target": "0", "current": "0 (red-team corpus)", "why": "The load-bearing claim.", "source": "red-team harness + audits"},
+      {"id": "M-05", "name": "Escapes (malicious published)", "target": "0", "current": "unmeasured", "why": "The load-bearing claim.", "source": "authoritative corpus-bound red-team result artifact (not available)"},
       {"id": "M-06", "name": "Weekly active reusers", "target": "80", "current": "0", "why": "Demand side.", "source": "reuse_event distinct actors"},
       {"id": "M-07", "name": "Cost per verified skill", "target": "< $0.50", "current": "tracked", "why": "Token-maxing discipline \u2014 route cheap, escalate on ambiguity.", "source": "governance/cost.py"},
       {"id": "M-08", "name": "Reuse per published skill", "target": "\u2265 4", "current": "unmeasured", "why": "Distinguishes a catalog from a graveyard.", "source": "reuse_event \u00f7 published"}
