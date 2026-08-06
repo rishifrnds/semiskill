@@ -3,6 +3,9 @@
 
 # Command centre runtime (local queue + command output, not project state)
 dashboard/inbox*.jsonl
+dashboard/inbox.lock
+dashboard/.inbox.jsonl.*.tmp
+dashboard/archive/
 dashboard/runs/
 
 # Node / build

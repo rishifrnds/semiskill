@@ -55,10 +55,12 @@ code,pre,.mono{font-family:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Co
 .nav-item{
   display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:calc(var(--radius) - 2px);
   color:hsl(var(--muted-foreground));cursor:pointer;font-weight:500;font-size:13.5px;border:1px solid transparent;
-  transition:background .12s,color .12s;user-select:none;
+  transition:background .12s,color .12s;user-select:none;width:100%;background:transparent;
+  text-align:left;font-family:inherit;appearance:none;
 }
 .nav-item:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
 .nav-item.active{background:hsl(var(--accent));color:hsl(var(--foreground));border-color:hsl(var(--border))}
+.nav-item:focus-visible{outline:2px solid hsl(var(--ring));outline-offset:2px}
 .nav-item .ico{width:16px;text-align:center;opacity:.9}
 .nav-item .n{margin-left:auto;font-size:11px;color:hsl(var(--muted-foreground));
   background:hsl(var(--muted));border-radius:6px;padding:1px 6px}
@@ -204,6 +206,7 @@ pre.out{background:hsl(var(--muted));border:1px solid hsl(var(--border));border-
   padding:10px;font-size:11px;max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-word}
 
 #toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:100}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .toast{background:hsl(var(--popover));border:1px solid hsl(var(--border));border-radius:var(--radius);
   padding:11px 14px;font-size:12.5px;min-width:260px;box-shadow:0 12px 32px rgba(0,0,0,.5);animation:fade .2s}
 .toast b{display:block;margin-bottom:2px}
@@ -223,22 +226,22 @@ textarea{width:100%;min-height:110px;resize:vertical}
       <div><b>SemiSkill</b><span>Command Centre</span></div>
     </div>
     <div class="nav-label">Build</div>
-    <div class="nav-item active" data-view="overview"><span class="ico">◎</span>Overview</div>
-    <div class="nav-item" data-view="architecture"><span class="ico">▤</span>Architecture</div>
-    <div class="nav-item" data-view="pipeline"><span class="ico">⇉</span>Pipeline</div>
-    <div class="nav-item" data-view="features"><span class="ico">✦</span>Features<span class="n" id="n-features">–</span></div>
-    <div class="nav-item" data-view="quality"><span class="ico">✓</span>Quality &amp; Bugs<span class="n" id="n-tests">–</span></div>
+    <button type="button" class="nav-item active" data-view="overview" aria-current="page"><span class="ico">◎</span>Overview</button>
+    <button type="button" class="nav-item" data-view="architecture"><span class="ico">▤</span>Architecture</button>
+    <button type="button" class="nav-item" data-view="pipeline"><span class="ico">⇉</span>Pipeline</button>
+    <button type="button" class="nav-item" data-view="features"><span class="ico">✦</span>Features<span class="n" id="n-features">–</span></button>
+    <button type="button" class="nav-item" data-view="quality"><span class="ico">✓</span>Quality &amp; Bugs<span class="n" id="n-tests">–</span></button>
     <div class="nav-label">Product</div>
-    <div class="nav-item" data-view="security"><span class="ico">⛨</span>Security<span class="n" id="n-attacks">–</span></div>
-    <div class="nav-item" data-view="catalog"><span class="ico">▩</span>Catalog<span class="n" id="n-published">–</span></div>
+    <button type="button" class="nav-item" data-view="security"><span class="ico">⛨</span>Security<span class="n" id="n-attacks">–</span></button>
+    <button type="button" class="nav-item" data-view="catalog"><span class="ico">▩</span>Catalog<span class="n" id="n-published">–</span></button>
     <div class="nav-label">Business</div>
-    <div class="nav-item" data-view="launch"><span class="ico">🚀</span>Launch</div>
-    <div class="nav-item" data-view="growth"><span class="ico">📈</span>Growth &amp; GTM</div>
-    <div class="nav-item" data-view="analytics"><span class="ico">◫</span>Analytics</div>
+    <button type="button" class="nav-item" data-view="launch"><span class="ico">🚀</span>Launch</button>
+    <button type="button" class="nav-item" data-view="growth"><span class="ico">📈</span>Growth &amp; GTM</button>
+    <button type="button" class="nav-item" data-view="analytics"><span class="ico">◫</span>Analytics</button>
     <div class="nav-label">Control</div>
-    <div class="nav-item" data-view="queue"><span class="ico">⌘</span>Action Queue<span class="n" id="n-queue">0</span></div>
+    <button type="button" class="nav-item" data-view="queue"><span class="ico">⌘</span>Action Queue<span class="n" id="n-queue">0</span></button>
     <div style="flex:1"></div>
-    <button class="btn wide outline" data-ask="1" style="margin-top:12px">＋ Ask Claude anything</button>
+    <div class="muted" style="font-size:11px;margin-top:12px">Only integrity-pinned schema-v1 server templates can enter the request queue.</div>
   </aside>
 
   <main>
@@ -249,7 +252,8 @@ textarea{width:100%;min-height:110px;resize:vertical}
       </div>
       <div class="spacer"></div>
       <div class="stat-strip" id="health"></div>
-      <button class="btn" id="btn-refresh">↻ Refresh</button>
+      <span id="request-session-status" class="sr-only" role="status" aria-live="polite">Request controls unavailable; activate Refresh.</span>
+      <button type="button" class="btn" id="btn-refresh">↻ Refresh</button>
     </header>
 
     <section class="view active" id="view-overview"></section>
@@ -268,32 +272,31 @@ textarea{width:100%;min-height:110px;resize:vertical}
 
 <div id="toast" role="status" aria-live="polite" aria-atomic="false"></div>
 
-<dialog id="ask-dlg">
-  <form method="dialog">
-    <div class="dlg-head">
-      <div class="card-header" style="padding:0">
-        <div><div class="t" id="ask-title">Send a task to Claude</div>
-        <div class="d">It lands in <code>dashboard/inbox.jsonl</code>. Say “work the queue” in chat and Claude picks it up.</div></div>
-      </div>
-    </div>
-    <div class="dlg-body">
-      <input type="text" id="ask-subject" placeholder="Short title" style="width:100%;margin-bottom:8px">
-      <textarea id="ask-prompt" placeholder="What should Claude do?"></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-        <label class="muted" style="font-size:11.5px">Priority</label>
-        <select id="ask-priority"><option>normal</option><option>high</option><option>low</option></select>
-      </div>
-    </div>
-    <div class="dlg-foot">
-      <button class="btn ghost" value="cancel">Cancel</button>
-      <button class="btn primary" id="ask-send" value="send">Queue task</button>
-    </div>
-  </form>
-</dialog>
+<div id="action-error" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
 <script>
 /* ═══════════════════════════ state + utils ═══════════════════════════════ */
-let S = null, CHARTS = {}, VIEW = 'overview';
+let S = null, SESSION = null, LAST_RECEIPT = null, LAST_ARCHIVE = null, CHARTS = {}, VIEW = 'overview';
+function loadPendingRequests() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem('semiskill.pending-requests') || '{}');
+    return new Map(Object.entries(parsed).filter(([, value]) => /^[0-9a-f-]{36}$/.test(value)));
+  } catch (error) { return new Map(); }
+}
+const PENDING_REQUESTS = loadPendingRequests();
+let PENDING_ARCHIVE_ID = (() => {
+  try {
+    const value = sessionStorage.getItem('semiskill.pending-archive');
+    return value && /^[0-9a-f-]{36}$/.test(value) ? value : null;
+  } catch (error) { return null; }
+})();
+function persistPendingRequests() {
+  try {
+    sessionStorage.setItem('semiskill.pending-requests', JSON.stringify(Object.fromEntries(PENDING_REQUESTS)));
+    if (PENDING_ARCHIVE_ID) sessionStorage.setItem('semiskill.pending-archive', PENDING_ARCHIVE_ID);
+    else sessionStorage.removeItem('semiskill.pending-archive');
+  } catch (error) { /* idempotency remains in-memory when storage is unavailable */ }
+}
 const $ = s => document.querySelector(s);
 const CSS = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const hsl = (n, a = 1) => `hsl(${CSS(n)} / ${a})`;
@@ -306,18 +309,46 @@ function toast(title, body, kind) {
   d.className = 'toast';
   d.innerHTML = `<b>${kind === 'bad' ? '⚠ ' : '✓ '}${esc(title)}</b><span class="muted">${esc(body || '')}</span>`;
   $('#toast').appendChild(d);
+  if (kind === 'bad') $('#action-error').textContent = `${title}. ${body || ''}`;
   setTimeout(() => d.remove(), 4200);
 }
 
 async function api(path, opts) {
-  const r = await fetch(path, opts);
-  if (!r.ok) throw new Error(await r.text());
+  const r = await fetch(path, { credentials: 'same-origin', ...(opts || {}) });
+  if (!r.ok) {
+    const error = new Error(await r.text());
+    error.status = r.status;
+    throw error;
+  }
   return r.json();
+}
+const definitiveRejection = status => [400, 403, 404, 405, 409, 411, 413, 415, 421, 422].includes(status);
+
+function syncMutationControls() {
+  document.querySelectorAll('[data-action-id], #q-archive').forEach(button => {
+    button.type = 'button';
+    const template = S?.model?.actions.find(action => action.id === button.dataset.actionId);
+    if (template && !button.hasAttribute('aria-label')) {
+      button.setAttribute('aria-label', `Queue request: ${template.label}`);
+    }
+    if (!SESSION) {
+      button.disabled = true;
+      button.setAttribute('title', 'Click Refresh to establish a new same-origin request session.');
+    } else if (button.getAttribute('aria-busy') !== 'true') {
+      button.disabled = false;
+      button.removeAttribute('title');
+    }
+  });
+  const status = $('#request-session-status');
+  if (status) status.textContent = SESSION
+    ? 'Prepared-request controls available.'
+    : 'Request controls unavailable; activate Refresh.';
 }
 
 /* card helper — every card can carry a "work on this" action button */
 function card(title, desc, body, opts = {}) {
-  const act = opts.action ? `<button class="btn xs outline" data-action-id="${opts.action}">⌘ Work on this</button>` : '';
+  const template = opts.action ? S?.model?.actions.find(action => action.id === opts.action) : null;
+  const act = opts.action ? `<button type="button" class="btn xs outline" data-action-id="${esc(opts.action)}" aria-label="Queue request: ${esc(template?.label || 'prepared section request')}">⌘ Queue section request</button>` : '';
   const extra = opts.extra || '';
   return `<div class="card ${opts.cls || ''}">
     <div class="card-header"><div style="flex:1;min-width:0"><div class="t">${title}</div>${desc ? `<div class="d">${desc}</div>` : ''}</div>
@@ -350,6 +381,17 @@ function freshness(iso) {
 function chart(id, cfg) {
   const el = document.getElementById(id);
   if (!el) return;
+  if (typeof Chart === 'undefined') {
+    el.style.display = 'none';
+    if (!document.getElementById(`${id}-unavailable`)) {
+      const notice = document.createElement('div');
+      notice.id = `${id}-unavailable`;
+      notice.className = 'empty';
+      notice.textContent = 'Chart unavailable; the source KPIs, tables and diagrams remain visible.';
+      el.parentElement.appendChild(notice);
+    }
+    return;
+  }
   if (CHARTS[id]) CHARTS[id].destroy();
   Chart.defaults.color = hsl('--muted-foreground');
   Chart.defaults.borderColor = hsl('--border');
@@ -374,10 +416,10 @@ const TITLES = {
   quality:   ['Quality & Bugs', 'Test inventory, risks, and open defects'],
   security:  ['Security', 'Red-team corpus, execution status, invariants and exposure'],
   catalog:   ['Catalog', 'Published skills, role coverage, reuse'],
-  launch:    ['Launch', 'Readiness scoring, blockers and timeline'],
+  launch:    ['Launch', 'Deterministic release gate plus curated planning inputs'],
   growth:    ['Growth & GTM', 'ICP, funnel, channels, assets, pricing'],
   analytics: ['Analytics', 'The metrics tree and what is instrumented'],
-  queue:     ['Action Queue', 'Tasks you have sent to Claude'],
+  queue:     ['Action Queue', 'Non-crediting prepared requests awaiting separate validation'],
 };
 
 function renderAll() {
@@ -394,6 +436,7 @@ function renderAll() {
   const snapshot = canonicalSnapshot();
   $('#n-published').textContent = snapshot ? snapshot.funnel.published : '—';
   $('#n-queue').textContent = S.inbox.filter(i => i.status === 'queued').length;
+  syncMutationControls();
 }
 
 function renderHealth() {
@@ -425,13 +468,13 @@ function vOverview() {
   const gaps = f.filter(x => x.status === 'gap').length;
   const partial = f.filter(x => x.status === 'partial').length;
   const crit = S.model.risks.filter(r => r.severity === 'critical').length;
-
-  const phases = [['A',21],['B',59],['C',146],['D',171],['E',176],['F',180],['G',183]];
+  const phaseMatch = String(S.state.phase || '').match(/Phase\s+[A-Z0-9-]+/);
+  const phaseLabel = phaseMatch ? phaseMatch[0] : 'unavailable';
 
   $('#view-overview').innerHTML = `
     <div class="grid g6">
-      ${kpi('Build', 'A–G', 'all planned phases complete', { color: hsl('--primary') })}
-      ${kpi('Tests', S.repo.collected_tests || S.repo.total_tests, `${S.repo.tests.length} files · ${S.repo.total_loc} LOC · last full green run: Phase G gate`)}
+      ${kpi('Current phase', phaseLabel, 'derived from the active project state', { color: hsl('--primary') })}
+      ${kpi('Tests collected', S.repo.collected_tests || S.repo.total_tests, `${S.repo.tests.length} files · collection inventory only; no current pass result`)}
       ${kpi('Features done', `${done}/${f.length}`, `${partial} partial · ${gaps} gaps`, { progress: pct(done, f.length) })}
       ${kpi('Red-team escapes', '—', redteam.status === 'not_executed'
             ? `${redteam.corpus.length} corpus inputs · not executed`
@@ -439,7 +482,7 @@ function vOverview() {
       ${kpi('Published skills', snapshot ? snapshot.funnel.published : '—', snapshot
             ? `canonical snapshot · ${freshness(snapshot.generated_at)}`
             : 'authoritative scoreboard unavailable')}
-      ${kpi('Launch ready', R.pct + '%', `${R.done}/${R.total} checklist items done`,
+      ${kpi('Launch-plan completion', R.pct + '%', `${R.done}/${R.total} curated planning items marked done; no release credit`,
             { progress: R.pct, progressCls: R.pct < 40 ? 'bad' : R.pct < 70 ? 'warn' : '' })}
     </div>
 
@@ -452,26 +495,25 @@ function vOverview() {
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Test suite growth by phase', 'Cumulative green tests at each phase gate',
-        `<div class="chart-box"><canvas id="c-growth"></canvas></div>`)}
+      ${card('Canonical 84-skill funnel', snapshot ? `Verified snapshot · ${freshness(snapshot.generated_at)}` : 'Authoritative snapshot unavailable',
+        snapshot ? `<div class="chart-box"><canvas id="c-funnel"></canvas></div>` : `<div class="empty">No funnel is inferred from fixtures or curated planning data.</div>`)}
       ${card('Feature status by layer', 'done / partial / gap across the 6 AIOS layers + product',
         `<div class="chart-box"><canvas id="c-featlayer"></canvas></div>`)}
     </div>
 
-    <div class="section-head"><h2>What needs a decision or a hand</h2><p class="muted">Click any button to queue the work for Claude</p></div>
+    <div class="section-head"><h2>What needs a decision or a hand</h2><p class="muted">Submit one governed prepared request for the highest-priority gap</p></div>
     <div class="grid g3">
       ${S.model.risks.slice(0, 6).map(r => card(
         `${badge(r.severity, r.severity === 'critical' ? 'critical' : r.severity === 'high' ? 'gap' : r.severity === 'medium' ? 'warn' : 'muted')} ${esc(r.title)}`,
         esc(r.area),
         `<div style="font-size:12px;line-height:1.6">${esc(r.detail)}</div>
-         <div class="muted" style="font-size:11.5px;margin-top:8px"><b>Mitigation:</b> ${esc(r.mitigation)}</div>
-         <button class="btn xs outline" style="margin-top:10px" data-adhoc="${esc('Mitigate ' + r.title)}|${esc('Work on this risk from the SemiSkill dashboard: ' + r.title + '. ' + r.detail + ' Proposed mitigation: ' + r.mitigation + '. Investigate, propose the smallest correct fix, and implement it with tests.')}">⌘ Take this on</button>`)).join('')}
+         <div class="muted" style="font-size:11.5px;margin-top:8px"><b>Mitigation:</b> ${esc(r.mitigation)}</div>`)).join('')}
     </div>
+    <div style="margin-top:10px"><button type="button" class="btn outline" data-action-id="A-29">⌘ Queue highest-priority gap triage</button></div>
 
     <div class="section-head"><h2>Execution requests</h2><p class="muted">Buttons create auditable work requests; mutation requests never invoke command actuators</p></div>
     <div class="grid g4">
-      ${['A-27','A-28','A-30','A-13'].map(id => {
-        const action = S.model.actions.find(item => item.id === id);
+      ${['A-27','A-28','A-30','A-13'].map(id => S.model.actions.find(item => item.id === id)).filter(Boolean).map(action => {
         return `<div class="card"><div class="card-content">
           <div class="l" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:${hsl('--muted-foreground')};font-weight:600">${esc(action.group)} · ${esc(action.id)}</div>
           <div style="font-weight:600;margin:4px 0 2px">${esc(action.label)}</div>
@@ -489,13 +531,17 @@ function vOverview() {
     </tbody></table></div>`, { tight: true })}
   `;
 
-  chart('c-growth', {
-    type: 'line',
-    data: { labels: phases.map(p => 'Phase ' + p[0]), datasets: [{
-      label: 'green tests', data: phases.map(p => p[1]),
-      borderColor: hsl('--chart-1'), backgroundColor: hsl('--chart-1', .16),
-      fill: true, tension: .35, pointRadius: 4, pointBackgroundColor: hsl('--chart-1'), borderWidth: 2 }] },
-    options: { plugins: { legend: { display: false } }, scales: gridOpts() }
+  if (snapshot) chart('c-funnel', {
+    type: 'bar',
+    data: {
+      labels: ['authored', 'strict lint', 'reviewed', 'recheck ready', 'approved', 'published'],
+      datasets: [{
+        data: [snapshot.funnel.authored, snapshot.funnel.strict_lint_pass, snapshot.funnel.reviewed,
+          snapshot.funnel.recheck_ready, snapshot.funnel.approved, snapshot.funnel.published],
+        backgroundColor: PALETTE(), borderRadius: 4,
+      }],
+    },
+    options: { plugins: { legend: { display: false } }, scales: gridOpts() },
   });
 
   const layers = [...S.model.layers.map(l => l.id), 'Product', 'Ops'];
@@ -578,10 +624,9 @@ function vArchitecture() {
 
     <div class="section-head"><h2>Architecture decisions</h2><p class="muted">DECISIONS.md — append-only ADRs</p></div>
     ${card('ADR register', `${S.adrs.length} decisions recorded`,
-      `<table><thead><tr><th style="width:90px">ID</th><th>Decision</th><th style="width:120px"></th></tr></thead><tbody>
-      ${S.adrs.map(a => `<tr><td class="mono">${esc(a.id)}</td><td>${esc(a.title)}</td>
-        <td><button class="btn xs ghost" data-adhoc="${esc('Review ' + a.id)}|${esc('Re-examine ' + a.id + ' (' + a.title + ') in DECISIONS.md: is it still the right call given where the build is now? If it needs qualifying or superseding, write the new ADR.')}">review</button></td></tr>`).join('')}
-      </tbody></table>`, { tight: true, action: 'A-13' })}
+      `<table><thead><tr><th style="width:90px">ID</th><th>Decision</th></tr></thead><tbody>
+      ${S.adrs.map(a => `<tr><td class="mono">${esc(a.id)}</td><td>${esc(a.title)}</td></tr>`).join('')}
+      </tbody></table>`, { tight: true, action: 'A-32' })}
 
     <div class="section-head"><h2>Canonical artifact schema</h2><p class="muted">Every event carries these fields — this is what makes the system queryable</p></div>
     ${card('Artifact fields', 'semiskill/artifacts/schema.py',
@@ -650,13 +695,12 @@ function vPipeline() {
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Stage detail', 'Click a stage to queue work on it',
-        `<table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Status</th><th class="num">Tests</th><th></th></tr></thead><tbody>
+      ${card('Stage detail', 'Observed stage inventory; the prepared request selects the highest-priority stage improvement',
+        `<table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Status</th><th class="num">Tests</th></tr></thead><tbody>
         ${st.map(s => `<tr><td class="mono muted">${s.n}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:11px">${esc(s.detail)}</div></td>
           <td>${badge(s.kind, s.kind === 'deterministic' ? 'info' : 'muted')}</td>
-          <td>${badge(s.status, s.status === 'live' ? 'done' : 'partial')}</td><td class="num">${s.tests}</td>
-          <td><button class="btn xs ghost" data-adhoc="${esc('Stage ' + s.n + ': ' + s.name)}|${esc('Work on pipeline stage ' + s.n + ' (' + s.name + ', ' + s.module + '). Current status: ' + s.status + '. ' + s.detail + ' Improve or complete it, tests first.')}">⌘</button></td></tr>`).join('')}
-        </tbody></table>`, { tight: true })}
+          <td>${badge(s.status, s.status === 'live' ? 'done' : 'partial')}</td><td class="num">${s.tests}</td></tr>`).join('')}
+        </tbody></table>`, { tight: true, action: 'A-33' })}
       <div class="grid" style="gap:14px;align-content:start">
         ${card('Lifecycle state machine', 'State is derived from artifacts, never stored — so it cannot be forged',
           `<svg viewBox="0 0 380 150" style="width:100%;height:150px">
@@ -690,13 +734,31 @@ function vPipeline() {
 
 /* ── features ─────────────────────────────────────────────────────────────── */
 let fFilter = { layer: 'all', status: 'all', q: '' };
-function vFeatures() {
-  const f = S.model.features;
-  const layers = [...new Set(f.map(x => x.layer))];
-  const rows = f.filter(x =>
+function filteredFeatures(features) {
+  return features.filter(x =>
     (fFilter.layer === 'all' || x.layer === fFilter.layer) &&
     (fFilter.status === 'all' || x.status === fFilter.status) &&
     (!fFilter.q || (x.name + x.note + x.evidence).toLowerCase().includes(fFilter.q.toLowerCase())));
+}
+function featureTableRows(rows) {
+  return rows.map(x => `<tr>
+    <td class="mono muted">${esc(x.id)}</td>
+    <td><b>${esc(x.name)}</b><div class="muted" style="font-size:11px;max-width:420px">${esc(x.note)}</div></td>
+    <td>${badge(x.layer, 'muted')}</td>
+    <td>${badge(x.status, x.status)}</td>
+    <td class="num">${x.tests || '–'}</td>
+    <td class="mono muted" style="font-size:11px">${esc(x.evidence)}</td>
+  </tr>`).join('');
+}
+function updateFeatureFilterResults() {
+  const rows = filteredFeatures(S.model.features);
+  $('#f-results').textContent = `${rows.length} of ${S.model.features.length} shown`;
+  $('#f-table-body').innerHTML = featureTableRows(rows);
+}
+function vFeatures() {
+  const f = S.model.features;
+  const layers = [...new Set(f.map(x => x.layer))];
+  const rows = filteredFeatures(f);
 
   $('#view-features').innerHTML = `
     <div class="grid g4">
@@ -710,37 +772,26 @@ function vFeatures() {
 
     <div class="grid g2" style="margin-top:14px">
       ${card('Verification evidence', 'Tests backing each implemented feature', `<div class="chart-box"><canvas id="c-evidence"></canvas></div>`)}
-      ${card('Gap burn-down candidates', 'Every gap is a queued task away', `<div class="list" style="max-height:240px;overflow:auto">
+      ${card('Gap burn-down candidates', 'Observed candidates; one prepared request selects the highest-leverage gap', `<div class="list" style="max-height:240px;overflow:auto">
         ${f.filter(x => x.status !== 'done' && x.status !== 'by-design-off').map(x => `<div class="row">
           <div class="g"><div class="h">${esc(x.name)} ${badge(x.status, x.status)}</div><div class="p">${esc(x.note)}</div></div>
-          <button class="btn xs outline" data-adhoc="${esc('Close ' + x.id + ': ' + x.name)}|${esc('Close the SemiSkill gap ' + x.id + ' — ' + x.name + '. Context: ' + x.note + ' Layer: ' + x.layer + '. Write the failing test first, then implement, then verify.')}">⌘</button>
         </div>`).join('')}</div>`, { tight: true })}
     </div>
 
-    <div class="section-head"><h2>Feature register</h2><p class="muted">${rows.length} of ${f.length} shown</p></div>
+    <div class="section-head"><h2>Feature register</h2><p id="f-results" class="muted" role="status" aria-live="polite">${rows.length} of ${f.length} shown</p></div>
     <div class="toolbar">
-      <input type="search" id="f-q" placeholder="Search features…" value="${esc(fFilter.q)}" style="min-width:220px">
-      <select id="f-layer"><option value="all">All layers</option>${layers.map(l => `<option ${fFilter.layer === l ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <select id="f-status"><option value="all">All statuses</option>${['done', 'partial', 'gap', 'by-design-off'].map(s => `<option ${fFilter.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+      <input type="search" id="f-q" aria-label="Search features" placeholder="Search features…" value="${esc(fFilter.q)}" style="min-width:220px">
+      <select id="f-layer" aria-label="Filter features by layer"><option value="all">All layers</option>${layers.map(l => `<option ${fFilter.layer === l ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select id="f-status" aria-label="Filter features by status"><option value="all">All statuses</option>${['done', 'partial', 'gap', 'by-design-off'].map(s => `<option ${fFilter.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
       <div class="spacer"></div>
-      <button class="btn outline" data-action-id="A-29">⌘ Ask Claude to pick the highest-leverage gap</button>
+      <button type="button" class="btn outline" data-action-id="A-29">⌘ Queue highest-leverage gap triage</button>
     </div>
-    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Feature</th><th>Layer</th><th>Status</th><th class="num">Tests</th><th>Evidence</th><th></th></tr></thead><tbody>
-      ${rows.map(x => `<tr>
-        <td class="mono muted">${esc(x.id)}</td>
-        <td><b>${esc(x.name)}</b><div class="muted" style="font-size:11px;max-width:420px">${esc(x.note)}</div></td>
-        <td>${badge(x.layer, 'muted')}</td>
-        <td>${badge(x.status, x.status)}</td>
-        <td class="num">${x.tests || '–'}</td>
-        <td class="mono muted" style="font-size:11px">${esc(x.evidence)}</td>
-        <td><button class="btn xs ghost" data-adhoc="${esc(x.id + ': ' + x.name)}|${esc('Work on SemiSkill feature ' + x.id + ' — ' + x.name + ' (' + x.layer + ', status ' + x.status + '). Note: ' + x.note + ' Evidence: ' + x.evidence)}">⌘</button></td>
-      </tr>`).join('')}
-    </tbody></table></div>`, { tight: true })}
+    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Feature</th><th>Layer</th><th>Status</th><th class="num">Tests</th><th>Evidence</th></tr></thead><tbody id="f-table-body">${featureTableRows(rows)}</tbody></table></div>`, { tight: true })}
   `;
 
-  $('#f-q').oninput = e => { fFilter.q = e.target.value; vFeatures(); $('#f-q').focus(); };
-  $('#f-layer').onchange = e => { fFilter.layer = e.target.value; vFeatures(); };
-  $('#f-status').onchange = e => { fFilter.status = e.target.value; vFeatures(); };
+  $('#f-q').oninput = e => { fFilter.q = e.target.value; updateFeatureFilterResults(); };
+  $('#f-layer').onchange = e => { fFilter.layer = e.target.value; updateFeatureFilterResults(); };
+  $('#f-status').onchange = e => { fFilter.status = e.target.value; updateFeatureFilterResults(); };
 
   const groups = [...new Set(S.repo.tests.map(t => t.group))];
   chart('c-evidence', {
@@ -768,12 +819,11 @@ function vQuality() {
     <div class="grid g2" style="margin-top:14px">
       ${card('Test distribution', 'Collected test inventory only; collection is not a pass result', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
         { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue isolated suite</button>` })}
-      ${card('Risk register', 'Ranked by severity — click to take one on',
+      ${card('Risk register', 'Ranked by severity; one prepared request selects the highest-priority risk',
         `<div class="list" style="max-height:260px;overflow:auto">${risks.map(r => `<div class="row">
           <div class="g"><div class="h">${badge(r.severity, r.severity === 'critical' ? 'critical' : r.severity === 'high' ? 'gap' : r.severity === 'medium' ? 'warn' : 'muted')} ${esc(r.title)}</div>
           <div class="p">${esc(r.detail)}</div></div>
-          <button class="btn xs outline" data-adhoc="${esc('Risk ' + r.id + ': ' + r.title)}|${esc('Address SemiSkill risk ' + r.id + ' — ' + r.title + '. ' + r.detail + ' Mitigation: ' + r.mitigation)}">⌘</button>
-        </div>`).join('')}</div>`, { tight: true })}
+        </div>`).join('')}</div>`, { tight: true, action: 'A-29' })}
     </div>
 
     <div class="section-head"><h2>Verification evidence</h2><p class="muted">Only persisted, commit/tree/database-bound run artifacts may claim PASS or FAIL</p></div>
@@ -862,8 +912,8 @@ function vSecurity() {
     <div class="grid g4">
       ${S.model.actions.filter(x => x.group === 'Security').map(x => `<div class="card"><div class="card-content">
         <div style="font-weight:600">${esc(x.label)}</div>
-        <div class="muted" style="font-size:11.5px;margin:6px 0 10px;min-height:52px">${esc(x.prompt.slice(0, 130))}…</div>
-        <button class="btn primary wide" data-action-id="${x.id}">⌘ Queue</button></div></div>`).join('')}
+        <div class="muted" style="font-size:11.5px;margin:6px 0 10px;min-height:52px">${esc(x.description)}</div>
+        <button type="button" class="btn primary wide" data-action-id="${x.id}">⌘ Queue</button></div></div>`).join('')}
     </div>
   `;
 
@@ -958,6 +1008,9 @@ function vCatalog() {
 /* ── launch ───────────────────────────────────────────────────────────────── */
 function vLaunch() {
   const lc = S.model.launch_checklist, R = readiness();
+  const releaseSnapshot = canonicalSnapshot();
+  const releaseGate = releaseSnapshot?.release_gate || null;
+  const releaseStatus = releaseGate ? (releaseGate.passed === true ? 'PASS' : 'FAIL') : 'UNAVAILABLE';
   const sections = [...new Set(lc.map(x => x.section))];
   const secScore = sec => {
     const items = lc.filter(x => x.section === sec);
@@ -968,17 +1021,21 @@ function vLaunch() {
   const tl = S.model.gtm.timeline, span = 72;
 
   $('#view-launch').innerHTML = `
+    ${card('Deterministic release gate', releaseStatus,
+      `<div style="font-size:12.5px;line-height:1.6">${releaseGate
+        ? `${badge(releaseStatus, releaseGate.passed === true ? 'done' : 'gap')} source snapshot ${esc(releaseSnapshot.snapshot_id || 'unidentified')}`
+        : `${badge('unavailable', 'gap')} No verified current scoreboard snapshot is available; launch is a hard no-go.`}</div>`)}
     <div class="grid g4">
-      ${kpi('Launch readiness', R.pct + '%', `${R.done} done · ${lc.filter(x => x.status === 'partial').length} partial · ${lc.filter(x => x.status === 'todo').length} to do`,
+      ${kpi('Curated plan completion', R.pct + '%', `${R.done} done · ${lc.filter(x => x.status === 'partial').length} partial · ${lc.filter(x => x.status === 'todo').length} to do; not the release gate`,
         { progress: R.pct, progressCls: R.pct < 40 ? 'bad' : R.pct < 70 ? 'warn' : '' })}
-      ${kpi('Hard blockers', lc.filter(x => x.status === 'todo' && x.weight === 3).length, 'weight-3 items still open', { color: hsl('--destructive') })}
-      ${kpi('Weeks of work left', Math.max(1, Math.round(lc.filter(x => x.status === 'todo').reduce((a, x) => a + x.weight, 0) / 6)), 'rough estimate at 6 weight-points/week')}
-      ${kpi('Target', 'Internal alpha', '3 design-partner guilds, then org-wide')}
+      ${kpi('High-weight plan items', lc.filter(x => x.status === 'todo' && x.weight === 3).length, 'curated weight-3 items still open', { color: hsl('--destructive') })}
+      ${kpi('Open plan weight', lc.filter(x => x.status === 'todo').reduce((a, x) => a + x.weight, 0), 'curated weight points; not a duration forecast')}
+      ${kpi('Planning target', 'Internal alpha', 'curated hypothesis: 3 design-partner guilds, then org-wide')}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Readiness by section', 'Weighted — a weight-3 item counts triple', `<div class="chart-box"><canvas id="c-ready"></canvas></div>`)}
-      ${card('Launch timeline', 'Working backwards from an internal launch',
+      ${card('Planning completion by section', 'Curated and non-crediting; a weight-3 item counts triple', `<div class="chart-box"><canvas id="c-ready"></canvas></div>`)}
+      ${card('Curated launch sequence', 'Planning hypothesis working backwards from an internal launch',
         tl.map((p, i) => `<div class="gantt-row">
           <div><div style="font-weight:600;font-size:12px">${esc(p.phase)}</div><div class="muted" style="font-size:11px">${esc(p.track)} · ${p.days}d</div></div>
           <div class="gantt-track"><div class="gantt-bar" style="left:${p.start / span * 100}%;width:${p.days / span * 100}%;background:${PALETTE()[i % 6]}">${esc(p.items[0])}${p.items.length > 1 ? ` +${p.items.length - 1}` : ''}</div></div>
@@ -986,24 +1043,22 @@ function vLaunch() {
         { action: 'A-21' })}
     </div>
 
-    <div class="section-head"><h2>Launch checklist</h2><p class="muted">${lc.length} items · click any row to queue it</p></div>
+    <div class="section-head"><h2>Launch checklist</h2><p class="muted">${lc.length} planning items; deterministic release-gate evidence remains authoritative</p><div class="spacer"></div><button type="button" class="btn outline" data-action-id="A-34">⌘ Queue next launch-planning request</button></div>
     <div class="grid g2">
-      ${sections.map(sec => card(sec, `${secScore(sec)}% ready`,
+      ${sections.map(sec => card(sec, `${secScore(sec)}% plan-complete`,
         `<div class="progress ${secScore(sec) < 40 ? 'bad' : secScore(sec) < 70 ? 'warn' : ''}" style="margin-bottom:10px"><span style="width:${secScore(sec)}%"></span></div>
          <div class="list">${lc.filter(x => x.section === sec).map(x => `<div class="row">
           <div class="g"><div class="h">${badge(x.status, x.status)} ${esc(x.item)}</div>
           <div class="p">weight ${x.weight} · owner ${esc(x.owner)}</div></div>
-          <button class="btn xs outline" data-adhoc="${esc(x.id + ': ' + x.item)}|${esc('Work the SemiSkill launch checklist item ' + x.id + ' — ' + x.item + ' (section ' + x.section + ', owner ' + x.owner + ', status ' + x.status + '). Do the work end to end and tell me what changed.')}">⌘</button>
         </div>`).join('')}</div>`)).join('')}
     </div>
 
-    <div class="section-head"><h2>Launch assets</h2><p class="muted">Everything the launch needs written, filmed or built</p></div>
+    <div class="section-head"><h2>Launch assets</h2><p class="muted">Everything the launch needs written, filmed or built</p><div class="spacer"></div><button type="button" class="btn outline" data-action-id="A-35">⌘ Queue next evidence-backed asset</button></div>
     <div class="grid g3">
       ${S.model.gtm.assets.map(a => `<div class="card"><div class="card-content">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">${badge(a.status, a.status === 'partial' ? 'partial' : 'todo')}${badge(a.type, 'muted')}</div>
         <div style="font-weight:600">${esc(a.name)}</div>
         <div class="muted" style="font-size:11.5px;margin:4px 0 10px;min-height:40px">${esc(a.note)}</div>
-        <button class="btn primary wide" data-adhoc="${esc('Produce: ' + a.name)}|${esc('Produce the SemiSkill launch asset “' + a.name + '” (' + a.type + ', channel: ' + a.channel + '). Context: ' + a.note + ' Save it under marketing/ and tell me where.')}">⌘ Produce this</button>
       </div></div>`).join('')}
     </div>
   `;
@@ -1042,13 +1097,12 @@ function vGrowth() {
     </div>
 
     <div class="section-head"><h2>Channels</h2></div>
-    ${card('', '', `<table><thead><tr><th>Channel</th><th>Type</th><th>Effort</th><th>Impact</th><th>Why it works here</th><th></th></tr></thead><tbody>
+    ${card('Channel register', 'Observed channel hypotheses; the prepared request selects the next experiment', `<table><thead><tr><th>Channel</th><th>Type</th><th>Effort</th><th>Impact</th><th>Why it works here</th></tr></thead><tbody>
       ${g.channels.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${badge(c.type, c.type === 'internal' ? 'info' : 'muted')}</td>
         <td>${badge(c.effort, c.effort === 'low' ? 'done' : c.effort === 'med' ? 'partial' : 'gap')}</td>
         <td>${badge(c.impact, c.impact === 'high' ? 'done' : 'partial')}</td>
-        <td class="muted">${esc(c.note)}</td>
-        <td><button class="btn xs ghost" data-adhoc="${esc('Activate channel: ' + c.name)}|${esc('Plan and produce what SemiSkill needs to activate the “' + c.name + '” channel (' + c.type + '). Why it works: ' + c.note + ' Give me the concrete artifacts, not a strategy essay.')}">⌘</button></td></tr>`).join('')}
-    </tbody></table>`, { tight: true })}
+        <td class="muted">${esc(c.note)}</td></tr>`).join('')}
+    </tbody></table>`, { tight: true, action: 'A-36' })}
 
     <div class="section-head"><h2>Packaging</h2><p class="muted">Internal stays free — the external track is a future decision</p></div>
     <div class="grid g4">
@@ -1060,15 +1114,15 @@ function vGrowth() {
         <div class="muted" style="font-size:11px">${esc(p.note)}</div>
       </div></div>`).join('')}
     </div>
-    <div style="margin-top:12px"><button class="btn outline" data-action-id="A-24">⌘ Turn packaging into an ADR</button></div>
+    <div style="margin-top:12px"><button type="button" class="btn outline" data-action-id="A-24">⌘ Turn packaging into an ADR</button></div>
 
     <div class="section-head"><h2>Go-to-market actions</h2></div>
     <div class="grid g4">
       ${g.channels.length && S.model.actions.filter(x => ['Marketing', 'Sales'].includes(x.group)).map(x => `<div class="card"><div class="card-content">
         <div style="display:flex;gap:6px;margin-bottom:6px">${badge(x.group, 'info')}</div>
         <div style="font-weight:600">${esc(x.label)}</div>
-        <div class="muted" style="font-size:11.5px;margin:6px 0 10px;min-height:48px">${esc(x.prompt.slice(0, 120))}…</div>
-        <button class="btn primary wide" data-action-id="${x.id}">⌘ Queue</button></div></div>`).join('')}
+        <div class="muted" style="font-size:11.5px;margin:6px 0 10px;min-height:48px">${esc(x.description)}</div>
+        <button type="button" class="btn primary wide" data-action-id="${x.id}">⌘ Queue</button></div></div>`).join('')}
     </div>
   `;
 
@@ -1105,23 +1159,22 @@ function vAnalytics() {
 
     <div class="grid g2" style="margin-top:14px">
       ${card('Metric tree', 'What we measure, the target, and where it comes from',
-        `<div class="tbl-wrap"><table><thead><tr><th>Metric</th><th>Target</th><th>Now</th><th>Source</th><th></th></tr></thead><tbody>
+        `<div class="tbl-wrap"><table><thead><tr><th>Metric</th><th>Target</th><th>Now</th><th>Source</th></tr></thead><tbody>
         ${m.map(x => `<tr><td><b>${esc(x.name)}</b><div class="muted" style="font-size:11px">${esc(x.why)}</div></td>
           <td class="mono">${esc(x.target)}</td>
           <td>${x.current === 'unmeasured' ? badge('unmeasured', 'gap') : badge(x.current, 'done')}</td>
-          <td class="muted mono" style="font-size:11px">${esc(x.source)}</td>
-          <td><button class="btn xs ghost" data-adhoc="${esc('Instrument: ' + x.name)}|${esc('Instrument the SemiSkill metric “' + x.name + '” (target ' + x.target + ', source: ' + x.source + '). Emit it as artifacts and expose it so the dashboard can chart it live.')}">⌘</button></td></tr>`).join('')}
+          <td class="muted mono" style="font-size:11px">${esc(x.source)}</td></tr>`).join('')}
         </tbody></table></div>`, { tight: true, action: 'A-15' })}
       <div class="grid" style="gap:14px;align-content:start">
         ${card('Artifact mix', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Raw artifact data unavailable while Postgres is offline',
           S.runtime.db.status === 'up' ? `<div class="chart-box short"><canvas id="c-mix"></canvas></div>`
             : `<div class="empty">No live connection.<br><button type="button" class="btn primary xs" data-action-id="A-31" style="margin-top:10px">⌘ Queue DB investigation</button></div>`)}
-        ${card('Weekly business review', 'Queue the report — Claude reads the store and writes it',
+        ${card('Weekly business review', 'Queue a hash-bound schema-v1 request; a governed worker must validate it',
           `<div class="list">
             <div class="row"><div class="g"><div class="h">Weekly metrics report</div><div class="p">submissions, blocks, publishes, reuse, time-to-publish, cost</div></div>
-            <button class="btn xs primary" data-action-id="A-25">⌘</button></div>
+            <button type="button" class="btn xs primary" data-action-id="A-25">⌘</button></div>
             <div class="row"><div class="g"><div class="h">Block rate / false positives</div><div class="p">over-blocking kills adoption faster than under-blocking kills security</div></div>
-            <button class="btn xs primary" data-action-id="A-26">⌘</button></div>
+            <button type="button" class="btn xs primary" data-action-id="A-26">⌘</button></div>
           </div>`, { tight: true })}
       </div>
     </div>
@@ -1144,76 +1197,172 @@ function vQueue() {
 
   $('#view-queue').innerHTML = `
     <div class="grid g4">
-      ${kpi('Queued', q.filter(x => x.status === 'queued').length, 'waiting for Claude to pick up')}
-      ${kpi('Total sent', q.length, 'this session and before')}
-      ${kpi('Inbox file', 'inbox.jsonl', 'dashboard/inbox.jsonl — one JSON line per task')}
-      ${kpi('How to run it', 'say “work the queue”', 'Claude reads the file and starts at the top')}
+      ${kpi('Queued requests', q.filter(x => x.status === 'queued').length, 'non-crediting until a governed worker attaches evidence')}
+      ${kpi('Visible receipts', q.length, 'template-bound and quarantined rows')}
+      ${kpi('Request journal', 'inbox.jsonl', 'durable JSONL receipts; arbitrary browser prose is rejected')}
+      ${kpi('Worker boundary', 'separate validation', 'a receipt never authorizes execution, approval, publication, or outreach')}
     </div>
 
-    <div style="margin:14px 0">
-      ${card('Send a task', 'Anything at all — it lands in the same queue',
-        `<div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="q-title" placeholder="Title" style="flex:1;min-width:200px">
-          <select id="q-priority"><option>normal</option><option>high</option><option>low</option></select>
-        </div>
-        <textarea id="q-prompt" placeholder="What should Claude do?" style="margin-top:8px"></textarea>
-        <button class="btn primary" id="q-send" style="margin-top:8px">⌘ Queue task</button>`)}
-    </div>
+    ${(LAST_RECEIPT || LAST_ARCHIVE) ? `<div class="grid g2" style="margin-top:14px">
+      ${LAST_RECEIPT ? card('Last accepted request receipt', LAST_RECEIPT.receipt_id,
+        `<div class="mono muted" style="font-size:11px;line-height:1.7">
+          request ${esc(LAST_RECEIPT.request_id)}<br>
+          template ${esc(LAST_RECEIPT.template_id)}<br>
+          action ${esc(LAST_RECEIPT.action_sha256)}<br>
+          status ${esc(LAST_RECEIPT.status)} · credit none
+        </div>`) : ''}
+      ${LAST_ARCHIVE ? card('Last archive receipt', LAST_ARCHIVE.archive_id,
+        `<div class="mono muted" style="font-size:11px;line-height:1.7">
+          request ${esc(LAST_ARCHIVE.request_id)}<br>
+          rows ${esc(LAST_ARCHIVE.row_count)}<br>
+          hash ${esc(LAST_ARCHIVE.sha256)}<br>
+          recovery ${esc(LAST_ARCHIVE.recovery_ref)}
+        </div>`) : ''}
+    </div>` : ''}
 
-    <div class="section-head"><h2>Task library</h2><p class="muted">${S.model.actions.length} prepared actions across ${groups.length} groups</p></div>
+    <div class="section-head"><h2>Hash-bound schema-v1 request library</h2><p class="muted">${S.model.actions.length} integrity-pinned server-owned templates across ${groups.length} groups</p></div>
     ${groups.map(gr => `<div class="section-head" style="margin:16px 0 8px"><h2 style="font-size:13.5px">${esc(gr)}</h2></div>
       <div class="grid g4">${S.model.actions.filter(a => a.group === gr).map(a => `<div class="card"><div class="card-content">
         <div style="font-weight:600;font-size:12.5px">${esc(a.label)}</div>
-        <div class="muted" style="font-size:11px;margin:6px 0 10px;min-height:46px">${esc(a.prompt.slice(0, 118))}…</div>
-        <button class="btn wide outline" data-action-id="${a.id}">⌘ Queue</button></div></div>`).join('')}</div>`).join('')}
+        <div class="muted" id="queue-${esc(a.id)}-description" style="font-size:11px;margin:6px 0 10px;min-height:46px">${esc(a.description)}</div>
+        <button type="button" class="btn wide outline" data-action-id="${esc(a.id)}" aria-label="Queue request: ${esc(a.label)}" aria-describedby="queue-${esc(a.id)}-description">⌘ Queue</button></div></div>`).join('')}</div>`).join('')}
 
-    <div class="section-head"><h2>Sent tasks</h2>
+    <div class="section-head"><h2>Request receipts</h2>
       <div class="spacer"></div>
-      ${q.length ? `<button class="btn ghost xs" id="q-clear">Archive queue</button>` : ''}
+      ${q.length ? `<button type="button" class="btn ghost xs" id="q-archive">Archive current request journal</button>` : ''}
     </div>
-    ${card('', '', q.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Kind</th><th>Title</th><th>Prompt</th><th>Status</th></tr></thead><tbody>
-      ${q.map(x => `<tr><td class="mono muted">${esc((x.ts || '').slice(5, 16).replace('T', ' '))}</td>
-        <td>${badge(x.kind, 'muted')}</td><td><b>${esc(x.title)}</b>${x.priority === 'high' ? ' ' + badge('high', 'warn') : ''}</td>
-        <td class="muted" style="max-width:460px;font-size:11.5px">${esc(x.prompt.slice(0, 220))}${x.prompt.length > 220 ? '…' : ''}</td>
-        <td>${badge(x.status, x.status === 'queued' ? 'info' : 'done')}</td></tr>`).join('')}
-    </tbody></table></div>` : `<div class="empty">Nothing queued yet. Click any ⌘ button anywhere on this dashboard.</div>`, { tight: true })}
+    ${card('', '', q.length ? `<div class="tbl-wrap"><table><thead><tr><th>Accepted</th><th>Receipt / request</th><th>Template</th><th>Request</th><th>Context</th><th>Status</th></tr></thead><tbody>
+      ${q.map(x => `<tr><td class="mono muted">${esc((x.accepted_at || '').slice(5, 16).replace('T', ' '))}</td>
+        <td class="mono muted">${esc(x.receipt_id || 'unavailable')}<br>${esc(x.request_id || 'unavailable')}</td>
+        <td>${badge(x.template_id || 'legacy', 'muted')}</td>
+        <td><b>${esc(x.title || 'Quarantined legacy request')}</b></td>
+        <td class="mono muted">${esc(x.context || 'none')}</td>
+        <td>${badge(x.status, x.status === 'queued' ? 'info' : 'gap')}</td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="empty">Nothing queued yet. Choose a hash-bound schema-v1 request template anywhere on this dashboard.</div>`, { tight: true })}
   `;
 
-  $('#q-send').onclick = async () => {
-    const title = $('#q-title').value.trim();
-    const prompt = $('#q-prompt').value.trim();
-    if (!title && !prompt) return toast('Nothing to send', 'Add a title or a prompt', 'bad');
-    await queue({ kind: 'ask', title: title || prompt.slice(0, 60), prompt: prompt || title, priority: $('#q-priority').value });
-    $('#q-title').value = ''; $('#q-prompt').value = '';
-  };
-  const clr = $('#q-clear');
-  if (clr) clr.onclick = async () => {
-    await api('/api/inbox/clear', { method: 'POST', body: '{}' });
-    toast('Queue archived', 'inbox.jsonl rotated');
-    refresh();
+  const archive = $('#q-archive');
+  if (archive) archive.onclick = async () => {
+    if (!window.confirm('Archive the current request journal? It may include receipts accepted since the last refresh; the recovery file remains available.')) return;
+    archive.disabled = true;
+    archive.setAttribute('aria-busy', 'true');
+    const label = archive.textContent;
+    archive.textContent = 'Archiving…';
+    const requestId = PENDING_ARCHIVE_ID || crypto.randomUUID();
+    PENDING_ARCHIVE_ID = requestId;
+    persistPendingRequests();
+    let receipt = null;
+    try {
+      receipt = await mutate('/api/inbox/archive', {
+        schema_version: 'semiskill.dashboard-archive/v1',
+        request_id: requestId,
+      });
+    } catch (error) {
+      if (definitiveRejection(error.status)) {
+        PENDING_ARCHIVE_ID = null;
+        persistPendingRequests();
+        toast('Archive rejected', 'No receipts were credited as archived.', 'bad');
+      } else {
+        toast('Archive outcome uncertain', `Retry will reuse request ${requestId}; it will not create a second archive.`, 'bad');
+      }
+      archive.disabled = false;
+      archive.removeAttribute('aria-busy');
+      archive.textContent = label;
+      syncMutationControls();
+      return;
+    }
+    PENDING_ARCHIVE_ID = null;
+    persistPendingRequests();
+    LAST_ARCHIVE = receipt;
+    toast('Queue archived', `${receipt.row_count} receipts · ${receipt.recovery_ref}`);
+    try {
+      await refreshInbox();
+    } catch (error) {
+      toast('Archive accepted; list refresh delayed', `Recovery ${receipt.recovery_ref} remains authoritative.`);
+    }
+    vQueue();
   };
 }
 
 /* ═══════════════════════════ actions ═════════════════════════════════════ */
-async function queue(row) {
+async function mutate(path, payload) {
+  if (!SESSION?.csrf_token) throw new Error('request session unavailable');
   try {
-    const r = await api('/api/action', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(row)
+    return await api(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-SemiSkill-CSRF': SESSION.csrf_token },
+      body: JSON.stringify(payload),
     });
-    S.inbox.push(r.action);
-    $('#n-queue').textContent = S.inbox.filter(i => i.status === 'queued').length;
-    toast('Queued for Claude', r.action.title);
-    if (VIEW === 'queue') vQueue();
-  } catch (e) {
-    toast('Could not queue', 'Is dashboard/server.py running?', 'bad');
+  } catch (error) {
+    if (error.status === 403) {
+      SESSION = null;
+      syncMutationControls();
+      toast('Request session expired', 'Click Refresh, then click the request again. Nothing was replayed.', 'bad');
+    }
+    throw error;
   }
+}
+
+async function establishSession() {
+  SESSION = await api('/api/session');
+  syncMutationControls();
+  return SESSION;
+}
+
+async function refreshInbox() {
+  const listing = await api('/api/inbox');
+  S.inbox = listing.inbox;
+  $('#n-queue').textContent = S.inbox.filter(item => item.status === 'queued').length;
+}
+
+async function queue(templateId) {
+  const template = S.model.actions.find(item => item.id === templateId);
+  if (!template) throw new Error('unknown request template');
+  const pendingKey = `${templateId}:${VIEW}`;
+  const requestId = PENDING_REQUESTS.get(pendingKey) || crypto.randomUUID();
+  PENDING_REQUESTS.set(pendingKey, requestId);
+  persistPendingRequests();
+  let receipt;
+  try {
+    receipt = await mutate('/api/action', {
+      schema_version: 'semiskill.dashboard-action/v1',
+      request_type: 'prepared',
+      template_id: templateId,
+      priority: 'normal',
+      context: VIEW,
+      request_id: requestId,
+    });
+  } catch (error) {
+    if (definitiveRejection(error.status)) {
+      PENDING_REQUESTS.delete(pendingKey);
+      persistPendingRequests();
+    }
+    throw error;
+  }
+  PENDING_REQUESTS.delete(pendingKey);
+  persistPendingRequests();
+  LAST_RECEIPT = receipt;
+  S.inbox.push({ ...receipt, title: template.label, context: VIEW, credit: 'none' });
+  $('#n-queue').textContent = S.inbox.filter(item => item.status === 'queued').length;
+  toast('Request queued', `${template.label} · receipt ${receipt.receipt_id}`);
+  try {
+    await refreshInbox();
+  } catch (error) {
+    toast('Request accepted; list refresh delayed', `Receipt ${receipt.receipt_id} remains authoritative.`);
+  }
+  if (VIEW === 'queue') vQueue();
+  return receipt;
 }
 
 document.addEventListener('click', async ev => {
   const nav = ev.target.closest('.nav-item');
   if (nav) {
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => {
+      n.classList.remove('active');
+      n.removeAttribute('aria-current');
+    });
     nav.classList.add('active');
+    nav.setAttribute('aria-current', 'page');
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     VIEW = nav.dataset.view;
     document.getElementById('view-' + VIEW).classList.add('active');
@@ -1227,28 +1376,27 @@ document.addEventListener('click', async ev => {
     if (a) {
       act.disabled = true;
       act.setAttribute('aria-busy', 'true');
+      const label = act.textContent;
+      act.textContent = 'Queueing…';
       try {
-        await queue({ action_id: a.id, kind: a.group.toLowerCase(), title: a.label, prompt: a.prompt, context: VIEW });
+        await queue(a.id);
+      } catch (e) {
+        toast(
+          definitiveRejection(e.status) ? 'Request rejected' : 'Request outcome uncertain',
+          definitiveRejection(e.status)
+            ? 'The request was not accepted; correct the session or template state and try again.'
+            : 'Retry this control to reuse the same request ID; it will not duplicate accepted work.',
+          'bad',
+        );
       } finally {
         act.disabled = false;
         act.removeAttribute('aria-busy');
+        act.textContent = label;
+        syncMutationControls();
       }
     }
     return;
   }
-  const adhoc = ev.target.closest('[data-adhoc]');
-  if (adhoc) {
-    const [title, prompt] = adhoc.dataset.adhoc.split('|');
-    queue({ kind: VIEW, title, prompt, context: VIEW });
-    return;
-  }
-  if (ev.target.closest('[data-ask]')) { $('#ask-dlg').showModal(); return; }
-});
-
-$('#ask-send').addEventListener('click', () => {
-  const title = $('#ask-subject').value.trim(), prompt = $('#ask-prompt').value.trim();
-  if (title || prompt) queue({ kind: 'ask', title: title || prompt.slice(0, 60), prompt: prompt || title, priority: $('#ask-priority').value, context: VIEW });
-  $('#ask-subject').value = ''; $('#ask-prompt').value = '';
 });
 
 /* ═══════════════════════════ boot ════════════════════════════════════════ */
@@ -1258,17 +1406,36 @@ async function refresh() {
     renderAll();
   } catch (e) {
     $('#view-overview').innerHTML = `<div class="card"><div class="card-content">
-      <h2 style="margin-bottom:8px">Command centre server is not running</h2>
-      <p class="muted" style="font-size:13px">This dashboard reads live repo, database and queue state from a small local server. Start it:</p>
+      <h2 style="margin-bottom:8px">Command centre state is unavailable</h2>
+      <p class="muted" style="font-size:13px">This dashboard could not read or render live repository, database and queue state. If the local server is stopped, start it:</p>
       <pre class="out" style="margin-top:10px">python dashboard/server.py</pre>
       <p class="muted" style="font-size:12px;margin-top:8px">Then reload this page. Error: ${esc(String(e).slice(0, 200))}</p>
     </div></div>`;
   }
 }
-$('#btn-refresh').onclick = () => { $('#btn-refresh').textContent = '↻ …'; refresh().then(() => $('#btn-refresh').textContent = '↻ Refresh'); };
+$('#btn-refresh').onclick = async () => {
+  $('#btn-refresh').textContent = '↻ …';
+  try {
+    if (!SESSION) await establishSession();
+    await refresh();
+  } catch (error) {
+    toast('Refresh failed', 'The command centre or request session is unavailable.', 'bad');
+  } finally {
+    $('#btn-refresh').textContent = '↻ Refresh';
+  }
+};
 $('#view-overview').innerHTML = `<div class="card"><div class="card-content"><div class="empty">
   Reading live state from the repo, the database and the queue…</div></div></div>`;
-refresh();
+async function boot() {
+  try {
+    await establishSession();
+  } catch (e) {
+    SESSION = null;
+    toast('Request controls unavailable', 'Could not establish the same-origin request session.', 'bad');
+  }
+  await refresh();
+}
+boot();
 setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 15000);
 </script>
 </body>

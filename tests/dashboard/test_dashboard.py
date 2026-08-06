@@ -515,6 +515,8 @@ def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
     assert "approvals" not in state["runtime"]["db"]
     assert "catalog" not in state["runtime"]["api"]
     assert "attacks" not in state and state["redteam"]["status"] == "not_executed"
+    assert len(state["model"]["actions"]) == 36
+    assert all("prompt" not in action and action.get("description") for action in state["model"]["actions"])
 
 
 def test_dashboard_html_uses_only_canonical_catalog_state():
@@ -537,6 +539,9 @@ def test_dashboard_html_uses_only_canonical_catalog_state():
     ):
         assert retired not in html
     assert "setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 15000)" in html
+    assert "if (typeof Chart === 'undefined')" in html
+    assert html.index("if (typeof Chart === 'undefined')") < html.index("Chart.defaults.color")
+    assert "the source KPIs, tables and diagrams remain visible" in html
 
 
 def test_dashboard_mutation_surface_has_no_command_actuators():
@@ -554,6 +559,93 @@ def test_dashboard_mutation_surface_has_no_command_actuators():
     assert 'aria-label="Queue request: ${esc(action.label)}"' in html
     assert 'role="status" aria-live="polite"' in html
     assert "act.setAttribute('aria-busy', 'true')" in html
+    for retired in (
+        "data-adhoc", "data-ask", "ask-prompt", "q-prompt", "q-title",
+        "/api/inbox/clear", "a.prompt", "row.prompt",
+    ):
+        assert retired not in html
+    assert "'X-SemiSkill-CSRF': SESSION.csrf_token" in html
+    assert "schema_version: 'semiskill.dashboard-action/v1'" in html
+    assert "const requestId = PENDING_REQUESTS.get(pendingKey) || crypto.randomUUID()" in html
+    assert "PENDING_REQUESTS.set(pendingKey, requestId)" in html
+    assert "request_id: requestId" in html
+    assert "PENDING_ARCHIVE_ID || crypto.randomUUID()" in html
+    assert "receipt.receipt_id" in html
+    assert "role=\"alert\" aria-live=\"assertive\"" in html
+    assert "id=\"request-session-status\"" in html
+    assert "button.type = 'button'" in html
+    assert "Queue section request" in html
+    for misleading in (
+        "Click a stage to queue work on it",
+        "click any row to queue it",
+        "Every gap is a queued task away",
+        "Click any button to queue the work for Claude",
+    ):
+        assert misleading not in html
+    for section_action in ("A-32", "A-33", "A-36"):
+        assert html.count(f"action: '{section_action}'") == 1
+    for section_action in ("A-34", "A-35"):
+        assert html.count(f'data-action-id="{section_action}"') == 1
+
+
+def test_dashboard_model_is_bound_to_adjacent_integrity_pin():
+    raw = Path("dashboard/model.json").read_bytes()
+    manifest = Path("dashboard/model.sha256").read_text(encoding="ascii").strip()
+    assert manifest == "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def test_curated_launch_plan_never_claims_release_readiness():
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    assert "Launch ready" not in html
+    assert "Launch readiness" not in html
+    assert "Weeks of work left" not in html
+    assert "Deterministic release gate" in html
+    assert "Curated plan completion" in html
+    assert "not the release gate" in html
+
+
+def test_dashboard_navigation_filters_and_overview_evidence_are_truthful_and_accessible():
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    assert 'class="nav-item active" data-view="overview" aria-current="page"' in html
+    assert "n.removeAttribute('aria-current')" in html
+    assert "nav.setAttribute('aria-current', 'page')" in html
+    assert 'id="f-results" class="muted" role="status" aria-live="polite"' in html
+    assert 'id="f-q" aria-label="Search features"' in html
+    assert 'id="f-layer" aria-label="Filter features by layer"' in html
+    assert 'id="f-status" aria-label="Filter features by status"' in html
+    assert 'id="f-table-body"' in html
+    assert "updateFeatureFilterResults()" in html
+    assert "$('#f-results').textContent" in html
+    assert "vFeatures(); $('#f-q').focus()" not in html
+    assert "derived from the active project state" in html
+    assert "Canonical 84-skill funnel" in html
+    for stale_claim in (
+        "all planned phases complete",
+        "last full green run: Phase G gate",
+        "Test suite growth by phase",
+    ):
+        assert stale_claim not in html
+
+    model = json.loads(Path("dashboard/model.json").read_text(encoding="utf-8"))
+    assert "build_status" not in model["project"]
+
+
+def test_dashboard_queue_readme_names_direct_writer_acl_boundary():
+    readme = Path("dashboard/README.md").read_text(encoding="utf-8")
+    assert "hashes are unkeyed" in readme
+    assert "direct write access" in readme
+    assert "construct self-consistent forged rows" in readme
+    assert "not an authorization boundary" in readme
+    assert "filesystem ACLs are the trust root" in readme
+
+
+def test_model_refresh_action_cannot_activate_its_own_trust_pin():
+    model = json.loads(Path("dashboard/model.json").read_text(encoding="utf-8"))
+    action = next(item for item in model["actions"] if item["id"] == "A-30")
+    prompt = action["prompt"].lower()
+    assert "reviewable patch only" in prompt
+    assert "do not update the integrity pin" in prompt
+    assert "separate reviewer or human" in prompt
 
 
 def test_redteam_fixture_is_input_inventory_not_execution_evidence(tmp_path):

@@ -7,9 +7,9 @@ Serves `index.html` and a live `/api/state` assembled from real signals:
   * plan      — the curated model in `model.json` (features, risks, launch, GTM)
   * inbox     — actions the user has clicked, appended to `inbox.jsonl`
 
-The dashboard's buttons POST to `/api/action`, which appends one JSON line per
-request. That file is the feedback channel: Claude reads `dashboard/inbox.jsonl`
-and works the queue.
+The dashboard's buttons POST template IDs to `/api/action`, which durably appends one
+non-crediting receipt per request. A separate governed worker must validate a receipt before
+performing work; browser text and legacy rows are never executable instructions.
 
 Read-mostly by construction: the only mutation path appends or archives task-queue
 events under `dashboard/`. Mutation requests cannot invoke command actuators; read-only
@@ -21,13 +21,15 @@ from __future__ import annotations
 
 import json
 import hashlib
+import hmac
 import os
 import re
+import secrets
+import socket
 import subprocess
 import sys
 import threading
 import time
-import uuid
 import webbrowser
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -41,6 +43,12 @@ MODEL = HERE / "model.json"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from dashboard import action_queue                              # noqa: E402
+from dashboard.action_queue import (                           # noqa: E402
+    ActionQueue,
+    QueueError,
+    strict_json_loads,
+)
 from semiskill.authoring.snapshot import (                    # noqa: E402
     SnapshotUnavailable,
     load_progress,
@@ -81,6 +89,12 @@ _POST_MIGRATION_ATTESTATION_KEYS = frozenset({
 _CURRENT_SCHEMA_ATTESTATION_KEYS = (
     _POST_MIGRATION_ATTESTATION_KEYS - {"projection_and_policy_start_empty"}
 )
+_MAX_ACTION_BODY_BYTES = 16_384
+_JSON_CONTENT_TYPE = re.compile(
+    r'^application/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$',
+    re.IGNORECASE,
+)
+_INVALID_BODY = object()
 
 
 class DashboardSnapshotRejected(RuntimeError):
@@ -316,7 +330,7 @@ def repo_signals() -> dict:
                                 "kind": kind, "phase": phase})
 
     rc, status = _sh(["git", "status", "--porcelain"])
-    dirty = [l for l in status.splitlines() if l.strip()] if rc == 0 else []
+    dirty = [line for line in status.splitlines() if line.strip()] if rc == 0 else []
     rc, branch = _sh(["git", "rev-parse", "--abbrev-ref", "HEAD"])
 
     modules, tests = [], []
@@ -396,7 +410,9 @@ def state_files() -> dict:
                        memory, re.M)
     # strip HTML comments first — BLOCKERS.md keeps its entry template commented out
     live_blockers = re.sub(r"<!--.*?-->", "", out["BLOCKERS.md"], flags=re.S)
-    blockers = [l.strip() for l in live_blockers.splitlines() if l.startswith("## [BLK-")]
+    blockers = [
+        line.strip() for line in live_blockers.splitlines() if line.startswith("## [BLK-")
+    ]
     return {"phase": phase, "right_now": right_now, "gaps": gaps,
             "steps": [{"id": a, "ts": b, "status": c, "what": d} for a, b, c, d in steps],
             "blockers": blockers}
@@ -832,14 +848,40 @@ def read_inbox() -> list[dict]:
         line = line.strip()
         if line:
             try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
+                row = strict_json_loads(line)
+            except (ValueError, json.JSONDecodeError) as exc:
+                raise action_queue.QueueUnavailable("queue corrupt") from exc
+            if not isinstance(row, dict):
+                raise action_queue.QueueUnavailable("queue corrupt")
+            rows.append(ActionQueue._public_row(row))
     return rows
 
 
-def build_state() -> dict:
-    model = json.loads(MODEL.read_text(encoding="utf-8"))
+def read_public_templates() -> list[dict]:
+    templates, registry_sha256 = action_queue._load_templates(MODEL)
+    if action_queue._load_model_manifest(MODEL.with_suffix(".sha256")) != registry_sha256:
+        raise action_queue.QueueUnavailable("template manifest mismatch")
+    return [
+        {
+            "id": template["template_id"],
+            "group": template["group"],
+            "label": template["title"],
+            "description": (
+                f"Hash-bound schema-v1 {template['group']} request; the server resolves the "
+                "integrity-pinned prompt when queued."
+            ),
+        }
+        for template in templates.values()
+    ]
+
+
+def build_state(inbox_reader=None, template_reader=None) -> dict:
+    inbox_reader = inbox_reader or read_inbox
+    template_reader = template_reader or read_public_templates
+    model = strict_json_loads(MODEL.read_text(encoding="utf-8", errors="strict"))
+    if not isinstance(model, dict):
+        raise action_queue.QueueUnavailable("dashboard model invalid")
+    model["actions"] = template_reader()
     migration = migration_witness_signal()
     canonical = canonical_snapshot_signals(migration=migration)
     redteam = redteam_signal()
@@ -855,29 +897,30 @@ def build_state() -> dict:
         "migration": migration,
         "redteam": redteam,
         "adrs": adrs(),
-        "inbox": read_inbox(),
+        "inbox": inbox_reader(),
     }
-
-
-# ---------------------------------------------------------------- actions
-
-def append_action(payload: dict) -> dict:
-    row = {
-        "id": payload.get("action_id") or f"ACT-{uuid.uuid4().hex[:8]}",
-        "ts": _now(),
-        "kind": str(payload.get("kind", "task"))[:40],
-        "title": str(payload.get("title", ""))[:300],
-        "prompt": str(payload.get("prompt", ""))[:4000],
-        "context": str(payload.get("context", ""))[:300],
-        "priority": str(payload.get("priority", "normal"))[:20],
-        "status": "queued",
-    }
-    with INBOX.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    return row
 
 
 # ---------------------------------------------------------------- http
+
+
+class DashboardHTTPServer(ThreadingHTTPServer):
+    """Loopback server with one queue owner and one process-local CSRF capability."""
+
+    daemon_threads = True
+
+    def __init__(self, server_address, handler, *, action_queue: ActionQueue, csrf_token=None):
+        super().__init__(server_address, handler)
+        self.action_queue = action_queue
+        self.expected_authority = f"127.0.0.1:{self.server_address[1]}"
+        self.expected_origin = f"http://{self.expected_authority}"
+        self.csrf_token = csrf_token or secrets.token_urlsafe(32)
+
+    def server_close(self):
+        try:
+            self.action_queue.close()
+        finally:
+            super().server_close()
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "SemiSkillCommandCentre/1.0"
@@ -885,14 +928,105 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _json(self, code: int, body):
+    def _security_headers(self):
+        self.send_header("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'none'")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+
+    def _json(self, code: int, body, *, headers=None):
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        self._security_headers()
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _single_header(self, name: str) -> str | None:
+        values = self.headers.get_all(name, [])
+        return values[0] if len(values) == 1 else None
+
+    def _require_host(self) -> bool:
+        expected = self.server.expected_authority
+        if self._single_header("Host") != expected:
+            self._json(421, {"error": "misdirected_request"})
+            return False
+        return True
+
+    def _require_mutation_authority(self) -> bool:
+        if self._single_header("Origin") != self.server.expected_origin:
+            self._json(403, {"error": "origin_rejected"})
+            return False
+        supplied = self._single_header("X-SemiSkill-CSRF")
+        if supplied is None or not hmac.compare_digest(supplied, self.server.csrf_token):
+            self._json(403, {"error": "csrf_rejected"})
+            return False
+        return True
+
+    def _read_json_object(self):
+        if self.headers.get_all("Transfer-Encoding", []):
+            self.close_connection = True
+            self._json(400, {"error": "unsupported_transfer_encoding"})
+            return _INVALID_BODY
+        lengths = self.headers.get_all("Content-Length", [])
+        if not lengths:
+            self._json(411, {"error": "content_length_required"})
+            return _INVALID_BODY
+        if len(lengths) != 1 or not re.fullmatch(r"\d+", lengths[0]):
+            self._json(400, {"error": "invalid_content_length"})
+            return _INVALID_BODY
+        if len(lengths[0]) > 20:
+            self.close_connection = True
+            self._json(400, {"error": "invalid_content_length"})
+            return _INVALID_BODY
+        try:
+            length = int(lengths[0])
+        except (ValueError, OverflowError):
+            self.close_connection = True
+            self._json(400, {"error": "invalid_content_length"})
+            return _INVALID_BODY
+        if length > _MAX_ACTION_BODY_BYTES:
+            self.close_connection = True
+            self._json(413, {"error": "request_too_large"})
+            return _INVALID_BODY
+        content_types = self.headers.get_all("Content-Type", [])
+        if len(content_types) != 1 or not _JSON_CONTENT_TYPE.fullmatch(content_types[0]):
+            self._json(415, {"error": "unsupported_media_type"})
+            return _INVALID_BODY
+
+        previous_timeout = self.connection.gettimeout()
+        try:
+            self.connection.settimeout(5)
+            raw = self.rfile.read(length)
+        except (TimeoutError, socket.timeout, OSError):
+            self.close_connection = True
+            self._json(400, {"error": "incomplete_body"})
+            return _INVALID_BODY
+        finally:
+            try:
+                self.connection.settimeout(previous_timeout)
+            except OSError:
+                pass
+        if len(raw) != length:
+            self.close_connection = True
+            self._json(400, {"error": "incomplete_body"})
+            return _INVALID_BODY
+        try:
+            payload = strict_json_loads(raw.decode("utf-8", errors="strict"))
+        except (UnicodeError, ValueError, json.JSONDecodeError, RecursionError):
+            self._json(400, {"error": "invalid_json"})
+            return _INVALID_BODY
+        if not isinstance(payload, dict):
+            self._json(422, {"error": "json_object_required"})
+            return _INVALID_BODY
+        return payload
+
+    def _queue_error(self, exc: QueueError):
+        return self._json(exc.status, {"error": exc.code})
 
     def _file(self, path: Path, ctype: str):
         if not path.exists():
@@ -901,41 +1035,84 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Cache-Control", "no-store")
+        self._security_headers()
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
     def do_GET(self):
+        if not self._require_host():
+            return None
         route = urlparse(self.path).path
         if route in ("/", "/index.html"):
             return self._file(HERE / "index.html", "text/html; charset=utf-8")
         if route == "/api/state":
             try:
-                return self._json(200, build_state())
-            except Exception as e:                            # noqa: BLE001
-                return self._json(500, {"error": f"{type(e).__name__}: {e}"})
+                return self._json(200, build_state(
+                    self.server.action_queue.read,
+                    self.server.action_queue.public_templates,
+                ))
+            except QueueError as exc:
+                return self._queue_error(exc)
+            except Exception:                                # noqa: BLE001
+                return self._json(500, {"error": "state_unavailable"})
+        if route == "/api/session":
+            return self._json(200, {
+                "schema_version": "semiskill.dashboard-session/v1",
+                "csrf_token": self.server.csrf_token,
+                "action_schema_version": action_queue.ACTION_REQUEST_SCHEMA,
+                "archive_schema_version": action_queue.ARCHIVE_REQUEST_SCHEMA,
+            })
         if route == "/api/inbox":
-            return self._json(200, {"inbox": read_inbox()})
+            try:
+                return self._json(200, {
+                    "schema_version": "semiskill.dashboard-inbox/v1",
+                    "status": "available",
+                    "inbox": self.server.action_queue.read(),
+                })
+            except QueueError as exc:
+                return self._queue_error(exc)
+        prefix = "/api/inbox/receipts/"
+        if route.startswith(prefix):
+            try:
+                receipt = self.server.action_queue.receipt(route.removeprefix(prefix))
+                return self._json(200, receipt) if receipt else self._json(
+                    404, {"error": "not_found"}
+                )
+            except QueueError as exc:
+                return self._queue_error(exc)
         return self._json(404, {"error": "unknown route"})
 
     def do_POST(self):
-        route = urlparse(self.path).path
-        length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(length) if length else b"{}"
+        if not self._require_host():
+            return None
+        parsed = urlparse(self.path)
+        route = parsed.path
+        if parsed.query or parsed.params:
+            return self._json(404, {"error": "unknown route"})
+        if route not in {"/api/action", "/api/inbox/archive"}:
+            return self._json(404, {"error": "unknown route"})
+        if not self._require_mutation_authority():
+            return None
+        payload = self._read_json_object()
+        if payload is _INVALID_BODY:
+            return None
         try:
-            payload = json.loads(raw.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            return self._json(400, {"error": "bad json"})
+            if route == "/api/action":
+                receipt = self.server.action_queue.enqueue(payload)
+                return self._json(
+                    202,
+                    receipt,
+                    headers={"Location": f"/api/inbox/receipts/{receipt['receipt_id']}"},
+                )
+            return self._json(200, self.server.action_queue.archive(payload))
+        except QueueError as exc:
+            return self._queue_error(exc)
 
-        if route == "/api/action":
-            row = append_action(payload)
-            print(f"  [queued] {row['kind']}: {row['title']}")
-            return self._json(200, {"ok": True, "action": row})
-        if route == "/api/inbox/clear":
-            if INBOX.exists():
-                INBOX.rename(INBOX.with_suffix(f".{int(time.time())}.jsonl"))
-            return self._json(200, {"ok": True})
-        return self._json(404, {"error": "unknown route"})
+    def do_OPTIONS(self):
+        if not self._require_host():
+            return None
+        return self._json(405, {"error": "method_not_allowed"}, headers={"Allow": "GET, POST"})
 
 
 def main():
@@ -943,7 +1120,12 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:                       # noqa: BLE001
         pass
-    httpd = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    queue = ActionQueue(inbox_path=INBOX, model_path=MODEL)
+    try:
+        httpd = DashboardHTTPServer(("127.0.0.1", PORT), Handler, action_queue=queue)
+    except Exception:
+        queue.close()
+        raise
     url = f"http://127.0.0.1:{PORT}"
     print(f"SemiSkill command centre -> {url}")
     print(f"  action queue: {INBOX}")
@@ -954,6 +1136,8 @@ def main():
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\nstopped")
+    finally:
+        httpd.server_close()
 
 
 if __name__ == "__main__":

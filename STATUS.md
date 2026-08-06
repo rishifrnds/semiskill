@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T15:21:53Z_
+_Last updated: 2026-08-06T16:45:30Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,9 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b2: harden all feedback controls into a same-origin, CSRF-bound, server-template-derived
-  append-only queue with durable receipts, serialization, archival audit and hostile HTTP tests.
+- J-010b2 checkpoint: the same-origin, CSRF-bound, server-template-derived append-only request
+  queue has durable receipts, crash reconciliation, archival audit and hostile HTTP coverage;
+  exact-byte implementation commit is pending this checkpoint repair.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -26,14 +27,14 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Catalog: 0 projection-backed published; legacy raw fixture chains remain non-published/non-crediting.
 - Consistency: 0 errors, 60 warnings. Full isolated suite: 771 passed, 4 skipped, 1 xpassed;
   migration/adoption/CLI security gate: 89 passed; authoring/export gate: 322 passed.
-- Dashboard mutation-actuator removal focused gate: 42 passed; JavaScript/Python/JSON syntax and
-  forbidden-route scans pass. This does not credit the still-unsafe action-ingestion boundary.
+- Dashboard queue focused gate: 116 passed after the final rebase; Ruff, Python, JavaScript, JSON,
+  model-pin and diff checks pass. Queue receipts are non-crediting and never launch evidence.
 - The prior v1 snapshot is intentionally non-crediting after the v2 observation/source-witness
   contract; regenerate only from a clean J-010a9 commit. Focused gate: 101 passed; live development
   tracker 15/15, current structural attestations 10/10, adoption attestations 11/11, projection 0.
 
 ## Immediate order
-1. Checkpoint removed dashboard run actuators, then harden and adversarially test task queuing.
+1. Commit the exact-byte J-010b2 implementation and its completion/state/ADR checkpoint.
 2. Run the full isolated suite and browser contract against the checkpointed command centre.
 3. Resolve the approval-bound `_shared` payload topology and build the production Next.js catalog.
 4. Re-review/fix/recheck all 84, human-approve in batches <=10, publish and verify 84/84.

@@ -1,5 +1,5 @@
 {
-  "_comment": "Curated project + go-to-market model for the SemiSkill command centre. Live signals (git, DB, tests, inbox) are merged in by dashboard/server.py at request time. Edit this file to change what the dashboard shows; it is data, not code.",
+  "_comment": "Security-sensitive curated project and go-to-market configuration for the SemiSkill command centre. Live signals (git, DB, tests, inbox) are merged by dashboard/server.py. Changes require the normal reviewed repository workflow plus an updated adjacent integrity pin; prompt text becomes separate-worker input.",
   "project": {
     "name": "SemiSkill",
     "tagline": "Internal, security-verified Agent-Skill marketplace",
@@ -7,7 +7,6 @@
     "started": "2026-07-13",
     "architecture": "AIOS 6-layer instance (mirrors E:\\code\\aios)",
     "repo": "https://github.com/rishifrnds/semiskill",
-    "build_status": "Phases 0/A\u2013G complete \u2014 183 tests green vs live Postgres",
     "stage": "internal-alpha"
   },
 
@@ -209,7 +208,12 @@
     {"id": "A-27", "group": "Quality", "label": "Request isolated full-suite verification", "prompt": "Run the full suite serially against the exact isolated *_test database. Bind the result to the current commit, source tree, and database identity; persist pass, fail, skip, xpass, and duration evidence. Never run concurrently or against the development catalog."},
     {"id": "A-28", "group": "Quality", "label": "Code review the whole build", "prompt": "Review the codebase for bugs, security holes, and convention drift, and report findings ranked by severity."},
     {"id": "A-29", "group": "Quality", "label": "Close a gap I pick", "prompt": "Pick the highest-leverage open gap on the dashboard, tell me why, and close it end-to-end with tests."},
-    {"id": "A-30", "group": "Quality", "label": "Refresh dashboard data", "prompt": "Re-derive the dashboard model from the current repo state (features, tests, gaps, risks) and update dashboard/model.json."},
-    {"id": "A-31", "group": "Ops", "label": "Investigate database availability", "prompt": "Diagnose why the dashboard cannot observe the configured database. Perform read-only identity and health checks first; do not start containers, mutate schemas, or use a development database for test execution. Return evidence and a proposed recovery action."}
+    {"id": "A-30", "group": "Quality", "label": "Propose refreshed dashboard data", "prompt": "Re-derive proposed dashboard model changes from current source-bound evidence (features, tests, gaps, risks) and prepare a reviewable patch only. Do not update the integrity pin or activate the changed prompt library; a separate reviewer or human must approve the exact model bytes and provenance before activation."},
+    {"id": "A-31", "group": "Ops", "label": "Investigate database availability", "prompt": "Diagnose why the dashboard cannot observe the configured database. Perform read-only identity and health checks first; do not start containers, mutate schemas, or use a development database for test execution. Return evidence and a proposed recovery action."},
+    {"id": "A-32", "group": "Build", "label": "Review the highest-priority architecture decision", "prompt": "Review the highest-priority active SemiSkill architecture decision against the current implementation and launch contract. Propose a qualifying or superseding ADR only when evidence requires it; preserve append-only decision history."},
+    {"id": "A-33", "group": "Security", "label": "Improve the highest-priority verification stage", "prompt": "Identify the highest-priority incomplete or weak verification stage, write a failing adversarial test, implement the smallest correct hardening, and attach source-bound evidence without crediting unexecuted checks."},
+    {"id": "A-34", "group": "Ops", "label": "Advance the next launch-planning item", "prompt": "Select the highest-weight incomplete item in the curated launch-planning register and advance its evidence-backed work. Then verify the separate deterministic release_gate snapshot; this request confers no launch credit and must not mark any item complete without source-bound proof."},
+    {"id": "A-35", "group": "Marketing", "label": "Produce the next evidence-backed launch asset", "prompt": "Select the next missing launch asset and produce a draft using only authoritative current product evidence. Keep unavailable metrics and outcomes explicitly unavailable; do not fabricate publication, red-team, adoption, pricing, or customer proof."},
+    {"id": "A-36", "group": "Sales", "label": "Advance the next go-to-market channel", "prompt": "Select the next proposed go-to-market channel, state the unvalidated hypothesis, and prepare the smallest concrete experiment or asset. Do not contact external parties or claim measured impact without separate human authorization and evidence."}
   ]
 }
