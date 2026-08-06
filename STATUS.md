@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T06:57:54Z_
+_Last updated: 2026-08-06T07:04:15Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-008c: make review collection batch-atomic, import legacy files as non-authoritative artifacts,
-  then remove legacy records from skill directories and fail closed on their reintroduction.
+- J-008d: import/archive the 35 legacy records as non-authoritative provenance, make embedded review
+  metadata fail closed, and bind exact original SKILL.md bytes before new reviews begin.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -37,6 +37,6 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- d1b5b39 — content reviews now carry exact hashes/facets/lineage, typed findings and independent
-  identities; deterministic code derives readiness, batch appends are transactional, and security
-  aggregate reviews are explicitly distinguished.
+- 1134b7f — collector validates complete batches of at most 10 before one transactional append;
+  malformed/mixed/stale/unknown results append nothing. Pytest now uses a guarded, separate
+  `semiskill_test` database and a verification run left the development artifact count unchanged.

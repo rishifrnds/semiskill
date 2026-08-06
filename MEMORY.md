@@ -429,9 +429,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008c implement strict atomic collection and non-authoritative legacy migration
 
 
+- [J-008c] 2026-08-06T07:04:15Z  status: done
+  what: replaced the lossy file-overwrite collector with a strict max-10 batch contract and atomic
+  artifact append, added non-authoritative legacy import/archive support, and isolated pytest in a
+  guarded semiskill_test database; 110 targeted tests pass and dev artifacts stayed 3 before/after
+  artifacts: 1134b7f, semiskill/authoring/review_collection.py, tools/collect_wave.py,
+  tests/authoring/test_review_collection.py, tests/tools/test_collect_wave.py, tests/conftest.py,
+  docker/postgres/init-test-db.sql
+  next: J-008d execute legacy import/archive and close the temporary REVIEW.json compatibility seam
+
+
 ## In-Flight Step
-- [J-008c] implement strict atomic review collection, legacy import/archive, and fail-closed removal
-  of review metadata from skill payload directories.
+- [J-008d] import/archive legacy evidence, reject embedded review metadata, and preserve exact
+  SKILL.md bytes in the canonical version fingerprint.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
