@@ -498,9 +498,17 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-009a build the canonical deterministic scoreboard snapshot and persistence contract
 
 
+- [J-009a] 2026-08-06T07:52:34Z  status: done
+  what: established canonical scoreboard/progress document schemas, timestamp-independent snapshot
+  IDs, strict fail-closed loaders, atomic JSON persistence and a stable non-secret database identity
+  artifacts: 496d424, semiskill/authoring/snapshot.py, semiskill/artifacts/store.py,
+  tests/authoring/test_snapshot.py, 8 passed
+  next: J-009b compute the full 84/20 cell/funnel/anomaly snapshot from authoritative inputs
+
+
 ## In-Flight Step
-- [J-009a] replace the legacy presentation scoreboard with the canonical deterministic snapshot,
-  conservation checks, database/source identity and exact approval/review/scan provenance.
+- [J-009b] compute the full 84-active/20-declined canonical cell matrix, funnel, role targets,
+  consistency/lint state, anomalies and exact review/approval provenance from authoritative inputs.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
