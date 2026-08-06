@@ -105,6 +105,19 @@ def test_hash_is_stable_and_content_sensitive(tmp_path):
     assert load_wave(tmp_path)[0].payload_sha256 != first.payload_sha256
 
 
+def test_review_metadata_never_changes_installable_payload_or_hash(tmp_path):
+    skill_dir = write_skill(tmp_path, "dv-a")
+    write_review(skill_dir, ready=False, why="initial review")
+    first = load_wave(tmp_path)[0]
+
+    write_review(skill_dir, ready=True, why="a later governance decision")
+    second = load_wave(tmp_path)[0]
+
+    assert "REVIEW.json" not in first.files
+    assert "REVIEW.json" not in second.files
+    assert second.payload_sha256 == first.payload_sha256
+
+
 def test_hash_ignores_fields_the_store_adds():
     a = {"slug": "s", "name": "n", "body": "b", "files": {}}
     b = dict(a, actor="someone-else", artifact_id="different")

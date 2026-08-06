@@ -26,7 +26,7 @@ import yaml
 
 from semiskill.authoring import facets
 from semiskill.authoring.lint_body import ERROR, WARN, ADVISORY, BodyFinding, lint_body
-from semiskill.capture.intake import build_skill_version, parse_skill_md
+from semiskill.capture.intake import build_skill_version, load_skill_dir, parse_skill_md
 from semiskill.governance.policy import ALLOWED_SKILL_TOOLS, DANGEROUS_SKILL_TOOLS, tool_risk
 from semiskill.scanners.base import SkillSubmission
 from semiskill.scanners.secret_pii import SecretPiiScanner
@@ -268,12 +268,10 @@ def lint_skill_dir(path: str | Path, **kw) -> LintReport:
     skill_md = d / "SKILL.md" if d.is_dir() else d
     files: dict[str, str] = {}
     if d.is_dir():
-        for f in sorted(x for x in d.rglob("*") if x.is_file() and x.name != "SKILL.md"):
-            try:
-                files[f.relative_to(d).as_posix()] = f.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                files[f.relative_to(d).as_posix()] = f"<binary:{f.stat().st_size}bytes>"
-    return lint_text(text=skill_md.read_text(encoding="utf-8"), path=str(skill_md),
+        skill_text, files = load_skill_dir(d)
+    else:
+        skill_text = skill_md.read_text(encoding="utf-8")
+    return lint_text(text=skill_text, path=str(skill_md),
                      files=files or None, **kw)
 
 

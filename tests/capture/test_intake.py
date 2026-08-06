@@ -162,11 +162,19 @@ def test_metadata_not_a_mapping_is_ignored_not_fatal():
 
 def test_load_skill_dir(tmp_path):
     (tmp_path / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
+    (tmp_path / "REVIEW.json").write_text(
+        '{"recheck":{"ready":true},"prose":"https://review.invalid/function("}',
+        encoding="utf-8",
+    )
+    (tmp_path / "notes.json").write_text('{"submitter":"payload"}', encoding="utf-8")
     (tmp_path / "scripts").mkdir()
     (tmp_path / "scripts" / "gen.py").write_text("print('hi')", encoding="utf-8")
     skill_md, files = load_skill_dir(tmp_path)
     assert "UVM Testbench Starter" in skill_md
-    assert files == {"scripts/gen.py": "print('hi')"}
+    assert files == {
+        "notes.json": '{"submitter":"payload"}',
+        "scripts/gen.py": "print('hi')",
+    }
 
 
 def test_load_skill_dir_requires_skill_md(tmp_path):

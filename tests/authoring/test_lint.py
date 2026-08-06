@@ -87,6 +87,21 @@ def test_name_matching_folder_is_clean(tmp_path):
     assert r.ok and r.predicted_verdict == "approve"
 
 
+def test_review_prose_is_outside_the_scanned_skill_payload(tmp_path):
+    d = tmp_path / "dv-sim-log-first-error"
+    d.mkdir()
+    (d / "SKILL.md").write_text(md(), encoding="utf-8")
+    (d / "REVIEW.json").write_text(
+        '{"ready":true,"prose":"See https://review.invalid and call function("}',
+        encoding="utf-8",
+    )
+
+    r = lint_skill_dir(d)
+
+    assert r.ok and r.predicted_verdict == "approve"
+    assert r.stage_safety[1] == 1.0
+
+
 def test_missing_description_is_an_error():
     assert "L013" in rules(lint_text(text=md(description="")))
 
