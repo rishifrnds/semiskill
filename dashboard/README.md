@@ -17,10 +17,23 @@ python dashboard/server.py        # → http://127.0.0.1:8899 (opens your browse
 | test files + `pytest --collect-only` count | metric targets, pricing, channels |
 | Docker / Postgres / read-API liveness | the 30 prepared task prompts |
 | artifact counts + type mix (when the DB is up) | |
-| published catalog size (when the read API is up) | |
+| validated canonical scoreboard + worker progress snapshots | |
 | the action queue itself | |
 
-The page auto-refreshes every 60s while it is visible. `model.json` is plain data — edit it and
+Configure the authoritative catalog inputs before starting the server:
+
+```powershell
+$env:SEMISKILL_ENVIRONMENT = "development"
+$env:SEMISKILL_SCOREBOARD_SNAPSHOT = "reports/scoreboard/latest.json"
+$env:SEMISKILL_PROGRESS_SNAPSHOT = "reports/scoreboard/progress.json" # optional
+```
+
+The dashboard validates the snapshot's semantic counts, provenance, database environment and
+snapshot ID. If it is absent or invalid, catalog metrics remain explicitly unavailable; API rows,
+database counts, seeds and test fixtures are never substitutes. Progress is independently validated
+against the loaded scoreboard and may be unavailable while the scoreboard remains available.
+
+The page auto-refreshes every 15s while it is visible. `model.json` is plain data — edit it and
 reload; nothing in it is code.
 
 ## The feedback loop
@@ -45,7 +58,7 @@ works them. Three ways to queue:
 ## Running commands
 
 The Overview page can run a small whitelist locally (`RUNNABLE` in `server.py`): the test suite, the
-seed demo, the Postgres container, the read API, and `git status`. Output lands on the
+Postgres container, the read API, and `git status`. Output lands on the
 **Quality & Bugs** page and in `dashboard/runs/`. Nothing else is runnable — the server never
 executes a caller-supplied string, and binds to `127.0.0.1` only.
 

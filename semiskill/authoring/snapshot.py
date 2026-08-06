@@ -11,6 +11,7 @@ import os
 import subprocess
 import tempfile
 from copy import deepcopy
+from datetime import datetime, timedelta
 from pathlib import Path
 
 SCOREBOARD_SCHEMA = "semiskill.scoreboard/v1"
@@ -29,6 +30,28 @@ _BLOCKER_SOURCES = ("lint", "consistency", "scan", "review", "approval")
 
 class SnapshotUnavailable(RuntimeError):
     """The configured snapshot source is absent, malformed, or internally inconsistent."""
+
+
+def _require_utc_timestamp(value: object, field: str) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise SnapshotUnavailable(f"{field} must be an aware RFC3339 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise SnapshotUnavailable(f"{field} must be an aware RFC3339 timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise SnapshotUnavailable(f"{field} must be an aware RFC3339 timestamp")
+    return parsed
+
+
+def _is_sha256(value: object) -> bool:
+    if not isinstance(value, str) or not value.startswith("sha256:") or len(value) != 71:
+        return False
+    try:
+        int(value[7:], 16)
+    except ValueError:
+        return False
+    return True
 
 
 def _semantic_validate_scoreboard(document: dict) -> None:
@@ -57,11 +80,35 @@ def _semantic_validate_scoreboard(document: dict) -> None:
         raise SnapshotUnavailable("scoreboard registry counts cannot be negative")
     if scope["target_per_role"] < 1:
         raise SnapshotUnavailable("scoreboard target_per_role must be positive")
-    database = document.get("sources", {}).get("database")
-    if not isinstance(database, dict) or database.get("environment") not in {
-        "development", "test", "production",
-    }:
+    sources = document.get("sources")
+    repository = sources.get("repository") if isinstance(sources, dict) else None
+    database = sources.get("database") if isinstance(sources, dict) else None
+    if (
+        not isinstance(repository, dict)
+        or not isinstance(repository.get("commit"), str)
+        or not repository["commit"].strip()
+        or type(repository.get("dirty")) is not bool
+    ):
+        raise SnapshotUnavailable("scoreboard repository provenance is invalid")
+    if (
+        not isinstance(database, dict)
+        or not isinstance(database.get("engine"), str)
+        or not database["engine"].strip()
+        or not isinstance(database.get("database_name"), str)
+        or not database["database_name"].strip()
+        or database.get("environment") not in {"development", "test", "production"}
+        or not _is_sha256(database.get("identity_sha256"))
+    ):
         raise SnapshotUnavailable("scoreboard database environment is invalid")
+    _validate_database_environment(database, database["environment"])
+
+    levels = registry.get("levels")
+    if (
+        not isinstance(levels, list)
+        or any(not isinstance(level, str) or not level.strip() for level in levels)
+        or len(levels) != len(set(levels))
+    ):
+        raise SnapshotUnavailable("scoreboard registry levels are invalid")
 
     active_cells: list[dict] = []
     declined_cells: list[dict] = []
@@ -74,6 +121,8 @@ def _semantic_validate_scoreboard(document: dict) -> None:
         slugs.add(cell["slug"])
         if not isinstance(cell.get("role"), str) or not cell["role"]:
             raise SnapshotUnavailable("scoreboard cell role is invalid")
+        if not isinstance(cell.get("level"), str) or not cell["level"]:
+            raise SnapshotUnavailable("scoreboard cell level is invalid")
         flags = cell.get("stage_flags")
         if not isinstance(flags, dict) or any(type(flags.get(name)) is not bool for name in _FLAG_NAMES):
             raise SnapshotUnavailable("scoreboard cell stage flags are invalid")
@@ -105,6 +154,8 @@ def _semantic_validate_scoreboard(document: dict) -> None:
     }
     if any(registry.get(key) != value for key, value in expected_registry.items()):
         raise SnapshotUnavailable("scoreboard registry counts do not match its cells")
+    if set(levels) != {cell["level"] for cell in active_cells}:
+        raise SnapshotUnavailable("scoreboard registry levels do not match its active cells")
 
     if type(funnel.get("active")) is not int or funnel["active"] != len(active_cells):
         raise SnapshotUnavailable("scoreboard active funnel count does not match its cells")
@@ -252,6 +303,7 @@ def _validate_scoreboard(document: object) -> dict:
     ):
         if not isinstance(document.get(key), expected):
             raise SnapshotUnavailable(f"scoreboard snapshot field {key!r} is missing or invalid")
+    _require_utc_timestamp(document["generated_at"], "scoreboard generated_at")
     expected_id = "sha256:" + hashlib.sha256(_canonical_bytes(document)).hexdigest()
     if document["snapshot_id"] != expected_id:
         raise SnapshotUnavailable("scoreboard snapshot_id does not match its canonical content")
@@ -350,6 +402,7 @@ def validate_progress_snapshot(document: object, snapshot_id: str) -> dict:
         document.get("workers"), list,
     ):
         raise SnapshotUnavailable("progress snapshot fields are missing or invalid")
+    _require_utc_timestamp(document["generated_at"], "progress generated_at")
     worker_ids: set[str] = set()
     for index, worker in enumerate(document["workers"]):
         if not isinstance(worker, dict):
@@ -359,6 +412,14 @@ def validate_progress_snapshot(document: object, snapshot_id: str) -> dict:
                 raise SnapshotUnavailable(f"progress worker {index} field {field!r} is invalid")
         if type(worker.get("attempt")) is not int or worker["attempt"] < 1:
             raise SnapshotUnavailable(f"progress worker {index} attempt is invalid")
+        started = _require_utc_timestamp(
+            worker["started_at"], f"progress worker {index} started_at",
+        )
+        updated = _require_utc_timestamp(
+            worker["updated_at"], f"progress worker {index} updated_at",
+        )
+        if updated < started:
+            raise SnapshotUnavailable(f"progress worker {index} timestamps are out of order")
         if worker["worker_id"] in worker_ids:
             raise SnapshotUnavailable("progress worker_id values must be unique")
         worker_ids.add(worker["worker_id"])

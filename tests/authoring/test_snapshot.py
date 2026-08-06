@@ -44,7 +44,13 @@ def _body():
     return {
         "scope": {"phase": "test", "expected_active": 0, "expected_declined": 0,
                   "expected_roles": 0, "target_per_role": 1},
-        "sources": {"database": {"database_name": "semiskill_test", "environment": "test"}},
+        "sources": {
+            "repository": {"commit": "test-commit", "dirty": False},
+            "database": {
+                "engine": "postgresql", "database_name": "semiskill_test",
+                "environment": "test", "identity_sha256": "sha256:" + "1" * 64,
+            },
+        },
         "registry": {"total": 0, "active": 0, "declined": 0, "roles": 0, "levels": []},
         "funnel": funnel, "exclusive_states": states,
         "conservation": {"passed": True, "checks": conservation_checks},
@@ -125,6 +131,63 @@ def test_progress_workers_require_typed_assignment_attempt_and_timestamps(tmp_pa
                      "updated_at": "2026-08-06T00:00:01Z"}],
     })
     with pytest.raises(SnapshotUnavailable, match="attempt"):
+        load_progress(path, snapshot["snapshot_id"])
+
+
+@pytest.mark.parametrize("generated_at", ["", "yesterday", "2026-08-06T00:00:00"])
+def test_scoreboard_requires_an_aware_rfc3339_generation_time(generated_at):
+    with pytest.raises(SnapshotUnavailable, match="generated_at"):
+        finalize_scoreboard(_body(), generated_at=generated_at)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("engine", ""),
+        ("database_name", ""),
+        ("environment", "unknown"),
+        ("identity_sha256", "sha256:not-a-hash"),
+    ],
+)
+def test_scoreboard_requires_complete_database_provenance(field, value):
+    body = _body()
+    body["sources"]["database"][field] = value
+    with pytest.raises(SnapshotUnavailable, match="database"):
+        finalize_scoreboard(body, generated_at="2026-08-06T00:00:00Z")
+
+
+def test_scoreboard_environment_must_match_the_database_identity():
+    body = _body()
+    body["sources"]["database"]["environment"] = "development"
+    with pytest.raises(SnapshotUnavailable, match="development snapshot"):
+        finalize_scoreboard(body, generated_at="2026-08-06T00:00:00Z")
+
+
+@pytest.mark.parametrize(("field", "value"), [("commit", ""), ("dirty", "false")])
+def test_scoreboard_requires_typed_repository_provenance(field, value):
+    body = _body()
+    body["sources"]["repository"][field] = value
+    with pytest.raises(SnapshotUnavailable, match="repository"):
+        finalize_scoreboard(body, generated_at="2026-08-06T00:00:00Z")
+
+
+def test_scoreboard_registry_levels_must_be_unique_and_match_active_cells():
+    body = _body()
+    body["registry"]["levels"] = ["senior", "senior"]
+    with pytest.raises(SnapshotUnavailable, match="levels"):
+        finalize_scoreboard(body, generated_at="2026-08-06T00:00:00Z")
+
+
+def test_progress_requires_aware_rfc3339_timestamps(tmp_path):
+    snapshot = finalize_scoreboard(_body(), generated_at="2026-08-06T00:00:00Z")
+    path = tmp_path / "progress.json"
+    write_json_atomic(path, {
+        "schema_version": "semiskill.progress/v1",
+        "scoreboard_snapshot_id": snapshot["snapshot_id"],
+        "generated_at": "not-a-time",
+        "workers": [],
+    })
+    with pytest.raises(SnapshotUnavailable, match="generated_at"):
         load_progress(path, snapshot["snapshot_id"])
 
 

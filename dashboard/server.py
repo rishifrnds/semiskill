@@ -2,7 +2,8 @@
 
 Serves `index.html` and a live `/api/state` assembled from real signals:
   * repo      — git history, tracked files, module LOC, test inventory
-  * runtime   — Docker Postgres reachability, read-API health, catalog counts
+  * runtime   — Docker Postgres reachability and read-API health
+  * scoreboard — validated canonical catalog state (never inferred from fixtures or API visibility)
   * plan      — the curated model in `model.json` (features, risks, launch, GTM)
   * inbox     — actions the user has clicked, appended to `inbox.jsonl`
 
@@ -38,6 +39,14 @@ INBOX = HERE / "inbox.jsonl"
 RUNS = HERE / "runs"
 MODEL = HERE / "model.json"
 
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from semiskill.authoring.snapshot import (                    # noqa: E402
+    SnapshotUnavailable,
+    load_progress,
+    load_scoreboard_snapshot,
+)
+
 PORT = int(os.environ.get("SEMISKILL_DASHBOARD_PORT", "8899"))
 API_URL = os.environ.get("SEMISKILL_API", "http://127.0.0.1:8787")
 
@@ -47,11 +56,6 @@ RUNNABLE: dict[str, dict] = {
         "label": "Run the test suite",
         "cmd": [sys.executable, "-m", "pytest", "-q"],
         "note": "Needs the Postgres container up.",
-    },
-    "demo": {
-        "label": "Run the live demo (seed → pipeline → catalog)",
-        "cmd": [sys.executable, "scripts/demo.py"],
-        "note": "Truncates and reseeds the demo catalog.",
     },
     "db-up": {
         "label": "Start the Postgres container",
@@ -219,50 +223,58 @@ def runtime_signals() -> dict:
                 total = cur.fetchone()[0]
                 cur.execute("select artifact_type, count(*) from artifacts group by 1 order by 2 desc")
                 by_type = [{"type": t, "n": n} for t, n in cur.fetchall()]
-                cur.execute(
-                    "select count(*) from artifacts where artifact_type='approval'"
-                    " and payload->>'decision' = 'approve'")
-                approvals = cur.fetchone()[0]
-        db = {"status": "up", "detail": "", "artifacts": total,
-              "by_type": by_type, "approvals": approvals}
+        db = {"status": "up", "detail": "", "artifacts": total, "by_type": by_type}
     except Exception as e:                                    # noqa: BLE001
         db["detail"] = f"{type(e).__name__}: {str(e)[:160]}"
     out["db"] = db
 
-    api = {"status": "down", "catalog": 0, "detail": ""}
+    api = {"status": "down", "detail": ""}
     try:
         import urllib.request                                  # noqa: PLC0415
         with urllib.request.urlopen(f"{API_URL}/health", timeout=2) as r:
             if r.status == 200:
                 api["status"] = "up"
-        if api["status"] == "up":
-            with urllib.request.urlopen(f"{API_URL}/catalog", timeout=3) as r:
-                api["catalog"] = len(json.loads(r.read()).get("results", []))
     except Exception as e:                                    # noqa: BLE001
         api["detail"] = f"{type(e).__name__}: {str(e)[:120]}"
     out["api"] = api
     return out
 
 
-def catalog_seeds() -> list[dict]:
-    """The published seed wave, read from the regression fixture (works DB-down)."""
-    f = ROOT / "tests" / "seed" / "fixtures" / "generated_seeds.json"
-    if not f.exists():
-        return []
-    rows = []
-    for s in json.loads(f.read_text(encoding="utf-8")):
-        md = s.get("skill_md", "")
+def canonical_snapshot_signals() -> dict:
+    """Load canonical catalog state or expose an explicit, non-substituted unavailable state."""
+    observed_at = _now()
+    scoreboard = {
+        "status": "unavailable", "observed_at": observed_at,
+        "reason": "not_configured", "snapshot": None,
+    }
+    progress = {
+        "status": "unavailable", "observed_at": observed_at,
+        "reason": "scoreboard_unavailable", "snapshot": None,
+    }
+    scoreboard_path = os.environ.get("SEMISKILL_SCOREBOARD_SNAPSHOT")
+    if not scoreboard_path:
+        return {"scoreboard": scoreboard, "progress": progress}
+    try:
+        snapshot = load_scoreboard_snapshot(scoreboard_path)
+    except SnapshotUnavailable:
+        scoreboard["reason"] = "invalid_or_unavailable"
+        return {"scoreboard": scoreboard, "progress": progress}
+    environment = os.environ.get("SEMISKILL_ENVIRONMENT", "development")
+    if snapshot["sources"]["database"]["environment"] != environment:
+        scoreboard["reason"] = "environment_mismatch"
+        return {"scoreboard": scoreboard, "progress": progress}
 
-        def field(k: str) -> str:
-            m = re.search(rf"^{k}:\s*(.+)$", md, re.M)
-            return m.group(1).strip() if m else ""
-
-        rows.append({"slug": s.get("slug", ""), "name": field("name"),
-                     "role": field("role"), "level": field("level"),
-                     "function": field("function") or "design-verification",
-                     "tools": field("allowed-tools").strip("[]"),
-                     "tags": field("tags").strip("[]")})
-    return rows
+    scoreboard.update(status="available", reason=None, snapshot=snapshot)
+    progress["reason"] = "not_configured"
+    progress_path = os.environ.get("SEMISKILL_PROGRESS_SNAPSHOT")
+    if progress_path:
+        try:
+            progress_snapshot = load_progress(progress_path, snapshot["snapshot_id"])
+        except SnapshotUnavailable:
+            progress["reason"] = "invalid_or_unavailable"
+        else:
+            progress.update(status="available", reason=None, snapshot=progress_snapshot)
+    return {"scoreboard": scoreboard, "progress": progress}
 
 
 def redteam_attacks() -> list[dict]:
@@ -298,13 +310,15 @@ def read_inbox() -> list[dict]:
 
 def build_state() -> dict:
     model = json.loads(MODEL.read_text(encoding="utf-8"))
+    canonical = canonical_snapshot_signals()
     return {
         "generated_at": _now(),
         "model": model,
         "repo": repo_signals(),
         "state": state_files(),
         "runtime": runtime_signals(),
-        "seeds": catalog_seeds(),
+        "scoreboard": canonical["scoreboard"],
+        "progress": canonical["progress"],
         "attacks": redteam_attacks(),
         "adrs": adrs(),
         "inbox": read_inbox(),
