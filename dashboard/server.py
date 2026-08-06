@@ -788,13 +788,16 @@ def _remove_unexecuted_redteam_credit(model: dict, redteam: dict) -> None:
         if feature.get("id") == "F-L6-06":
             feature.update(
                 name="Red-team harness and input corpus",
-                status="partial",
+                declared_status="partial",
                 note=("Harness tests and adversarial inputs exist; no immutable execution result "
                       "is bound to the current corpus."),
             )
     for item in model.get("launch_checklist", []):
         if item.get("id") == "LC-11":
-            item.update(item="Authoritative corpus-bound red-team execution result", status="todo")
+            item.update(
+                item="Authoritative corpus-bound red-team execution result",
+                declared_status="todo",
+            )
     for risk in model.get("risks", []):
         if risk.get("id") == "R-07":
             risk["detail"] = (
@@ -803,10 +806,13 @@ def _remove_unexecuted_redteam_credit(model: dict, redteam: dict) -> None:
             )
     for metric in model.get("gtm", {}).get("metrics", []):
         if metric.get("id") == "M-05":
-            metric.update(
-                current="unmeasured",
-                source="authoritative corpus-bound red-team result artifact (not available)",
-            )
+            metric["measurement"] = {
+                "status": "unmeasured",
+                "value": None,
+                "observed_at": None,
+                "evidence_ref": None,
+                "reason": "authoritative corpus execution result is unavailable",
+            }
 
 
 def adrs() -> list[dict]:

@@ -605,12 +605,210 @@ def test_dashboard_model_is_bound_to_adjacent_integrity_pin():
 
 def test_curated_launch_plan_never_claims_release_readiness():
     html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    launch = html[html.index("function vLaunch()") : html.index("function vGrowth()")]
     assert "Launch ready" not in html
     assert "Launch readiness" not in html
     assert "Weeks of work left" not in html
     assert "Deterministic release gate" in html
     assert "Curated plan completion" in html
     assert "not the release gate" in html
+    assert "const releaseSnapshot = canonicalSnapshot()" in launch
+    assert "const releaseGate = releaseSnapshot?.release_gate || null" in launch
+    assert "releaseGate.passed === true" in launch
+    assert "S.model.release" not in launch and "readiness().passed" not in launch
+
+
+def test_curated_registers_are_explicitly_non_crediting_and_unvalidated():
+    model = json.loads(Path("dashboard/model.json").read_text(encoding="utf-8"))
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+
+    assert model["project"]["stage"] == "local-pre-alpha"
+    assert model["register_authority"] == {
+        "features": "curated_non_crediting",
+        "risks": "curated_non_crediting",
+        "launch_plan": "curated_non_crediting",
+        "gtm": "unvalidated_hypotheses",
+    }
+
+    for feature in model["features"]:
+        assert feature["declared_status"] in {"done", "partial", "gap", "by-design-off"}
+        assert isinstance(feature["source_ref"], str)
+        assert "status" not in feature and "tests" not in feature and "evidence" not in feature
+
+    for stage in model["pipeline_stages"]:
+        assert stage["declared_state"] in {"source-present", "external-adapter-pending"}
+        assert "status" not in stage
+
+    assert all(risk["validation_status"] == "unvalidated" for risk in model["risks"])
+    assert all("severity" not in risk and risk["severity_hypothesis"] for risk in model["risks"])
+    assert "R-06" not in {risk["id"] for risk in model["risks"]}
+
+    deferred = {item["id"]: item for item in model["deferred_scope"]}
+    assert deferred["D-EXT-01"]["status"] == "deferred"
+    assert deferred["D-TAX-01"]["status"] == "deferred"
+    assert "LC-25" not in {item["id"] for item in model["launch_checklist"]}
+    assert all(item["declared_status"] in {"todo", "partial", "done"}
+               for item in model["launch_checklist"])
+    assert all("status" not in item and "evidence_ref" not in item
+               for item in model["launch_checklist"])
+    assert next(item for item in model["launch_checklist"] if item["id"] == "LC-23")["source_ref"] == "docs/ADOPTION.md"
+
+    gtm = model["gtm"]
+    assert gtm["authority"] == {
+        "kind": "curated_hypothesis",
+        "credit": "none",
+        "validation_status": "unvalidated",
+    }
+    for cohort in (gtm["funnels"]["user"], gtm["funnels"]["supply"]):
+        assert len({row["unit"] for row in cohort}) == 1
+        assert all(row["measurement_status"] == "unmeasured" for row in cohort)
+        targets = [row["target_count"] for row in cohort]
+        assert targets == sorted(targets, reverse=True)
+    assert {row["unit"] for row in gtm["funnels"]["user"]} == {"unique_people"}
+    assert {row["unit"] for row in gtm["funnels"]["supply"]} == {"skill_versions"}
+    published = next(row for row in gtm["funnels"]["supply"] if row["id"] == "published")
+    assert published["instrument"] == "verified scoreboard publish projection"
+    assert gtm["funnels"]["advocacy"]["measurement_status"] == "unmeasured"
+
+    assert all(item["validation_status"] == "unvalidated" for item in gtm["icp"])
+    assert all(not {"size", "why", "entry"}.intersection(item) for item in gtm["icp"])
+    assert all(item["validation_status"] == "unvalidated" and item["evidence_ref"] is None
+               for item in gtm["channels"])
+    assert all(not {"effort", "impact", "note"}.intersection(item) for item in gtm["channels"])
+    assert all(item["availability"] == "not_offered" and item["evidence_ref"] is None
+               for item in gtm["pricing"])
+    assert all(not {"price", "for"}.intersection(item) for item in gtm["pricing"])
+    for asset in gtm["assets"]:
+        assert asset["declared_status"] in {"todo", "partial"}
+        assert asset["validation_status"] == "unvalidated"
+        assert asset["availability"] == "not_published"
+        assert "source_ref" in asset and "status" not in asset
+    for asset in (item for item in gtm["assets"] if item.get("deferred_scope_id")):
+        assert asset["deferred_scope_id"] in deferred
+
+    for metric in gtm["metrics"]:
+        assert "current" not in metric and not isinstance(metric["target"], str)
+        assert metric["target"]["status"] == "hypothesis"
+        measurement = metric["measurement"]
+        assert measurement["status"] == "unmeasured"
+        assert measurement["value"] is None
+        assert measurement["observed_at"] is None
+        assert measurement["evidence_ref"] is None
+        assert measurement["reason"]
+    metrics = {metric["id"]: metric for metric in gtm["metrics"]}
+    for metric_id in ("M-02", "M-06", "M-07"):
+        assert metrics[metric_id]["measurement"]["status"] == "unmeasured"
+        assert metrics[metric_id]["measurement"]["value"] is None
+
+    for required in (
+        "Unvalidated 90-day user-funnel hypothesis",
+        "Unvalidated 90-day supply-funnel hypothesis",
+        "Unvalidated channel hypotheses",
+        "Unvalidated packaging hypotheses — not an offer",
+        "Deferred external scope",
+    ):
+        assert required in html
+    for forbidden in (
+        "Adoption funnel",
+        "Observed channel hypotheses",
+        "Internal stays free",
+        "current !== 'unmeasured'",
+        "Invariants held",
+        "Observed stage inventory",
+    ):
+        assert forbidden not in html
+
+
+def test_prepared_requests_cannot_turn_curated_inputs_into_proof():
+    model = json.loads(Path("dashboard/model.json").read_text(encoding="utf-8"))
+    actions = {item["id"]: item["prompt"].lower() for item in model["actions"]}
+    required = {
+        "A-10": ("frozen corpus", "current source", "fixture", "not a result"),
+        "A-12": ("persisted", "current tree", "test database", "unavailable"),
+        "A-15": ("unique people", "skill versions", "separate"),
+        "A-16": ("source-bound current evidence", "unavailable", "do not publish", "do not"),
+        "A-17": ("simulation", "unavailable", "do not publish"),
+        "A-18": ("source-bound current evidence", "unavailable", "do not post"),
+        "A-19": (
+            "authoritative current evidence",
+            "unavailable",
+            "never invent",
+            "do not present or distribute",
+        ),
+        "A-20": ("proof unavailable", "authoritative", "do not publish"),
+        "A-21": ("draft", "do not contact", "claim partners"),
+        "A-22": ("blank", "user-supplied", "no default", "no roi claim", "do not publish"),
+        "A-23": (
+            "authoritative current evidence",
+            "proof unavailable",
+            "do not invent",
+            "do not",
+            "publish",
+        ),
+        "A-24": ("after the 84", "not an offer", "unvalidated"),
+        "A-25": ("read-only", "unavailable", "do not infer zero"),
+        "A-26": (
+            "read-only",
+            "cohort and corpus hashes",
+            "current commit",
+            "utc window",
+            "denominator",
+        ),
+        "A-29": ("curated candidate", "validate"),
+        "A-30": ("references", "never pass", "patch only", "integrity pin"),
+        "A-33": ("curated", "bound execution"),
+        "A-35": (
+            "authoritative current product evidence",
+            "unavailable",
+            "do not publish",
+            "post or distribute",
+        ),
+        "A-36": (
+            "unvalidated hypothesis",
+            "do not contact",
+            "do not launch",
+            "publish, post or send",
+            "human authorization",
+        ),
+    }
+    for action_id, clauses in required.items():
+        assert all(clause in actions[action_id] for clause in clauses), action_id
+
+
+def test_curated_registers_never_receive_success_or_verified_styling():
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+
+    def view(name, next_name):
+        return html[html.index(f"function {name}()") : html.index(f"function {next_name}()")]
+
+    for fragment in (
+        view("vPipeline", "vFeatures"),
+        view("vFeatures", "vQuality"),
+        view("vGrowth", "vAnalytics"),
+        view("vAnalytics", "vQueue"),
+    ):
+        assert "hsl('--success')" not in fragment
+        assert "hsl('--success'," not in fragment
+
+    launch = view("vLaunch", "vGrowth")
+    assert "backgroundColor: sections.map" not in launch
+    assert "badge(x.declared_status, x.declared_status)" not in launch
+    assert "badge(x.declared_status, 'info')" in launch
+    assert "Curated planning stage" in launch
+
+    growth = view("vGrowth", "vAnalytics")
+    assert "badge(i.priority_hypothesis, 'done')" not in growth
+    assert "c.effort_hypothesis, 'info'" in growth
+    assert "c.impact_hypothesis, 'info'" in growth
+
+    analytics = view("vAnalytics", "vQueue")
+    assert "Measured observations" in analytics
+    assert "authoritative observation provider not configured" in analytics
+    assert "badge('unmeasured', 'muted')" in analytics
+    assert "Curated launch-asset drafts" in launch
+    assert "badge('declared ' + a.declared_status, 'info')" in launch
+    assert "badge('not published', 'muted')" in launch
+    assert "a.status" not in launch
 
 
 def test_dashboard_navigation_filters_and_overview_evidence_are_truthful_and_accessible():
@@ -709,7 +907,9 @@ def test_pipeline_and_publication_views_match_current_executable_contracts():
     assert "hard-fail forces the stage-6 aggregate review to reject" in html
     assert "s.n < 6" in html
     assert "short-circuits" not in html and "no aggregate review is written" not in html
-    assert all("tests" not in stage for stage in model["pipeline_stages"])
+    assert all("tests" not in stage and "status" not in stage for stage in model["pipeline_stages"])
+    assert all(stage["declared_state"] in {"source-present", "external-adapter-pending"}
+               for stage in model["pipeline_stages"])
     aggregate = next(stage for stage in model["pipeline_stages"] if stage["id"] == "aggregate")
     assert "hard-fail forces reject" in aggregate["detail"].lower()
     assert "full scan chain" in aggregate["detail"].lower()
@@ -788,9 +988,10 @@ def test_unexecuted_redteam_forces_non_crediting_model_state(monkeypatch):
     launch = next(item for item in model["launch_checklist"] if item["id"] == "LC-11")
     metric = next(item for item in model["gtm"]["metrics"] if item["id"] == "M-05")
     risk = next(item for item in model["risks"] if item["id"] == "R-07")
-    assert feature["status"] == "partial"
-    assert launch["status"] == "todo" and launch["weight"] == 3
-    assert metric["current"] == "unmeasured"
+    assert feature["declared_status"] == "partial"
+    assert launch["declared_status"] == "todo" and launch["weight"] == 3
+    assert metric["measurement"]["status"] == "unmeasured"
+    assert metric["measurement"]["value"] is None
     assert "unavailable" in risk["detail"] and "proven" not in risk["detail"]
 
 
@@ -807,7 +1008,8 @@ def test_model_contains_no_redteam_success_credit_without_results():
     launch = next(item for item in model["launch_checklist"] if item["id"] == "LC-11")
     metric = next(item for item in model["gtm"]["metrics"] if item["id"] == "M-05")
     risk = next(item for item in model["risks"] if item["id"] == "R-07")
-    assert feature["status"] == "partial"
-    assert launch["status"] == "todo"
-    assert metric["current"] == "unmeasured"
+    assert feature["declared_status"] == "partial"
+    assert launch["declared_status"] == "todo"
+    assert metric["measurement"]["status"] == "unmeasured"
+    assert metric["measurement"]["value"] is None
     assert "proven" not in risk["detail"].lower()

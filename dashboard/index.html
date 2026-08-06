@@ -137,6 +137,7 @@ main{min-width:0;display:flex;flex-direction:column}
 
 .progress{height:7px;border-radius:99px;background:hsl(var(--muted));overflow:hidden}
 .progress>span{display:block;height:100%;border-radius:99px;background:hsl(var(--primary));transition:width .5s ease}
+.progress.neutral>span{background:hsl(var(--info))}
 .progress.warn>span{background:hsl(var(--warning))}
 .progress.bad>span{background:hsl(var(--destructive))}
 
@@ -409,16 +410,16 @@ const gridOpts = (stacked = false) => ({
 
 /* ═══════════════════════════ views ═══════════════════════════════════════ */
 const TITLES = {
-  overview:  ['Overview', 'Live build, security and launch posture'],
+  overview:  ['Overview', 'Observed signals and curated non-crediting plans'],
   architecture: ['Architecture', 'AIOS 6-layer map, modules and decisions'],
   pipeline:  ['Verification Pipeline', 'Six stages, the gate, and the lifecycle'],
-  features:  ['Features', 'What is implemented, partial, or a gap — with evidence'],
-  quality:   ['Quality & Bugs', 'Test inventory, risks, and open defects'],
+  features:  ['Features', 'Declared states and source references; no run evidence'],
+  quality:   ['Quality & Risks', 'Static test inventory and curated risk assessments'],
   security:  ['Security', 'Red-team corpus, execution status, invariants and exposure'],
   catalog:   ['Catalog', 'Published skills, role coverage, reuse'],
   launch:    ['Launch', 'Deterministic release gate plus curated planning inputs'],
-  growth:    ['Growth & GTM', 'ICP, funnel, channels, assets, pricing'],
-  analytics: ['Analytics', 'The metrics tree and what is instrumented'],
+  growth:    ['Growth & GTM', 'Unvalidated audience, funnel, channel and packaging hypotheses'],
+  analytics: ['Analytics', 'Metric definitions; authoritative observations are separate'],
   queue:     ['Action Queue', 'Non-crediting prepared requests awaiting separate validation'],
 };
 
@@ -454,18 +455,17 @@ function renderHealth() {
 function readiness() {
   const lc = S.model.launch_checklist;
   const w = lc.reduce((a, x) => a + x.weight, 0);
-  const got = lc.reduce((a, x) => a + x.weight * (x.status === 'done' ? 1 : x.status === 'partial' ? .5 : 0), 0);
-  return { pct: Math.round(got / w * 100), done: lc.filter(x => x.status === 'done').length, total: lc.length };
+  const got = lc.reduce((a, x) => a + x.weight * (x.declared_status === 'done' ? 1 : x.declared_status === 'partial' ? .5 : 0), 0);
+  return { pct: Math.round(got / w * 100), done: lc.filter(x => x.declared_status === 'done').length, total: lc.length };
 }
 
 function vOverview() {
   const f = S.model.features, R = readiness();
   const snapshot = canonicalSnapshot();
   const redteam = S.redteam;
-  const done = f.filter(x => x.status === 'done').length;
-  const gaps = f.filter(x => x.status === 'gap').length;
-  const partial = f.filter(x => x.status === 'partial').length;
-  const crit = S.model.risks.filter(r => r.severity === 'critical').length;
+  const done = f.filter(x => x.declared_status === 'done').length;
+  const gaps = f.filter(x => x.declared_status === 'gap').length;
+  const partial = f.filter(x => x.declared_status === 'partial').length;
   const phaseMatch = String(S.state.phase || '').match(/Phase\s+[A-Z0-9-]+/);
   const phaseLabel = phaseMatch ? phaseMatch[0] : 'unavailable';
 
@@ -473,15 +473,14 @@ function vOverview() {
     <div class="grid g6">
       ${kpi('Current phase', phaseLabel, 'derived from the active project state', { color: hsl('--primary') })}
       ${kpi('Test functions', S.repo.total_tests, `${S.repo.tests.length} files · static source inventory only; no current pass result`)}
-      ${kpi('Features done', `${done}/${f.length}`, `${partial} partial · ${gaps} gaps`, { progress: pct(done, f.length) })}
+      ${kpi('Curated feature claims', `${done}/${f.length} declared done`, `${partial} partial · ${gaps} gaps · non-crediting planning register`)}
       ${kpi('Red-team escapes', '—', redteam.status === 'not_executed'
             ? `${redteam.corpus.length} corpus inputs · not executed`
             : 'authoritative result unavailable')}
       ${kpi('Published skills', snapshot ? snapshot.funnel.published : '—', snapshot
             ? `canonical snapshot · ${freshness(snapshot.generated_at)}`
             : 'authoritative scoreboard unavailable')}
-      ${kpi('Launch-plan completion', R.pct + '%', `${R.done}/${R.total} curated planning items marked done; no release credit`,
-            { progress: R.pct, progressCls: R.pct < 40 ? 'bad' : R.pct < 70 ? 'warn' : '' })}
+      ${kpi('Launch-plan completion', R.pct + '%', `${R.done}/${R.total} curated planning items marked done; no release credit`)}
     </div>
 
     <div class="section-head"><h2>Where the build stands</h2><p class="muted">From MEMORY.md / STATUS.md — the actual project state files</p></div>
@@ -495,19 +494,19 @@ function vOverview() {
     <div class="grid g2" style="margin-top:14px">
       ${card('Canonical 84-skill funnel', snapshot ? `Verified snapshot · ${freshness(snapshot.generated_at)}` : 'Authoritative snapshot unavailable',
         snapshot ? `<div class="chart-box"><canvas id="c-funnel"></canvas></div>` : `<div class="empty">No funnel is inferred from fixtures or curated planning data.</div>`)}
-      ${card('Feature status by layer', 'done / partial / gap across the 6 AIOS layers + product',
+      ${card('Curated feature claims by layer', 'Declared done / partial / gap; not source-bound verification evidence',
         `<div class="chart-box"><canvas id="c-featlayer"></canvas></div>`)}
     </div>
 
-    <div class="section-head"><h2>What needs a decision or a hand</h2><p class="muted">Submit one governed prepared request for the highest-priority gap</p></div>
+    <div class="section-head"><h2>Candidates needing independent validation</h2><p class="muted">Queue one governed request without inferring priority from curated order</p></div>
     <div class="grid g3">
       ${S.model.risks.slice(0, 6).map(r => card(
-        `${badge(r.severity, r.severity === 'critical' ? 'critical' : r.severity === 'high' ? 'gap' : r.severity === 'medium' ? 'warn' : 'muted')} ${esc(r.title)}`,
+        `${badge(r.severity_hypothesis + ' hypothesis', 'info')} ${esc(r.title)}`,
         esc(r.area),
         `<div style="font-size:12px;line-height:1.6">${esc(r.detail)}</div>
          <div class="muted" style="font-size:11.5px;margin-top:8px"><b>Mitigation:</b> ${esc(r.mitigation)}</div>`)).join('')}
     </div>
-    <div style="margin-top:10px"><button type="button" class="btn outline" data-action-id="A-29">⌘ Queue highest-priority gap triage</button></div>
+    <div style="margin-top:10px"><button type="button" class="btn outline" data-action-id="A-29">⌘ Queue candidate validation</button></div>
 
     <div class="section-head"><h2>Execution requests</h2><p class="muted">Buttons create auditable work requests; mutation requests never invoke command actuators</p></div>
     <div class="grid g4">
@@ -543,11 +542,11 @@ function vOverview() {
   });
 
   const layers = [...S.model.layers.map(l => l.id), 'Product', 'Ops'];
-  const byStatus = st => layers.map(L => S.model.features.filter(x => x.layer === L && x.status === st).length);
+  const byStatus = st => layers.map(L => S.model.features.filter(x => x.layer === L && x.declared_status === st).length);
   chart('c-featlayer', {
     type: 'bar',
     data: { labels: layers, datasets: [
-      { label: 'done', data: byStatus('done'), backgroundColor: hsl('--success', .85), borderRadius: 4 },
+      { label: 'declared done', data: byStatus('done'), backgroundColor: hsl('--info', .72), borderRadius: 4 },
       { label: 'partial', data: byStatus('partial'), backgroundColor: hsl('--warning', .85), borderRadius: 4 },
       { label: 'gap', data: byStatus('gap'), backgroundColor: hsl('--destructive', .8), borderRadius: 4 }] },
     options: { plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 7 } } }, scales: gridOpts(true) }
@@ -606,13 +605,13 @@ function vArchitecture() {
           <text x="396" y="172" class="lbl">Held-out corpus</text>
           <text x="396" y="190" class="sub">outside anything the pipeline</text>
           <text x="396" y="206" class="sub">role can read or modify</text>
-          <text x="396" y="230" class="sub" fill="${hsl('--destructive')}">verified by test, not policy</text>
+          <text x="396" y="230" class="sub" fill="${hsl('--muted-foreground')}">source/test reference · no current run evidence</text>
           <rect x="380" y="262" width="230" height="118" rx="9" class="box" fill="${hsl('--card')}" stroke="${hsl('--border')}"/>
           <text x="396" y="284" class="lbl">Artifact spine</text>
           <text x="396" y="302" class="sub">Captured → Analyzed → Proposed</text>
           <text x="396" y="318" class="sub">→ Executed → Observed</text>
           <text x="396" y="342" class="sub">append-only · corrections never edits</text>
-          <text x="396" y="362" class="sub">${S.runtime.db.status === 'up' ? (S.runtime.db.artifacts + ' artifacts live') : 'DB offline — start it to see live counts'}</text>
+          <text x="396" y="362" class="sub">${S.runtime.db.status === 'up' ? (S.runtime.db.artifacts + ' raw artifact rows · inventory only') : 'artifact inventory unavailable'}</text>
         </svg>`, { action: 'A-13' })}
       <div class="grid" style="gap:14px;align-content:start">
         ${card('Code distribution by layer', `${S.repo.total_loc} LOC across ${S.repo.modules.length} modules`,
@@ -649,14 +648,15 @@ function vPipeline() {
   const w = 128, gap = 14;
   const stageBox = (s, i) => {
     const x = 14 + i * (w + gap);
-    const col = s.status === 'live' ? hsl('--success') : hsl('--warning');
+    const sourcePresent = s.declared_state === 'source-present';
+    const col = sourcePresent ? hsl('--info') : hsl('--warning');
     return `<g>
       <rect x="${x}" y="54" width="${w}" height="72" rx="9" fill="${hsl('--card')}" stroke="${col}55"/>
       <circle cx="${x + 14}" cy="70" r="4" fill="${col}"/>
       <text x="${x + 26}" y="74" class="lbl" style="font-size:10.5px">Stage ${s.n}</text>
       <text x="${x + 10}" y="96" class="lbl" style="font-size:10.5px">${esc(s.name.length > 20 ? s.name.slice(0, 19) + '…' : s.name)}</text>
-      <text x="${x + 10}" y="112" class="sub">${s.status === 'live' ? 'declared implemented' : 'external adapter pending'}</text>
-      ${i < st.length - 1 ? `<path d="M${x + w} 90 L${x + w + gap} 90" class="flow ok"/>` : ''}
+      <text x="${x + 10}" y="112" class="sub">${sourcePresent ? 'source present' : 'external adapter pending'}</text>
+      ${i < st.length - 1 ? `<path d="M${x + w} 90 L${x + w + gap} 90" class="flow"/>` : ''}
       ${s.n < 6 ? `<path d="M${x + w / 2} 126 L${x + w / 2} 152" class="flow bad"/>
       <text x="${x + w / 2 + 4}" y="146" class="sub" fill="${hsl('--destructive')}" style="font-size:9px">hard-fail recorded</text>` : ''}
     </g>`;
@@ -664,8 +664,8 @@ function vPipeline() {
 
   $('#view-pipeline').innerHTML = `
     <div class="grid g4">
-      ${kpi('Declared implementations', st.filter(s => s.status === 'live').length + '/6', 'curated source map; not execution evidence')}
-      ${kpi('External adapters pending', st.filter(s => s.status !== 'live').length + '/6', 'security-audit + LLM judge need controlled resources', { color: hsl('--warning') })}
+      ${kpi('Declared source present', st.filter(s => s.declared_state === 'source-present').length + '/6', 'curated source map; not execution evidence')}
+      ${kpi('External adapters pending', st.filter(s => s.declared_state === 'external-adapter-pending').length + '/6', 'security-audit + LLM judge need controlled resources', { color: hsl('--warning') })}
       ${kpi('Stage definitions', st.length, 'all configured stages emit evidence; a hard-fail forces reject')}
       ${kpi('Lifecycle vocabulary', S.model.lifecycle.length, S.model.lifecycle.join(' → '))}
     </div>
@@ -683,18 +683,18 @@ function vPipeline() {
           <text x="30" y="175" class="lbl" fill="${hsl('--destructive')}">REJECT · hard-fail retained in complete artifact trail</text>
           <rect x="620" y="152" width="246" height="36" rx="8" fill="${hsl('--card')}" stroke="${hsl('--border')}"/>
           <text x="636" y="175" class="lbl">② human review queue (risk-ranked)</text>
-          <path d="M743 188 L743 200" class="flow ok"/>
+          <path d="M743 188 L743 200" class="flow"/>
           <rect x="620" y="200" width="246" height="34" rx="8" fill="${hsl('--primary')}18" stroke="${hsl('--primary')}66"/>
           <text x="636" y="222" class="lbl" fill="${hsl('--primary')}">③ approval actuator → catalog</text>
         </svg>`, { action: 'A-08' })}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Stage detail', 'Observed stage inventory; the prepared request selects the highest-priority stage improvement',
+      ${card('Curated stage source/adapter map', 'Declared source references and adapter gaps; not run evidence. A prepared request validates one candidate.',
         `<table><thead><tr><th>#</th><th>Stage</th><th>Kind</th><th>Declared status</th></tr></thead><tbody>
         ${st.map(s => `<tr><td class="mono muted">${s.n}</td><td><b>${esc(s.name)}</b><div class="muted" style="font-size:11px">${esc(s.detail)}</div></td>
           <td>${badge(s.kind, s.kind === 'deterministic' ? 'info' : 'muted')}</td>
-          <td>${badge(s.status, s.status === 'live' ? 'info' : 'partial')}</td></tr>`).join('')}
+          <td>${badge(s.declared_state, s.declared_state === 'source-present' ? 'info' : 'partial')}</td></tr>`).join('')}
         </tbody></table>`, { tight: true, action: 'A-33' })}
       <div class="grid" style="gap:14px;align-content:start">
         ${card('Lifecycle state machine', 'State is derived from artifacts, never stored — so it cannot be forged',
@@ -732,22 +732,21 @@ let fFilter = { layer: 'all', status: 'all', q: '' };
 function filteredFeatures(features) {
   return features.filter(x =>
     (fFilter.layer === 'all' || x.layer === fFilter.layer) &&
-    (fFilter.status === 'all' || x.status === fFilter.status) &&
-    (!fFilter.q || (x.name + x.note + x.evidence).toLowerCase().includes(fFilter.q.toLowerCase())));
+    (fFilter.status === 'all' || x.declared_status === fFilter.status) &&
+    (!fFilter.q || (x.name + x.note + x.source_ref).toLowerCase().includes(fFilter.q.toLowerCase())));
 }
 function featureTableRows(rows) {
   return rows.map(x => `<tr>
     <td class="mono muted">${esc(x.id)}</td>
     <td><b>${esc(x.name)}</b><div class="muted" style="font-size:11px;max-width:420px">${esc(x.note)}</div></td>
     <td>${badge(x.layer, 'muted')}</td>
-    <td>${badge(x.status, x.status)}</td>
-    <td class="num">${x.tests || '–'}</td>
-    <td class="mono muted" style="font-size:11px">${esc(x.evidence)}</td>
+    <td>${badge(x.declared_status, x.declared_status === 'done' ? 'info' : x.declared_status === 'partial' ? 'partial' : x.declared_status === 'gap' ? 'warn' : 'muted')}</td>
+    <td class="mono muted" style="font-size:11px">${esc(x.source_ref)}</td>
   </tr>`).join('');
 }
 function updateFeatureFilterResults() {
   const rows = filteredFeatures(S.model.features);
-  $('#f-results').textContent = `${rows.length} of ${S.model.features.length} shown`;
+  $('#f-results').textContent = `${rows.length} of ${S.model.features.length} non-crediting records shown`;
   $('#f-table-body').innerHTML = featureTableRows(rows);
 }
 function vFeatures() {
@@ -758,30 +757,29 @@ function vFeatures() {
   $('#view-features').innerHTML = `
     <div class="grid g4">
       ${['done', 'partial', 'gap', 'by-design-off'].map(s => {
-        const n = f.filter(x => x.status === s).length;
-        return kpi(s === 'by-design-off' ? 'By design off' : s, n, `${pct(n, f.length)}% of ${f.length} features`,
-          { color: s === 'done' ? hsl('--success') : s === 'partial' ? hsl('--warning') : s === 'gap' ? hsl('--destructive') : undefined,
-            progress: pct(n, f.length) });
+        const n = f.filter(x => x.declared_status === s).length;
+        return kpi(`Declared ${s === 'by-design-off' ? 'by design off' : s}`, n,
+          `${pct(n, f.length)}% of ${f.length} curated records; no verification credit`);
       }).join('')}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Verification evidence', 'Tests backing each implemented feature', `<div class="chart-box"><canvas id="c-evidence"></canvas></div>`)}
-      ${card('Gap burn-down candidates', 'Observed candidates; one prepared request selects the highest-leverage gap', `<div class="list" style="max-height:240px;overflow:auto">
-        ${f.filter(x => x.status !== 'done' && x.status !== 'by-design-off').map(x => `<div class="row">
-          <div class="g"><div class="h">${esc(x.name)} ${badge(x.status, x.status)}</div><div class="p">${esc(x.note)}</div></div>
+      ${card('Static test-function inventory', 'Repository-wide source definitions by suite; not mapped feature evidence or a pass result', `<div class="chart-box"><canvas id="c-evidence"></canvas></div>`)}
+      ${card('Curated gap candidates', 'Planning hypotheses; one prepared request selects a candidate for independent validation', `<div class="list" style="max-height:240px;overflow:auto">
+        ${f.filter(x => x.declared_status !== 'done' && x.declared_status !== 'by-design-off').map(x => `<div class="row">
+          <div class="g"><div class="h">${esc(x.name)} ${badge(x.declared_status, x.declared_status === 'gap' ? 'warn' : 'partial')}</div><div class="p">${esc(x.note)}</div></div>
         </div>`).join('')}</div>`, { tight: true })}
     </div>
 
-    <div class="section-head"><h2>Feature register</h2><p id="f-results" class="muted" role="status" aria-live="polite">${rows.length} of ${f.length} shown</p></div>
+    <div class="section-head"><h2>Curated feature register</h2><p id="f-results" class="muted" role="status" aria-live="polite">${rows.length} of ${f.length} non-crediting records shown</p></div>
     <div class="toolbar">
       <input type="search" id="f-q" aria-label="Search features" placeholder="Search features…" value="${esc(fFilter.q)}" style="min-width:220px">
       <select id="f-layer" aria-label="Filter features by layer"><option value="all">All layers</option>${layers.map(l => `<option ${fFilter.layer === l ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <select id="f-status" aria-label="Filter features by status"><option value="all">All statuses</option>${['done', 'partial', 'gap', 'by-design-off'].map(s => `<option ${fFilter.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
       <div class="spacer"></div>
-      <button type="button" class="btn outline" data-action-id="A-29">⌘ Queue highest-leverage gap triage</button>
+      <button type="button" class="btn outline" data-action-id="A-29">⌘ Queue candidate validation</button>
     </div>
-    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Feature</th><th>Layer</th><th>Status</th><th class="num">Tests</th><th>Evidence</th></tr></thead><tbody id="f-table-body">${featureTableRows(rows)}</tbody></table></div>`, { tight: true })}
+    ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>ID</th><th>Feature</th><th>Layer</th><th>Declared status</th><th>Reference</th></tr></thead><tbody id="f-table-body">${featureTableRows(rows)}</tbody></table></div>`, { tight: true })}
   `;
 
   $('#f-q').oninput = e => { fFilter.q = e.target.value; updateFeatureFilterResults(); };
@@ -791,7 +789,7 @@ function vFeatures() {
   const groups = [...new Set(S.repo.tests.map(t => t.group))];
   chart('c-evidence', {
     type: 'bar',
-    data: { labels: groups, datasets: [{ label: 'tests', data: groups.map(g => S.repo.tests.filter(t => t.group === g).reduce((a, t) => a + t.count, 0)), backgroundColor: hsl('--chart-1', .8), borderRadius: 4 }] },
+    data: { labels: groups, datasets: [{ label: 'test functions', data: groups.map(g => S.repo.tests.filter(t => t.group === g).reduce((a, t) => a + t.count, 0)), backgroundColor: hsl('--chart-1', .8), borderRadius: 4 }] },
     options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: gridOpts() }
   });
 }
@@ -805,8 +803,7 @@ function vQuality() {
     <div class="grid g4">
       ${kpi('Test functions', S.repo.total_tests, `${t.length} files · ${groups.length} suites · static source inventory`)}
       ${kpi('Last verified suite', 'not evidenced', 'No current commit/tree/database-bound run artifact is configured')}
-      ${kpi('Open risks', risks.length, `${risks.filter(r => r.severity === 'critical' || r.severity === 'high').length} critical/high`,
-        { color: hsl('--warning') })}
+      ${kpi('Curated risks', risks.length, `${risks.filter(r => r.severity_hypothesis === 'critical' || r.severity_hypothesis === 'high').length} critical/high hypotheses; not an issue tracker`)}
       ${kpi('Uncommitted', S.repo.dirty, S.repo.dirty ? 'working tree is dirty' : 'working tree clean',
         { color: S.repo.dirty ? hsl('--warning') : hsl('--success') })}
     </div>
@@ -814,9 +811,9 @@ function vQuality() {
     <div class="grid g2" style="margin-top:14px">
       ${card('Test-function distribution', 'Static source inventory only; it is not collection or a pass result', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
         { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue isolated suite</button>` })}
-      ${card('Risk register', 'Ranked by severity; one prepared request selects the highest-priority risk',
+      ${card('Curated risk register', 'Planning register, not observed defect evidence; a prepared request selects one candidate for independent validation',
         `<div class="list" style="max-height:260px;overflow:auto">${risks.map(r => `<div class="row">
-          <div class="g"><div class="h">${badge(r.severity, r.severity === 'critical' ? 'critical' : r.severity === 'high' ? 'gap' : r.severity === 'medium' ? 'warn' : 'muted')} ${esc(r.title)}</div>
+          <div class="g"><div class="h">${badge(r.severity_hypothesis + ' hypothesis', 'info')} ${esc(r.title)}</div>
           <div class="p">${esc(r.detail)}</div></div>
         </div>`).join('')}</div>`, { tight: true, action: 'A-29' })}
     </div>
@@ -842,16 +839,16 @@ function vSecurity() {
   const redteam = S.redteam;
   const a = redteam.corpus || [], classes = [...new Set(a.map(x => x.attack_class))];
   const invariants = [
-    ['Catalog written only by the approval actuator', 'done', 'ADR-002 · tests/governance/test_publish.py'],
-    ['Lifecycle state derived, never stored', 'done', 'tests/spine/test_lifecycle.py'],
-    ['Hard-fail forces reject while all configured stages and stage-6 review remain recorded', 'done', 'tests/spine/test_pipeline.py'],
-    ['Held-out corpus unreadable by the pipeline role', 'done', 'migration 0004 + role test'],
-    ['Submitter cannot forge verification artifacts', 'done', 'semiskill_submitter role, migration 0003'],
-    ['Skill bodies treated as untrusted at retrieval', 'done', 'context/untrusted.py'],
-    ['Need-to-know is invisible, not redacted-visible', 'done', 'tests/context/test_retrieve.py'],
-    ['Gate audit is fail-closed (write precedes execution)', 'done', 'governance/gate.py'],
-    ['Principals bound to a real identity provider', 'partial', 'verified bearer/group resolver implemented; production tenant configuration remains pending'],
-    ['Live security-audit + judge stages in production', 'partial', 'injected fakes tested; live needs egress/keys'],
+    ['Catalog written only by the approval actuator', 'source-ref', 'ADR-011 · tests/governance/test_publish.py'],
+    ['Lifecycle state derived, never stored', 'source-ref', 'tests/spine/test_lifecycle.py'],
+    ['Hard-fail forces reject while all configured stages and stage-6 review remain recorded', 'source-ref', 'tests/spine/test_pipeline.py'],
+    ['Held-out corpus unreadable by the pipeline role', 'source-ref', 'migration 0004 + role test'],
+    ['Submitter cannot forge verification artifacts', 'source-ref', 'semiskill_submitter role, migration 0003'],
+    ['Skill bodies treated as untrusted at retrieval', 'source-ref', 'context/untrusted.py'],
+    ['Need-to-know is invisible, not redacted-visible', 'source-ref', 'tests/context/test_retrieve.py'],
+    ['Gate audit is fail-closed (write precedes execution)', 'source-ref', 'governance/gate.py'],
+    ['Principals bound to a production identity provider', 'pending', 'resolver implemented; production tenant configuration remains pending'],
+    ['Live security-audit + judge stages in production', 'pending', 'live controlled adapters and credentials remain pending'],
   ];
   const migration = S.migration || { status: 'unavailable', reason: 'not_observed' };
   const tracker = migration.tracker;
@@ -878,17 +875,16 @@ function vSecurity() {
     <div class="grid g4">
       ${kpi('Escapes', '—', redteam.status === 'not_executed' ? 'not executed' : 'result unavailable')}
       ${kpi('Corpus classes available', classes.length, esc(classes.join(', ')))}
-      ${kpi('Invariants held', invariants.filter(i => i[1] === 'done').length + '/' + invariants.length, 'structurally enforced + tested',
-        { progress: pct(invariants.filter(i => i[1] === 'done').length, invariants.length) })}
-      ${kpi('Exposure', S.model.risks.filter(r => r.area === 'security').length, 'open security risks', { color: hsl('--destructive') })}
+      ${kpi('Implementation references', invariants.filter(i => i[1] === 'source-ref').length + '/' + invariants.length, 'curated source references; no current test-run credit')}
+      ${kpi('Curated security risks', S.model.risks.filter(r => r.area === 'security').length, 'planning assessment; not observed defects')}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
       ${card('Corpus input composition', 'Adversarial inputs available; no execution outcome is inferred', `<div class="chart-box"><canvas id="c-attacks"></canvas></div>`,
         { action: 'A-10' })}
-      ${card('Security invariants', 'The load-bearing properties — each is a test, not a promise',
+      ${card('Security implementation references', 'Curated source pointers; current execution claims require bound run artifacts',
         `<div class="list" style="max-height:250px;overflow:auto">${invariants.map(([n, s, e]) => `<div class="row">
-          <div class="g"><div class="h">${badge(s, s)} ${esc(n)}</div><div class="p mono">${esc(e)}</div></div></div>`).join('')}</div>`, { tight: true })}
+          <div class="g"><div class="h">${badge(s, s === 'source-ref' ? 'info' : 'partial')} ${esc(n)}</div><div class="p mono">${esc(e)}</div></div></div>`).join('')}</div>`, { tight: true })}
     </div>
 
     <div class="section-head"><h2>Migration adoption witness</h2><p class="muted">Live, redacted evidence only; operator identity, authentication context, reasons, and raw manifests never enter this API.</p></div>
@@ -1010,7 +1006,7 @@ function vLaunch() {
   const secScore = sec => {
     const items = lc.filter(x => x.section === sec);
     const w = items.reduce((a, x) => a + x.weight, 0);
-    const g = items.reduce((a, x) => a + x.weight * (x.status === 'done' ? 1 : x.status === 'partial' ? .5 : 0), 0);
+    const g = items.reduce((a, x) => a + x.weight * (x.declared_status === 'done' ? 1 : x.declared_status === 'partial' ? .5 : 0), 0);
     return Math.round(g / w * 100);
   };
   const tl = S.model.gtm.timeline, span = 72;
@@ -1021,11 +1017,10 @@ function vLaunch() {
         ? `${badge(releaseStatus, releaseGate.passed === true ? 'done' : 'gap')} source snapshot ${esc(releaseSnapshot.snapshot_id || 'unidentified')}`
         : `${badge('unavailable', 'gap')} No verified current scoreboard snapshot is available; launch is a hard no-go.`}</div>`)}
     <div class="grid g4">
-      ${kpi('Curated plan completion', R.pct + '%', `${R.done} done · ${lc.filter(x => x.status === 'partial').length} partial · ${lc.filter(x => x.status === 'todo').length} to do; not the release gate`,
-        { progress: R.pct, progressCls: R.pct < 40 ? 'bad' : R.pct < 70 ? 'warn' : '' })}
-      ${kpi('High-weight plan items', lc.filter(x => x.status === 'todo' && x.weight === 3).length, 'curated weight-3 items still open', { color: hsl('--destructive') })}
-      ${kpi('Open plan weight', lc.filter(x => x.status === 'todo').reduce((a, x) => a + x.weight, 0), 'curated weight points; not a duration forecast')}
-      ${kpi('Planning target', 'Internal alpha', 'curated hypothesis: 3 design-partner guilds, then org-wide')}
+      ${kpi('Curated plan completion', R.pct + '%', `${R.done} declared done · ${lc.filter(x => x.declared_status === 'partial').length} partial · ${lc.filter(x => x.declared_status === 'todo').length} to do; non-crediting and not the release gate`)}
+      ${kpi('Weight-3 plan items', lc.filter(x => x.declared_status === 'todo' && x.weight === 3).length, 'curated planning weights; not measured priority')}
+      ${kpi('Open plan weight', lc.filter(x => x.declared_status === 'todo').reduce((a, x) => a + x.weight, 0), 'curated weight points; not a duration forecast')}
+      ${kpi('Curated planning stage', esc(S.model.project.stage), `${S.model.deferred_scope.length} deferred scopes excluded from release-plan credit`)}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
@@ -1034,82 +1029,104 @@ function vLaunch() {
         tl.map((p, i) => `<div class="gantt-row">
           <div><div style="font-weight:600;font-size:12px">${esc(p.phase)}</div><div class="muted" style="font-size:11px">${esc(p.track)} · ${p.days}d</div></div>
           <div class="gantt-track"><div class="gantt-bar" style="left:${p.start / span * 100}%;width:${p.days / span * 100}%;background:${PALETTE()[i % 6]}">${esc(p.items[0])}${p.items.length > 1 ? ` +${p.items.length - 1}` : ''}</div></div>
-        </div>`).join('') + `<div class="muted" style="font-size:11px;margin-top:6px">Day 0 → day ${span}. Hover a bar's row for its workstream.</div>`,
+        </div>`).join('') + `<div class="muted" style="font-size:11px;margin-top:6px">Day 0 → day ${span}. Bars show a non-binding planning sequence, not a forecast.</div>`,
         { action: 'A-21' })}
     </div>
 
     <div class="section-head"><h2>Launch checklist</h2><p class="muted">${lc.length} planning items; deterministic release-gate evidence remains authoritative</p><div class="spacer"></div><button type="button" class="btn outline" data-action-id="A-34">⌘ Queue next launch-planning request</button></div>
     <div class="grid g2">
       ${sections.map(sec => card(sec, `${secScore(sec)}% plan-complete`,
-        `<div class="progress ${secScore(sec) < 40 ? 'bad' : secScore(sec) < 70 ? 'warn' : ''}" style="margin-bottom:10px"><span style="width:${secScore(sec)}%"></span></div>
+        `<div class="progress neutral" style="margin-bottom:10px"><span style="width:${secScore(sec)}%"></span></div>
          <div class="list">${lc.filter(x => x.section === sec).map(x => `<div class="row">
-          <div class="g"><div class="h">${badge(x.status, x.status)} ${esc(x.item)}</div>
-          <div class="p">weight ${x.weight} · owner ${esc(x.owner)}</div></div>
+          <div class="g"><div class="h">${badge(x.declared_status, 'info')} ${esc(x.item)}</div>
+          <div class="p">weight ${x.weight} · owner ${esc(x.owner)}${x.source_ref ? ` · source ${esc(x.source_ref)}` : ''}</div></div>
         </div>`).join('')}</div>`)).join('')}
     </div>
 
-    <div class="section-head"><h2>Launch assets</h2><p class="muted">Everything the launch needs written, filmed or built</p><div class="spacer"></div><button type="button" class="btn outline" data-action-id="A-35">⌘ Queue next evidence-backed asset</button></div>
+    <div class="section-head"><h2>Curated launch-asset drafts</h2><p class="muted">Unvalidated and not published; source references are drafts, not outcome evidence</p><div class="spacer"></div><button type="button" class="btn outline" data-action-id="A-35">⌘ Queue next evidence-backed asset draft</button></div>
     <div class="grid g3">
       ${S.model.gtm.assets.map(a => `<div class="card"><div class="card-content">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">${badge(a.status, a.status === 'partial' ? 'partial' : 'todo')}${badge(a.type, 'muted')}</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">${badge('declared ' + a.declared_status, 'info')}${badge('not published', 'muted')}${badge(a.type, 'muted')}</div>
         <div style="font-weight:600">${esc(a.name)}</div>
         <div class="muted" style="font-size:11.5px;margin:4px 0 10px;min-height:40px">${esc(a.note)}</div>
+        <div class="muted mono" style="font-size:10.5px">source ${esc(a.source_ref || 'unavailable')}${a.deferred_scope_id ? ' · deferred ' + esc(a.deferred_scope_id) : ''}</div>
       </div></div>`).join('')}
     </div>
   `;
 
   chart('c-ready', {
     type: 'bar',
-    data: { labels: sections, datasets: [{ data: sections.map(secScore), backgroundColor: sections.map(s2 => secScore(s2) >= 70 ? hsl('--success', .8) : secScore(s2) >= 40 ? hsl('--warning', .8) : hsl('--destructive', .75)), borderRadius: 4 }] },
+    data: { labels: sections, datasets: [{ label: 'curated plan score', data: sections.map(secScore), backgroundColor: hsl('--info', .68), borderRadius: 4 }] },
     options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, max: 100, grid: { color: hsl('--border', .55) }, ticks: { callback: v => v + '%' } } } }
   });
 }
 
 /* ── growth ───────────────────────────────────────────────────────────────── */
 function vGrowth() {
-  const g = S.model.gtm, maxF = Math.max(...g.funnel.map(f => f.target));
+  const g = S.model.gtm;
+  const userFunnel = g.funnels.user;
+  const supplyFunnel = g.funnels.supply;
+  const maxUser = Math.max(...userFunnel.map(f => f.target_count));
+  const maxSupply = Math.max(...supplyFunnel.map(f => f.target_count));
+  const funnelRows = (rows, max) => rows.map((f, i) => `<div class="funnel-row">
+    <div style="width:96px;font-size:12px;font-weight:600">${esc(f.label)}</div>
+    <div class="funnel-bar" style="width:${Math.max(12, f.target_count / max * 100)}%;background:${PALETTE()[i % 6]}">${f.target_count}</div>
+    <div class="muted" style="font-size:11px;flex:1">${esc(f.definition)} · ${esc(f.unit)} · unmeasured</div>
+  </div>`).join('');
 
   $('#view-growth').innerHTML = `
-    ${card('Positioning', 'The one paragraph everything else derives from',
-      `<div style="font-size:13.5px;line-height:1.7">${esc(g.positioning)}</div>`, { action: 'A-20' })}
+    ${card('Unvalidated positioning hypothesis', 'Curated and non-crediting; no customer or adoption evidence',
+      `<div style="font-size:13.5px;line-height:1.7">${esc(g.positioning_hypothesis)}</div>`, { action: 'A-20' })}
 
-    <div class="section-head"><h2>Who it is for</h2></div>
+    <div class="section-head"><h2>Unvalidated audience hypotheses</h2></div>
     <div class="grid g3">
-      ${g.icp.map(i => card(`${badge(i.size, i.size === 'primary' ? 'done' : i.size === 'expansion' ? 'info' : 'muted')} ${esc(i.segment)}`, '',
-        `<div style="font-size:12px;line-height:1.6">${esc(i.why)}</div>
-         <div class="muted" style="font-size:11.5px;margin-top:8px"><b>Entry point:</b> ${esc(i.entry)}</div>`)).join('')}
+      ${g.icp.map(i => card(`${badge(i.priority_hypothesis + ' hypothesis', 'info')} ${esc(i.segment)}`, 'unvalidated',
+        `<div style="font-size:12px;line-height:1.6">${esc(i.rationale_hypothesis)}</div>
+         <div class="muted" style="font-size:11.5px;margin-top:8px"><b>Proposed experiment:</b> ${esc(i.entry_experiment)}</div>
+         ${i.deferred_scope_id ? `<div style="margin-top:8px">${badge('deferred · ' + i.deferred_scope_id, 'muted')}</div>` : ''}`)).join('')}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Adoption funnel', 'Targets for the first 90 days — instrument each step as an artifact',
-        g.funnel.map((f, i) => `<div class="funnel-row">
-          <div style="width:96px;font-size:12px;font-weight:600">${esc(f.stage)}</div>
-          <div class="funnel-bar" style="width:${Math.max(12, f.target / maxF * 100)}%;background:${PALETTE()[i % 6]}">${f.target}</div>
-          <div class="muted" style="font-size:11px;flex:1">${esc(f.definition)}</div>
-        </div>`).join(''), { action: 'A-15' })}
-      ${card('Channel mix', 'Impact vs effort — top-left is where to start',
+      ${card('Unvalidated 90-day user-funnel hypothesis', 'Unique people · all measurements unavailable',
+        funnelRows(userFunnel, maxUser), { action: 'A-15' })}
+      ${card('Unvalidated 90-day supply-funnel hypothesis', 'Skill versions · publication means the verified projection, never approval alone',
+        funnelRows(supplyFunnel, maxSupply), { action: 'A-15' })}
+    </div>
+    <div class="grid g2" style="margin-top:14px">
+      ${card('Unvalidated advocacy hypothesis', 'Separate unique-people outcome; instrument not implemented',
+        `<div class="funnel-row"><div style="width:96px;font-size:12px;font-weight:600">${esc(g.funnels.advocacy.label)}</div>
+        <div class="funnel-bar" style="width:35%;background:${hsl('--chart-3')}">${g.funnels.advocacy.target_count}</div>
+        <div class="muted" style="font-size:11px;flex:1">${esc(g.funnels.advocacy.definition)} · unmeasured</div></div>`)}
+      ${card('Unvalidated channel hypothesis map', 'Curated impact and effort estimates; not measured ranking',
         `<div class="chart-box"><canvas id="c-chan"></canvas></div>`, { action: 'A-18' })}
     </div>
 
-    <div class="section-head"><h2>Channels</h2></div>
-    ${card('Channel register', 'Observed channel hypotheses; the prepared request selects the next experiment', `<table><thead><tr><th>Channel</th><th>Type</th><th>Effort</th><th>Impact</th><th>Why it works here</th></tr></thead><tbody>
+    <div class="section-head"><h2>Unvalidated channel hypotheses</h2></div>
+    ${card('Curated channel register', 'Non-crediting estimates; a prepared request may draft the next experiment', `<table><thead><tr><th>Channel</th><th>Type</th><th>Effort hypothesis</th><th>Impact hypothesis</th><th>Rationale / scope</th></tr></thead><tbody>
       ${g.channels.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${badge(c.type, c.type === 'internal' ? 'info' : 'muted')}</td>
-        <td>${badge(c.effort, c.effort === 'low' ? 'done' : c.effort === 'med' ? 'partial' : 'gap')}</td>
-        <td>${badge(c.impact, c.impact === 'high' ? 'done' : 'partial')}</td>
-        <td class="muted">${esc(c.note)}</td></tr>`).join('')}
+        <td>${badge(c.effort_hypothesis, 'info')}</td>
+        <td>${badge(c.impact_hypothesis, 'info')}</td>
+        <td class="muted">${esc(c.rationale_hypothesis)}${c.deferred_scope_id ? `<div>${badge('deferred · ' + c.deferred_scope_id, 'muted')}</div>` : ''}</td></tr>`).join('')}
     </tbody></table>`, { tight: true, action: 'A-36' })}
 
-    <div class="section-head"><h2>Packaging</h2><p class="muted">Internal stays free — the external track is a future decision</p></div>
+    <div class="section-head"><h2>Unvalidated packaging hypotheses — not an offer</h2><p class="muted">All prices and bundles are undecided, unavailable, and non-crediting</p></div>
     <div class="grid g4">
       ${g.pricing.map(p => `<div class="card"><div class="card-content">
+        <div style="display:flex;gap:6px;margin-bottom:6px">${badge('unvalidated', 'info')}${badge('not offered', 'muted')}</div>
         <div class="l">${esc(p.tier)}</div>
-        <div class="v" style="font-size:22px;font-weight:700;margin:2px 0">${esc(p.price)}</div>
-        <div class="muted" style="font-size:11.5px">${esc(p.for)}</div>
-        <div style="font-size:12px;margin:10px 0 6px">${esc(p.includes)}</div>
-        <div class="muted" style="font-size:11px">${esc(p.note)}</div>
+        <div class="v" style="font-size:20px;font-weight:700;margin:2px 0">${esc(p.proposed_price)}</div>
+        <div class="muted" style="font-size:11.5px">${esc(p.audience_hypothesis)}</div>
+        <div style="font-size:12px;margin:10px 0 6px">${esc(p.includes_hypothesis)}</div>
+        ${p.deferred_scope_id ? `<div class="muted" style="font-size:11px">deferred · ${esc(p.deferred_scope_id)}</div>` : ''}
       </div></div>`).join('')}
     </div>
     <div style="margin-top:12px"><button type="button" class="btn outline" data-action-id="A-24">⌘ Turn packaging into an ADR</button></div>
+
+    <div class="section-head"><h2>Deferred external scope</h2><p class="muted">Excluded from the DV-84 launch denominator and all readiness credit</p></div>
+    ${card('Deferred-scope register', 'A separate decision is required after the internal release',
+      `<div class="list">${S.model.deferred_scope.map(d => `<div class="row"><div class="g">
+        <div class="h">${badge(d.status, 'muted')} ${esc(d.scope)}</div>
+        <div class="p">${d.preconditions.map(esc).join(' · ')}</div></div></div>`).join('')}</div>`, { tight: true })}
 
     <div class="section-head"><h2>Go-to-market actions</h2></div>
     <div class="grid g4">
@@ -1126,14 +1143,14 @@ function vGrowth() {
     data: { datasets: g.channels.map((c, i) => ({
       label: c.name,
       // deterministic jitter so channels sharing a cell stay distinguishable
-      data: [{ x: { low: 1, med: 2, high: 3 }[c.effort] + ((i % 3) - 1) * .12,
-               y: { low: 1, med: 2, high: 3 }[c.impact] + (Math.floor(i / 3) - 1) * .12 }],
+      data: [{ x: { low: 1, med: 2, high: 3 }[c.effort_hypothesis] + ((i % 3) - 1) * .12,
+               y: { low: 1, med: 2, high: 3 }[c.impact_hypothesis] + (Math.floor(i / 3) - 1) * .12 }],
       backgroundColor: PALETTE()[i % 6], pointRadius: 9, pointHoverRadius: 12 })) },
     options: {
       plugins: { legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 7, padding: 6, font: { size: 10 } } } },
       scales: {
-        x: { min: .5, max: 3.5, title: { display: true, text: 'effort →' }, grid: { color: hsl('--border', .5) }, ticks: { callback: v => ({ 1: 'low', 2: 'med', 3: 'high' }[v] || '') } },
-        y: { min: .5, max: 3.5, title: { display: true, text: 'impact →' }, grid: { color: hsl('--border', .5) }, ticks: { callback: v => ({ 1: 'low', 2: 'med', 3: 'high' }[v] || '') } }
+        x: { min: .5, max: 3.5, title: { display: true, text: 'effort hypothesis →' }, grid: { color: hsl('--border', .5) }, ticks: { callback: v => ({ 1: 'low', 2: 'med', 3: 'high' }[v] || '') } },
+        y: { min: .5, max: 3.5, title: { display: true, text: 'impact hypothesis →' }, grid: { color: hsl('--border', .5) }, ticks: { callback: v => ({ 1: 'low', 2: 'med', 3: 'high' }[v] || '') } }
       }
     }
   });
@@ -1142,23 +1159,23 @@ function vGrowth() {
 /* ── analytics ────────────────────────────────────────────────────────────── */
 function vAnalytics() {
   const m = S.model.gtm.metrics;
-  const instrumented = m.filter(x => x.current !== 'unmeasured').length;
+  const targetLabel = t => `${{ less_than: '<', greater_than_or_equal: '≥', equal: '=' }[t.comparator] || t.comparator} ${t.value} ${t.unit}`;
 
   $('#view-analytics').innerHTML = `
     <div class="grid g4">
-      ${kpi('Metrics defined', m.length, 'the tree the business runs on')}
-      ${kpi('Instrumented', `${instrumented}/${m.length}`, 'the rest need the funnel wiring', { progress: pct(instrumented, m.length), progressCls: 'warn' })}
-      ${kpi('Artifacts stored', S.runtime.db.status === 'up' ? S.runtime.db.artifacts : '–', S.runtime.db.status === 'up' ? 'live count from Postgres' : 'DB offline')}
-      ${kpi('Source of truth', 'artifacts', 'every metric derives from an immutable row')}
+      ${kpi('Metric definitions', m.length, 'curated hypotheses; no measurement credit')}
+      ${kpi('Measured observations', `0/${m.length}`, 'authoritative observation provider not configured')}
+      ${kpi('Raw artifact rows', S.runtime.db.status === 'up' ? S.runtime.db.artifacts : '—', S.runtime.db.status === 'up' ? 'database-wide inventory only; not an adoption metric' : 'inventory unavailable')}
+      ${kpi('Observation authority', 'separate', 'requires environment, database, scope, window, freshness and evidence binding')}
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Metric tree', 'What we measure, the target, and where it comes from',
-        `<div class="tbl-wrap"><table><thead><tr><th>Metric</th><th>Target</th><th>Now</th><th>Source</th></tr></thead><tbody>
+      ${card('Unvalidated metric definitions', 'Targets are hypotheses; every current observation is unavailable',
+        `<div class="tbl-wrap"><table><thead><tr><th>Metric</th><th>Target hypothesis</th><th>Observation</th><th>Source definition</th></tr></thead><tbody>
         ${m.map(x => `<tr><td><b>${esc(x.name)}</b><div class="muted" style="font-size:11px">${esc(x.why)}</div></td>
-          <td class="mono">${esc(x.target)}</td>
-          <td>${x.current === 'unmeasured' ? badge('unmeasured', 'gap') : badge(x.current, 'done')}</td>
-          <td class="muted mono" style="font-size:11px">${esc(x.source)}</td></tr>`).join('')}
+          <td class="mono">${esc(targetLabel(x.target))}<div class="muted">${esc(x.target.horizon)}</div></td>
+          <td>${badge('unmeasured', 'muted')}<div class="muted" style="font-size:11px">${esc(x.measurement.reason)}</div></td>
+          <td class="muted mono" style="font-size:11px">${esc(x.source_definition)}</td></tr>`).join('')}
         </tbody></table></div>`, { tight: true, action: 'A-15' })}
       <div class="grid" style="gap:14px;align-content:start">
         ${card('Artifact mix', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Raw artifact data unavailable while Postgres is offline',
