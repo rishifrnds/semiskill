@@ -479,9 +479,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008h freeze every export badge and pack manifest to the active approval evidence chain
 
 
+- [J-008h] 2026-08-06T07:39:39Z  status: done
+  what: added one fail-closed frozen approval-chain resolver and made active publication indexing,
+  catalog, site and pack derive verification only from the exact approval-bound security review,
+  content review and scan IDs; later scans/reviews cannot rewrite a badge and 46 focused tests pass
+  artifacts: 0d4323a, semiskill/governance/publish.py, semiskill/wave.py,
+  semiskill/authoring/gate.py, semiskill/authoring/catalog_page.py,
+  semiskill/authoring/site.py, semiskill/authoring/pack.py
+  next: J-008i remove remaining retired auto-publish and REVIEW.json assumptions, run full suite
+
+
 ## In-Flight Step
-- [J-008h] resolve and validate the immutable approval evidence chain once, use it in catalog/site/
-  pack exports, then repair the remaining legacy test assumptions and rerun the full isolated suite.
+- [J-008i] repair scoreboard, seed, controller and red-team assumptions around the retired callback
+  publisher and file reviews, then run the full isolated Python suite and classify true residuals.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
