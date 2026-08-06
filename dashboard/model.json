@@ -206,9 +206,10 @@
     {"id": "A-24", "group": "Sales", "label": "Pricing / packaging ADR", "prompt": "Write an ADR proposing pricing and packaging for the external track, with the internal-free decision made explicit."},
     {"id": "A-25", "group": "Analytics", "label": "Weekly metrics report", "prompt": "Produce this week's metrics report from the artifact store: submissions, blocks, publishes, reuse, time-to-publish, cost per verified skill \u2014 and flag anything moving the wrong way."},
     {"id": "A-26", "group": "Analytics", "label": "Measure block rate / false positives", "prompt": "Measure the block rate on honest submissions vs the red-team corpus, estimate the false-positive rate, and propose scanner tuning if over-blocking."},
-    {"id": "A-27", "group": "Quality", "label": "Run the full test suite", "prompt": "Run the full test suite against live Postgres and report failures with the actual output."},
+    {"id": "A-27", "group": "Quality", "label": "Request isolated full-suite verification", "prompt": "Run the full suite serially against the exact isolated *_test database. Bind the result to the current commit, source tree, and database identity; persist pass, fail, skip, xpass, and duration evidence. Never run concurrently or against the development catalog."},
     {"id": "A-28", "group": "Quality", "label": "Code review the whole build", "prompt": "Review the codebase for bugs, security holes, and convention drift, and report findings ranked by severity."},
     {"id": "A-29", "group": "Quality", "label": "Close a gap I pick", "prompt": "Pick the highest-leverage open gap on the dashboard, tell me why, and close it end-to-end with tests."},
-    {"id": "A-30", "group": "Quality", "label": "Refresh dashboard data", "prompt": "Re-derive the dashboard model from the current repo state (features, tests, gaps, risks) and update dashboard/model.json."}
+    {"id": "A-30", "group": "Quality", "label": "Refresh dashboard data", "prompt": "Re-derive the dashboard model from the current repo state (features, tests, gaps, risks) and update dashboard/model.json."},
+    {"id": "A-31", "group": "Ops", "label": "Investigate database availability", "prompt": "Diagnose why the dashboard cannot observe the configured database. Perform read-only identity and health checks first; do not start containers, mutate schemas, or use a development database for test execution. Return evidence and a proposed recovery action."}
   ]
 }

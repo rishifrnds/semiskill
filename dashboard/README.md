@@ -68,12 +68,13 @@ works them. Three ways to queue:
 
 `Archive queue` rotates `inbox.jsonl` to a timestamped file rather than deleting it.
 
-## Running commands
+## Queue-only controls
 
-The Overview page can run a small whitelist locally (`RUNNABLE` in `server.py`): the test suite, the
-Postgres container, the read API, and `git status`. Output lands on the
-**Quality & Bugs** page and in `dashboard/runs/`. Nothing else is runnable — the server never
-executes a caller-supplied string, and binds to `127.0.0.1` only.
+Dashboard mutation requests never start tests, containers, migrations, approvals, publications,
+or external communications. Operational controls append typed requests only; read-only state
+collection may run bounded local probes. A separate worker must claim a request, perform the work
+under the repository/database gates, and attach verification evidence before any result receives
+credit.
 
 ## Design
 

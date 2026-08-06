@@ -11,9 +11,9 @@ The dashboard's buttons POST to `/api/action`, which appends one JSON line per
 request. That file is the feedback channel: Claude reads `dashboard/inbox.jsonl`
 and works the queue.
 
-Read-mostly by construction: the only writes are the inbox and run logs, both
-under `dashboard/`. `/api/run` executes ONLY commands in `RUNNABLE` — never
-caller-supplied strings — and binds to 127.0.0.1.
+Read-mostly by construction: the only mutation path appends or archives task-queue
+events under `dashboard/`. Mutation requests cannot invoke command actuators; read-only
+state collection may run bounded local probes.
 
     python dashboard/server.py            # http://127.0.0.1:8899
 """
@@ -37,7 +37,6 @@ from urllib.parse import urlparse
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 INBOX = HERE / "inbox.jsonl"
-RUNS = HERE / "runs"
 MODEL = HERE / "model.json"
 
 if str(ROOT) not in sys.path:
@@ -50,34 +49,6 @@ from semiskill.authoring.snapshot import (                    # noqa: E402
 
 PORT = int(os.environ.get("SEMISKILL_DASHBOARD_PORT", "8899"))
 API_URL = os.environ.get("SEMISKILL_API", "http://127.0.0.1:8787")
-
-# Whitelisted commands the dashboard may trigger. Nothing else can be run.
-RUNNABLE: dict[str, dict] = {
-    "tests": {
-        "label": "Run the test suite",
-        "cmd": [sys.executable, "-m", "pytest", "-q"],
-        "note": "Needs the Postgres container up.",
-    },
-    "db-up": {
-        "label": "Start the Postgres container",
-        "cmd": ["docker", "compose", "up", "-d", "db"],
-        "note": "Requires Docker Desktop running.",
-    },
-    "api": {
-        "label": "Start the read API (background)",
-        "cmd": [sys.executable, "-m", "semiskill.api"],
-        "note": "Serves the catalog on :8787.",
-        "background": True,
-    },
-    "git-status": {
-        "label": "git status",
-        "cmd": ["git", "status", "--short", "--branch"],
-        "note": "",
-    },
-}
-
-_run_log: list[dict] = []          # newest last; in-memory ring of run results
-_run_lock = threading.Lock()
 
 _DEFAULT_SCOREBOARD_MAX_AGE_SECONDS = 900
 _DEFAULT_PROGRESS_MAX_AGE_SECONDS = 300
@@ -885,9 +856,6 @@ def build_state() -> dict:
         "redteam": redteam,
         "adrs": adrs(),
         "inbox": read_inbox(),
-        "runs": list(_run_log[-25:]),
-        "runnable": [{"id": k, "label": v["label"], "note": v.get("note", "")}
-                     for k, v in RUNNABLE.items()],
     }
 
 
@@ -907,34 +875,6 @@ def append_action(payload: dict) -> dict:
     with INBOX.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     return row
-
-
-def run_command(key: str) -> dict:
-    spec = RUNNABLE.get(key)
-    if not spec:
-        return {"ok": False, "error": "unknown command"}
-    RUNS.mkdir(exist_ok=True)
-    started = _now()
-
-    if spec.get("background"):
-        try:
-            subprocess.Popen(spec["cmd"], cwd=ROOT,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            entry = {"id": key, "label": spec["label"], "started": started,
-                     "code": 0, "output": "started in background", "ok": True}
-        except Exception as e:                                # noqa: BLE001
-            entry = {"id": key, "label": spec["label"], "started": started,
-                     "code": 1, "output": str(e), "ok": False}
-    else:
-        code, out = _sh(spec["cmd"], timeout=600)
-        entry = {"id": key, "label": spec["label"], "started": started,
-                 "finished": _now(), "code": code, "ok": code == 0,
-                 "output": out[-6000:]}
-        (RUNS / f"{key}-{int(time.time())}.log").write_text(out, encoding="utf-8")
-
-    with _run_lock:
-        _run_log.append(entry)
-    return entry
 
 
 # ---------------------------------------------------------------- http
@@ -976,8 +916,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(500, {"error": f"{type(e).__name__}: {e}"})
         if route == "/api/inbox":
             return self._json(200, {"inbox": read_inbox()})
-        if route == "/api/runs":
-            return self._json(200, {"runs": list(_run_log[-25:])})
         return self._json(404, {"error": "unknown route"})
 
     def do_POST(self):
@@ -993,10 +931,6 @@ class Handler(BaseHTTPRequestHandler):
             row = append_action(payload)
             print(f"  [queued] {row['kind']}: {row['title']}")
             return self._json(200, {"ok": True, "action": row})
-        if route == "/api/run":
-            key = str(payload.get("id", ""))
-            print(f"  [run] {key}")
-            return self._json(200, run_command(key))
         if route == "/api/inbox/clear":
             if INBOX.exists():
                 INBOX.rename(INBOX.with_suffix(f".{int(time.time())}.jsonl"))

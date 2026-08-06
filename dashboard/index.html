@@ -266,7 +266,7 @@ textarea{width:100%;min-height:110px;resize:vertical}
   </main>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <dialog id="ask-dlg">
   <form method="dialog">
@@ -468,14 +468,17 @@ function vOverview() {
          <button class="btn xs outline" style="margin-top:10px" data-adhoc="${esc('Mitigate ' + r.title)}|${esc('Work on this risk from the SemiSkill dashboard: ' + r.title + '. ' + r.detail + ' Proposed mitigation: ' + r.mitigation + '. Investigate, propose the smallest correct fix, and implement it with tests.')}">⌘ Take this on</button>`)).join('')}
     </div>
 
-    <div class="section-head"><h2>Quick actions</h2><p class="muted">Whitelisted commands run locally; everything else queues a task</p></div>
+    <div class="section-head"><h2>Execution requests</h2><p class="muted">Buttons create auditable work requests; mutation requests never invoke command actuators</p></div>
     <div class="grid g4">
-      ${S.runnable.map(r => `<div class="card"><div class="card-content">
-        <div class="l" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:${hsl('--muted-foreground')};font-weight:600">${esc(r.id)}</div>
-        <div style="font-weight:600;margin:4px 0 2px">${esc(r.label)}</div>
-        <div class="muted" style="font-size:11.5px;min-height:32px">${esc(r.note)}</div>
-        <button class="btn primary wide" data-run="${esc(r.id)}" style="margin-top:8px">▶ Run</button>
-      </div></div>`).join('')}
+      ${['A-27','A-28','A-30','A-13'].map(id => {
+        const action = S.model.actions.find(item => item.id === id);
+        return `<div class="card"><div class="card-content">
+          <div class="l" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:${hsl('--muted-foreground')};font-weight:600">${esc(action.group)} · ${esc(action.id)}</div>
+          <div style="font-weight:600;margin:4px 0 2px">${esc(action.label)}</div>
+          <div class="muted" id="request-${esc(action.id)}-description" style="font-size:11.5px;min-height:32px">Queued for controlled execution and evidence collection.</div>
+          <button type="button" class="btn primary wide" data-action-id="${esc(action.id)}" aria-label="Queue request: ${esc(action.label)}" aria-describedby="request-${esc(action.id)}-description" style="margin-top:8px">⌘ Queue request</button>
+        </div></div>`;
+      }).join('')}
     </div>
 
     <div class="section-head"><h2>Commit history</h2><p class="muted">${S.repo.commits.length} commits · branch ${esc(S.repo.branch)}</p></div>
@@ -667,10 +670,10 @@ function vPipeline() {
                   : `<path d="M${x + 108} ${y + 19} L${x + 124} ${y + 19}" class="flow"/>`) : ''}</g>`;
             }).join('')}
           </svg>`)}
-        ${card('Scan artifacts by type', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Postgres offline — start the DB for live counts',
+        ${card('Scan artifacts by type', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Raw artifact data unavailable while Postgres is offline',
           S.runtime.db.status === 'up'
             ? `<div class="chart-box short"><canvas id="c-arts"></canvas></div>`
-            : `<div class="empty">No live connection.<br><button class="btn primary xs" data-run="db-up" style="margin-top:10px">▶ Start Postgres</button></div>`)}
+            : `<div class="empty">No live connection.<br><button type="button" class="btn primary xs" data-action-id="A-31" style="margin-top:10px">⌘ Queue DB investigation</button></div>`)}
       </div>
     </div>
   `;
@@ -750,15 +753,12 @@ function vFeatures() {
 /* ── quality ──────────────────────────────────────────────────────────────── */
 function vQuality() {
   const t = S.repo.tests, groups = [...new Set(t.map(x => x.group))];
-  const runs = S.runs.slice().reverse();
   const risks = S.model.risks;
 
   $('#view-quality').innerHTML = `
     <div class="grid g4">
       ${kpi('Tests collected', S.repo.collected_tests || S.repo.total_tests, `${t.length} files · ${groups.length} suites · ${S.repo.total_tests} test functions`)}
-      ${kpi('Last run', runs.find(r => r.id === 'tests') ? (runs.find(r => r.id === 'tests').ok ? 'PASS' : 'FAIL') : 'not run here',
-        runs.find(r => r.id === 'tests') ? runs.find(r => r.id === 'tests').started : 'click Run tests to verify now',
-        { color: runs.find(r => r.id === 'tests') ? (runs.find(r => r.id === 'tests').ok ? hsl('--success') : hsl('--destructive')) : undefined })}
+      ${kpi('Last verified suite', 'not evidenced', 'No current commit/tree/database-bound run artifact is configured')}
       ${kpi('Open risks', risks.length, `${risks.filter(r => r.severity === 'critical' || r.severity === 'high').length} critical/high`,
         { color: hsl('--warning') })}
       ${kpi('Uncommitted', S.repo.dirty, S.repo.dirty ? 'working tree is dirty' : 'working tree clean',
@@ -766,8 +766,8 @@ function vQuality() {
     </div>
 
     <div class="grid g2" style="margin-top:14px">
-      ${card('Test distribution', 'Where the verification effort actually sits', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
-        { extra: `<button class="btn xs primary" data-run="tests">▶ Run suite</button>` })}
+      ${card('Test distribution', 'Collected test inventory only; collection is not a pass result', `<div class="chart-box"><canvas id="c-tests"></canvas></div>`,
+        { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue isolated suite</button>` })}
       ${card('Risk register', 'Ranked by severity — click to take one on',
         `<div class="list" style="max-height:260px;overflow:auto">${risks.map(r => `<div class="row">
           <div class="g"><div class="h">${badge(r.severity, r.severity === 'critical' ? 'critical' : r.severity === 'high' ? 'gap' : r.severity === 'medium' ? 'warn' : 'muted')} ${esc(r.title)}</div>
@@ -776,15 +776,8 @@ function vQuality() {
         </div>`).join('')}</div>`, { tight: true })}
     </div>
 
-    <div class="section-head"><h2>Command output</h2><p class="muted">Whitelisted local runs (this session)</p></div>
-    <div class="grid g2">
-      ${card('Run history', runs.length ? `${runs.length} runs` : 'Nothing run yet',
-        runs.length ? `<div class="list">${runs.map(r => `<div class="row"><div class="g">
-          <div class="h">${badge(r.ok ? 'ok' : 'failed', r.ok ? 'done' : 'gap')} ${esc(r.label)}</div>
-          <div class="p mono">${esc(r.started)} · exit ${r.code}</div></div></div>`).join('')}</div>`
-          : `<div class="empty">Run the suite, the demo, or the DB from the Overview page.</div>`, { tight: true })}
-      ${card('Latest output', '', runs.length ? `<pre class="out">${esc(runs[0].output || '')}</pre>` : `<div class="empty">No output yet.</div>`, { tight: true })}
-    </div>
+    <div class="section-head"><h2>Verification evidence</h2><p class="muted">Only persisted, commit/tree/database-bound run artifacts may claim PASS or FAIL</p></div>
+    ${card('Full-suite result', 'Authoritative run source not configured', `<div class="empty">No result is credited. Queue an isolated suite request; a later worker must attach immutable evidence before this view changes.</div>`, { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue request</button>` })}
 
     <div class="section-head"><h2>Test inventory</h2></div>
     ${card('', '', `<div class="tbl-wrap"><table><thead><tr><th>Suite</th><th>File</th><th class="num">Tests</th></tr></thead><tbody>
@@ -1120,9 +1113,9 @@ function vAnalytics() {
           <td><button class="btn xs ghost" data-adhoc="${esc('Instrument: ' + x.name)}|${esc('Instrument the SemiSkill metric “' + x.name + '” (target ' + x.target + ', source: ' + x.source + '). Emit it as artifacts and expose it so the dashboard can chart it live.')}">⌘</button></td></tr>`).join('')}
         </tbody></table></div>`, { tight: true, action: 'A-15' })}
       <div class="grid" style="gap:14px;align-content:start">
-        ${card('Artifact mix', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Start the DB for live data',
+        ${card('Artifact mix', S.runtime.db.status === 'up' ? 'Live from Postgres' : 'Raw artifact data unavailable while Postgres is offline',
           S.runtime.db.status === 'up' ? `<div class="chart-box short"><canvas id="c-mix"></canvas></div>`
-            : `<div class="empty">No live connection.<br><button class="btn primary xs" data-run="db-up" style="margin-top:10px">▶ Start Postgres</button></div>`)}
+            : `<div class="empty">No live connection.<br><button type="button" class="btn primary xs" data-action-id="A-31" style="margin-top:10px">⌘ Queue DB investigation</button></div>`)}
         ${card('Weekly business review', 'Queue the report — Claude reads the store and writes it',
           `<div class="list">
             <div class="row"><div class="g"><div class="h">Weekly metrics report</div><div class="p">submissions, blocks, publishes, reuse, time-to-publish, cost</div></div>
@@ -1231,25 +1224,22 @@ document.addEventListener('click', async ev => {
   const act = ev.target.closest('[data-action-id]');
   if (act) {
     const a = S.model.actions.find(x => x.id === act.dataset.actionId);
-    if (a) queue({ action_id: a.id, kind: a.group.toLowerCase(), title: a.label, prompt: a.prompt, context: VIEW });
+    if (a) {
+      act.disabled = true;
+      act.setAttribute('aria-busy', 'true');
+      try {
+        await queue({ action_id: a.id, kind: a.group.toLowerCase(), title: a.label, prompt: a.prompt, context: VIEW });
+      } finally {
+        act.disabled = false;
+        act.removeAttribute('aria-busy');
+      }
+    }
     return;
   }
   const adhoc = ev.target.closest('[data-adhoc]');
   if (adhoc) {
     const [title, prompt] = adhoc.dataset.adhoc.split('|');
     queue({ kind: VIEW, title, prompt, context: VIEW });
-    return;
-  }
-  const run = ev.target.closest('[data-run]');
-  if (run) {
-    const id = run.dataset.run, label = run.textContent;
-    run.disabled = true; run.textContent = '⏳ running…';
-    try {
-      const r = await api('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-      toast(r.ok ? 'Command finished' : 'Command failed', `${r.label} · exit ${r.code}`, r.ok ? '' : 'bad');
-      await refresh();
-    } catch (e) { toast('Run failed', String(e).slice(0, 120), 'bad'); }
-    run.disabled = false; run.textContent = label;
     return;
   }
   if (ev.target.closest('[data-ask]')) { $('#ask-dlg').showModal(); return; }

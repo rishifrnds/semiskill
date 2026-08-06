@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import inspect
 import json
 import uuid
 from datetime import datetime, timezone
@@ -536,6 +537,23 @@ def test_dashboard_html_uses_only_canonical_catalog_state():
     ):
         assert retired not in html
     assert "setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 15000)" in html
+
+
+def test_dashboard_mutation_surface_has_no_command_actuators():
+    source = inspect.getsource(server)
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+
+    for retired in (
+        "RUNNABLE", "run_command", 'route == "/api/run"',
+        'route == "/api/runs"', "subprocess.Popen",
+    ):
+        assert retired not in source
+    for retired in ("data-run", "/api/run", "S.runs", "S.runnable"):
+        assert retired not in html
+    assert 'data-action-id="A-31"' in html
+    assert 'aria-label="Queue request: ${esc(action.label)}"' in html
+    assert 'role="status" aria-live="polite"' in html
+    assert "act.setAttribute('aria-busy', 'true')" in html
 
 
 def test_redteam_fixture_is_input_inventory_not_execution_evidence(tmp_path):
