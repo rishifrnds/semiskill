@@ -3,6 +3,7 @@
 Serves `index.html` and a live `/api/state` assembled from real signals:
   * repo      — git history, tracked files, module LOC, test inventory
   * runtime   — read-only Postgres artifact-store liveness
+  * verification — immutable, source-bound Python full-suite evidence (non-crediting)
   * scoreboard — validated canonical catalog state (never inferred from fixtures or API visibility)
   * plan      — the curated model in `model.json` (features, risks, launch, GTM)
   * inbox     — actions the user has clicked, appended to `inbox.jsonl`
@@ -23,6 +24,7 @@ import copy
 import json
 import hashlib
 import hmac
+import math
 import os
 import re
 import secrets
@@ -30,6 +32,7 @@ import socket
 import subprocess
 import sys
 import threading
+import uuid
 import webbrowser
 from dataclasses import fields
 from datetime import datetime, timezone
@@ -63,11 +66,18 @@ from semiskill.artifacts.schema import (                       # noqa: E402
     ArtifactType,
     SourceSystem,
 )
+from semiskill.verification.evidence import (                  # noqa: E402
+    FullSuiteEvidenceUnavailable,
+    read_latest_run,
+    validate_counts,
+)
 
 PORT = int(os.environ.get("SEMISKILL_DASHBOARD_PORT", "8899"))
 
 _DEFAULT_SCOREBOARD_MAX_AGE_SECONDS = 900
 _DEFAULT_PROGRESS_MAX_AGE_SECONDS = 300
+_DEFAULT_FULL_SUITE_MAX_AGE_SECONDS = 86_400
+_MAX_FULL_SUITE_AGE_SECONDS = 604_800
 _MAX_FUTURE_SKEW_SECONDS = 60
 _MIGRATION_NAME = re.compile(r"^\d{4}_[a-z0-9_]+\.sql$")
 _CANONICAL_SOURCE_PATHS = {
@@ -103,6 +113,14 @@ _JSON_CONTENT_TYPE = re.compile(
     re.IGNORECASE,
 )
 _INVALID_BODY = object()
+_FULL_SUITE_SCOPE = {
+    "kind": "python-full-suite",
+    "test_root": "tests",
+    "selection": "all",
+    "execution": "serial",
+    "database_environment": "test",
+    "credit": "none",
+}
 
 
 class DashboardSnapshotRejected(RuntimeError):
@@ -403,6 +421,130 @@ def _validate_adr_observation(value: dict, *, repository_commit: str | None = No
         raise ValueError("invalid ADR items")
 
 
+def _full_suite_max_age_seconds() -> int:
+    raw = os.environ.get(
+        "SEMISKILL_FULL_SUITE_MAX_AGE_SECONDS", str(_DEFAULT_FULL_SUITE_MAX_AGE_SECONDS),
+    )
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise OperationalProbeUnavailable("freshness_configuration_invalid") from exc
+    if not 15 <= value <= _MAX_FULL_SUITE_AGE_SECONDS:
+        raise OperationalProbeUnavailable("freshness_configuration_invalid")
+    return value
+
+
+def _validate_full_suite_observation(value: dict, *, repository: dict | None = None) -> None:
+    if value["status"] == "unavailable":
+        return
+    identity, scope, data = value["identity"], value["scope"], value["data"]
+    if (
+        not isinstance(identity, dict)
+        or set(identity) != {
+            "run_id", "run_sha256", "source_commit", "source_tree",
+            "database_identity_sha256",
+        }
+        or not isinstance(scope, dict) or scope != _FULL_SUITE_SCOPE
+        or not isinstance(data, dict)
+        or set(data) != {
+            "verdict", "started_at", "ended_at", "duration_seconds", "exit_code",
+            "result_complete", "failure_reason", "counts", "database", "artifact",
+        }
+    ):
+        raise ValueError("invalid full-suite observation")
+    try:
+        if str(uuid.UUID(identity["run_id"])) != identity["run_id"]:
+            raise ValueError("invalid full-suite run identity")
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError("invalid full-suite run identity") from exc
+    digest = r"sha256:[0-9a-f]{64}"
+    if (
+        re.fullmatch(digest, str(identity.get("run_sha256", ""))) is None
+        or not _valid_object_id(identity.get("source_commit"))
+        or not _valid_object_id(identity.get("source_tree"))
+        or len(identity["source_commit"]) != len(identity["source_tree"])
+        or re.fullmatch(digest, str(identity.get("database_identity_sha256", ""))) is None
+    ):
+        raise ValueError("invalid full-suite identity")
+    started, ended = _timestamp(data.get("started_at")), _timestamp(data.get("ended_at"))
+    duration = data.get("duration_seconds")
+    exit_code = data.get("exit_code")
+    if (
+        ended < started
+        or not isinstance(duration, (int, float)) or isinstance(duration, bool)
+        or not math.isfinite(duration) or duration < 0
+        or not isinstance(exit_code, int) or isinstance(exit_code, bool)
+        or not 0 <= exit_code <= 255
+        or not isinstance(data.get("result_complete"), bool)
+    ):
+        raise ValueError("invalid full-suite result")
+    failure_reason = data.get("failure_reason")
+    if (
+        (data["result_complete"] and failure_reason is not None)
+        or (
+            not data["result_complete"]
+            and (not isinstance(failure_reason, str) or not re.fullmatch(r"[a-z0-9_]{1,80}", failure_reason))
+        )
+    ):
+        raise ValueError("invalid full-suite result")
+    counts = validate_counts(data.get("counts"))
+    should_pass = (
+        data["result_complete"] and exit_code == 0 and counts["collected"] > 0
+        and counts["failed"] == 0 and counts["errors"] == 0 and counts["not_run"] == 0
+        and counts["collection_errors"] == 0 and counts["deselected"] == 0
+    )
+    if data.get("verdict") not in {"pass", "fail"} or (data["verdict"] == "pass") != should_pass:
+        raise ValueError("invalid full-suite verdict")
+    database = data.get("database")
+    if (
+        not isinstance(database, dict)
+        or set(database) != {
+            "engine", "environment", "database_name", "identity_sha256",
+            "session_user_sha256",
+        }
+        or database.get("engine") != "postgresql" or database.get("environment") != "test"
+        or not isinstance(database.get("database_name"), str)
+        or re.fullmatch(r"[a-z][a-z0-9_]*_test", database["database_name"]) is None
+        or re.fullmatch(digest, str(database.get("identity_sha256", ""))) is None
+        or re.fullmatch(digest, str(database.get("session_user_sha256", ""))) is None
+        or database["identity_sha256"] != identity["database_identity_sha256"]
+    ):
+        raise ValueError("invalid full-suite database")
+    artifact = data.get("artifact")
+    run_id = identity["run_id"]
+    if (
+        not isinstance(artifact, dict)
+        or set(artifact) != {"run_ref", "run_sha256", "output_ref", "output_sha256"}
+        or artifact.get("run_ref") != f"dashboard/runs/full-suite/runs/{run_id}.json"
+        or artifact.get("run_sha256") != identity["run_sha256"]
+        or artifact.get("output_ref") != f"dashboard/runs/full-suite/outputs/{run_id}.log"
+        or re.fullmatch(digest, str(artifact.get("output_sha256", ""))) is None
+    ):
+        raise ValueError("invalid full-suite artifact")
+    now = _timestamp(value["observed_at"])
+    raw_age_seconds = (now - ended).total_seconds()
+    if raw_age_seconds < -_MAX_FUTURE_SKEW_SECONDS:
+        raise ValueError("invalid full-suite timestamp")
+    age_seconds = math.ceil(max(0, raw_age_seconds))
+    if abs(max(0, age_seconds) - value["freshness"]["age_seconds"]) > 2:
+        raise ValueError("full-suite freshness detached")
+    if value["freshness"]["max_age_seconds"] != _full_suite_max_age_seconds():
+        raise ValueError("full-suite freshness configuration detached")
+    if value["status"] == "stale" and value.get("reason") != "full_suite_expired":
+        raise ValueError("invalid full-suite stale reason")
+    if repository is not None:
+        repo_identity = repository.get("identity") if isinstance(repository, dict) else None
+        repo_data = repository.get("data") if isinstance(repository, dict) else None
+        if (
+            not isinstance(repository, dict) or repository.get("status") != "available"
+            or not isinstance(repo_identity, dict) or not isinstance(repo_data, dict)
+            or repo_data.get("dirty") != 0
+            or repo_identity.get("commit") != identity["source_commit"]
+            or repo_identity.get("tree") != identity["source_tree"]
+        ):
+            raise ValueError("full-suite repository binding invalid")
+
+
 def _collect_observation(collector, validator=None) -> dict:
     try:
         value = _validated_observation(collector())
@@ -416,9 +558,22 @@ def _collect_observation(collector, validator=None) -> dict:
 
 
 def _sh(args: list[str], timeout: int = 20) -> tuple[int, str]:
+    environment = os.environ.copy()
+    for key in tuple(environment):
+        if key.startswith("GIT_"):
+            environment.pop(key, None)
+    environment.update(
+        GIT_OPTIONAL_LOCKS="0", GIT_TERMINAL_PROMPT="0", GIT_CONFIG_NOSYSTEM="1",
+        GIT_CONFIG_SYSTEM=os.devnull, GIT_CONFIG_GLOBAL=os.devnull,
+    )
+    command = args
+    if args and args[0] == "git":
+        command = ["git", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", *args[1:]]
     try:
-        p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True,
-                           timeout=timeout, encoding="utf-8", errors="replace")
+        p = subprocess.run(
+            command, cwd=ROOT, env=environment, capture_output=True, text=True,
+            timeout=timeout, encoding="utf-8", errors="replace",
+        )
         return p.returncode, (p.stdout or "") + (p.stderr or "")
     except FileNotFoundError:
         return 127, f"command not found: {args[0]}"
@@ -1010,6 +1165,93 @@ def runtime_signals() -> dict:
     return {"checked_at": observed_at, "db": db}
 
 
+def full_suite_signal(*, repository: dict | None = None) -> dict:
+    """Project immutable full-suite evidence without executing, connecting or repairing anything."""
+    observed_at = _now()
+    repo_identity = repository.get("identity") if isinstance(repository, dict) else None
+    repo_data = repository.get("data") if isinstance(repository, dict) else None
+    if (
+        not isinstance(repository, dict) or repository.get("status") != "available"
+        or not isinstance(repo_identity, dict) or not isinstance(repo_data, dict)
+    ):
+        return _unavailable_observation("repository_unavailable", observed_at=observed_at)
+    if repo_data.get("dirty") != 0:
+        return _unavailable_observation("working_tree_dirty", observed_at=observed_at)
+    commit, tree = repo_identity.get("commit"), repo_identity.get("tree")
+    if not _valid_object_id(commit) or not _valid_object_id(tree) or len(commit) != len(tree):
+        return _unavailable_observation("repository_identity_invalid", observed_at=observed_at)
+    root = ROOT / "dashboard" / "runs" / "full-suite"
+    try:
+        run = read_latest_run(root)
+        expected_format = "sha1" if len(commit) == 40 else "sha256"
+        if run["source"]["object_format"] != expected_format:
+            raise OperationalProbeUnavailable("source_object_format_mismatch")
+        if run["source"]["commit"] != commit:
+            raise OperationalProbeUnavailable("source_commit_mismatch")
+        if run["source"]["tree"] != tree:
+            raise OperationalProbeUnavailable("source_tree_mismatch")
+        ended = _timestamp(run["ended_at"])
+        raw_age_seconds = (_timestamp(observed_at) - ended).total_seconds()
+        if raw_age_seconds < -_MAX_FUTURE_SKEW_SECONDS:
+            raise OperationalProbeUnavailable("full_suite_clock_skew")
+        age_seconds = math.ceil(max(0, raw_age_seconds))
+        max_age_seconds = _full_suite_max_age_seconds()
+        stale = age_seconds > max_age_seconds
+        database = run["database"]
+        return _available_observation(
+            observed_at=observed_at,
+            identity={
+                "run_id": run["run_id"],
+                "run_sha256": run["run_sha256"],
+                "source_commit": commit,
+                "source_tree": tree,
+                "database_identity_sha256": database["identity_sha256"],
+            },
+            scope=dict(_FULL_SUITE_SCOPE),
+            freshness={
+                "status": "stale" if stale else "fresh",
+                "age_seconds": age_seconds,
+                "max_age_seconds": max_age_seconds,
+            },
+            status="stale" if stale else "available",
+            reason="full_suite_expired" if stale else None,
+            data={
+                "verdict": run["verdict"],
+                "started_at": run["started_at"],
+                "ended_at": run["ended_at"],
+                "duration_seconds": run["duration_seconds"],
+                "exit_code": run["exit_code"],
+                "result_complete": run["result_complete"],
+                "failure_reason": run["failure_reason"],
+                "counts": dict(run["counts"]),
+                "database": {
+                    "engine": database["engine"],
+                    "environment": database["environment"],
+                    "database_name": database["database_name"],
+                    "identity_sha256": database["identity_sha256"],
+                    "session_user_sha256": database["session_user_sha256"],
+                },
+                "artifact": {
+                    "run_ref": f"dashboard/runs/full-suite/runs/{run['run_id']}.json",
+                    "run_sha256": run["run_sha256"],
+                    "output_ref": f"dashboard/runs/full-suite/{run['output']['ref']}",
+                    "output_sha256": run["output"]["sha256"],
+                },
+            },
+        )
+    except OperationalProbeUnavailable as exc:
+        return _unavailable_observation(exc.reason, observed_at=observed_at)
+    except FullSuiteEvidenceUnavailable as exc:
+        reason = str(exc)
+        if re.fullmatch(r"[a-z0-9_]{1,80}", reason) is None:
+            reason = "full_suite_evidence_invalid"
+        return _unavailable_observation(reason, observed_at=observed_at)
+    except DashboardSnapshotRejected as exc:
+        return _unavailable_observation(exc.reason, observed_at=observed_at)
+    except Exception:  # noqa: BLE001 - the reader discloses no filesystem exception detail
+        return _unavailable_observation("full_suite_evidence_invalid", observed_at=observed_at)
+
+
 def canonical_snapshot_signals(*, migration: dict | None = None) -> dict:
     """Load canonical catalog state or expose an explicit, non-substituted unavailable state."""
     observed_at = _now()
@@ -1531,6 +1773,10 @@ def build_state(state_reader=None, model_reader=None) -> dict:
     _remove_unexecuted_redteam_credit(model, redteam)
     repository = _collect_observation(repo_signals, _validate_repo_observation)
     repository_commit = _repository_commit(repository)
+    full_suite = _collect_observation(
+        lambda: full_suite_signal(repository=repository),
+        lambda value: _validate_full_suite_observation(value, repository=repository),
+    )
     project_state = _collect_observation(
         lambda: state_files(repository=repository),
         lambda value: _validate_state_observation(
@@ -1550,6 +1796,7 @@ def build_state(state_reader=None, model_reader=None) -> dict:
         "repo": repository,
         "state": project_state,
         "runtime": _collect_runtime_signals(),
+        "verification": {"full_suite": full_suite},
         "scoreboard": canonical["scoreboard"],
         "progress": canonical["progress"],
         "migration": migration,

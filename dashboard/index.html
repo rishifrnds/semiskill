@@ -118,6 +118,7 @@ main{min-width:0;display:flex;flex-direction:column}
 .btn.ghost:hover{background:hsl(var(--accent));color:hsl(var(--foreground))}
 .btn.outline{background:transparent}
 .btn.xs{padding:3px 8px;font-size:11.5px}
+.btn.touch{min-height:44px;padding:8px 12px}
 .btn.wide{width:100%}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 
@@ -156,6 +157,7 @@ tbody td{padding:8px 10px;border-bottom:1px solid hsl(var(--border)/.7);vertical
 tbody tr:hover{background:hsl(var(--accent)/.5)}
 tbody tr:last-child td{border-bottom:none}
 .tbl-wrap{max-height:520px;overflow:auto;border-radius:calc(var(--radius) - 2px)}
+.tbl-wrap[tabindex="0"]:focus-visible{outline:2px solid hsl(var(--ring));outline-offset:2px}
 .muted{color:hsl(var(--muted-foreground))}
 .num{font-variant-numeric:tabular-nums;text-align:right}
 
@@ -453,6 +455,101 @@ const observationDisplayStatus = observation => observationAvailable(observation
   ? 'available'
   : observation?.status === 'available' ? 'stale' : observation?.status || 'unavailable';
 
+function fullSuiteState() {
+  const observation = S?.verification?.full_suite;
+  if (!observation || !['available', 'stale'].includes(observation.status)
+    || !observation.identity || !observation.scope || !observation.freshness || !observation.data) {
+    return {
+      state: 'UNAVAILABLE', observation, data: null,
+      reason: observation?.reason || 'no immutable full-suite evidence',
+    };
+  }
+  const observedAt = Date.parse(observation.observed_at);
+  const observedElapsed = Number.isFinite(observedAt)
+    ? Math.max(0, Math.ceil((Date.now() - observedAt) / 1000)) : Infinity;
+  const maximum = observation.freshness.max_age_seconds;
+  const effectiveAge = Number.isFinite(observedElapsed)
+    ? observation.freshness.age_seconds + observedElapsed : null;
+  const clientExpired = maximum !== null && (effectiveAge === null || effectiveAge > maximum);
+  if (observation.status === 'stale' || clientExpired) {
+    return {
+      state: 'STALE', observation, data: null,
+      reason: observation.status === 'stale'
+        ? observation.reason || 'full-suite evidence expired' : 'client freshness expired',
+      ageSeconds: effectiveAge, maxAgeSeconds: maximum,
+    };
+  }
+  if (!['pass', 'fail'].includes(observation.data.verdict)) {
+    return { state: 'UNAVAILABLE', observation, data: null, reason: 'invalid evidence verdict' };
+  }
+  const state = observation.data.verdict === 'pass' ? 'PASS' : 'FAIL';
+  return {
+    state, observation, data: observation.data, reason: observation.data.failure_reason,
+    ageSeconds: effectiveAge, maxAgeSeconds: maximum,
+  };
+}
+
+function fullSuiteSummary() {
+  const suite = fullSuiteState();
+  if (!suite.data) return `Python full suite ${suite.state.toLowerCase()} · ${suite.reason}`;
+  return `Python full suite ${suite.state.toLowerCase()} · completed ${suite.data.ended_at} · age ${suite.ageSeconds}s · credit none`;
+}
+
+function fullSuiteEvidenceCard(title, opts = {}) {
+  const suite = fullSuiteState();
+  const observation = suite.observation;
+  const launchBoundary = opts.launch
+    ? '<div class="muted" style="margin-top:10px">Supporting quality evidence only: it cannot change skill readiness, approvals, publication, funnel counts, or the canonical DV-84 release gate.</div>'
+    : '';
+  const queueBoundary = opts.queue
+    ? '<div id="full-suite-queue-boundary" class="muted" style="margin-top:8px">The button creates a non-crediting request receipt only; it does not run tests or change this evidence.</div>'
+    : '';
+  const queue = opts.queue
+    ? `<button type="button" class="btn primary touch" data-action-id="A-27" aria-describedby="full-suite-queue-boundary">⌘ Queue isolated-suite request</button>`
+    : '';
+  if (suite.state === 'UNAVAILABLE') {
+    return card(title, 'UNAVAILABLE · non-crediting',
+      `<div role="region" aria-label="Python full-suite evidence unavailable" class="empty">
+        ${badge('UNAVAILABLE', 'gap')} ${esc(suite.reason)}. No result or zero-count fallback is shown.
+        ${launchBoundary}${queueBoundary}
+      </div>`, { extra: queue });
+  }
+  const identity = observation.identity;
+  if (suite.state === 'STALE') {
+    return card(title, 'STALE · non-crediting',
+      `<div role="region" aria-label="Stale Python full-suite evidence">
+        <div class="row"><div class="g"><div class="h">${badge('STALE', 'warn')} Historical result withheld</div>
+          <div class="p">${esc(suite.reason)} · ended ${esc(observation.data.ended_at)} · effective age ${esc(String(suite.ageSeconds ?? 'unknown'))}s / ${esc(String(suite.maxAgeSeconds ?? 'unknown'))}s</div></div></div>
+        <div class="row"><div class="g"><div class="h">Validated identity only</div>
+          <div class="sub mono">run ${esc(identity.run_id)} · ${esc(identity.run_sha256)}<br>commit ${esc(identity.source_commit)} · tree ${esc(identity.source_tree)}<br>database ${esc(identity.database_identity_sha256)}</div></div></div>
+        ${launchBoundary}${queueBoundary}
+      </div>`, { extra: queue });
+  }
+  const data = suite.data, counts = data.counts, artifact = data.artifact;
+  const countRows = [
+    ['Collected', counts.collected], ['Passed', counts.passed], ['Failed', counts.failed],
+    ['Errors', counts.errors], ['Skipped', counts.skipped], ['XFailed', counts.xfailed],
+    ['XPassed', counts.xpassed], ['Not run', counts.not_run],
+    ['Collection errors', counts.collection_errors], ['Deselected', counts.deselected],
+  ];
+  const tone = suite.state === 'PASS' ? 'done' : 'gap';
+  return card(title, `${suite.state} · exact clean source · test database · credit none`,
+    `<div role="region" aria-label="Python full-suite ${suite.state.toLowerCase()} evidence">
+      <div class="row"><div class="g"><div class="h">${badge(suite.state, tone)} Current immutable run</div>
+        <div class="p">started ${esc(data.started_at)} · completed ${esc(data.ended_at)} · effective age ${esc(String(suite.ageSeconds))}s / ${esc(String(suite.maxAgeSeconds))}s · duration ${esc(String(data.duration_seconds))}s · exit ${esc(String(data.exit_code))} · result ${data.result_complete ? 'complete' : 'incomplete'}${data.failure_reason ? ` · ${esc(data.failure_reason)}` : ''}</div></div></div>
+      <div class="tbl-wrap" role="region" aria-label="Full-suite outcome counts" tabindex="0"><table><caption class="sr-only">Full-suite outcome counts</caption><thead><tr><th scope="col">Outcome</th><th scope="col" class="num">Count</th></tr></thead><tbody>
+        ${countRows.map(([label, value]) => `<tr><td>${esc(label)}</td><td class="num">${value}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="row"><div class="g"><div class="h">Run identity</div><div class="sub mono">${esc(identity.run_id)} · ${esc(identity.run_sha256)}</div></div></div>
+      <div class="row"><div class="g"><div class="h">Source identity</div><div class="sub mono">commit ${esc(identity.source_commit)}<br>tree ${esc(identity.source_tree)}</div></div></div>
+      <div class="row"><div class="g"><div class="h">Isolated test database</div><div class="sub mono">${esc(data.database.environment)}/${esc(data.database.database_name)} · ${esc(data.database.identity_sha256)}</div></div></div>
+      <div class="row"><div class="g"><div class="h">Immutable run artifact</div><div class="sub mono">${esc(artifact.run_ref)} · ${esc(artifact.run_sha256)}</div></div></div>
+      <div class="row"><div class="g"><div class="h">Declared scope</div><div class="sub mono">tests · all · serial · credit none</div></div></div>
+      ${launchBoundary}
+      ${queueBoundary}
+    </div>`, { extra: queue });
+}
+
 function chart(id, cfg) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -524,13 +621,16 @@ function renderAll() {
 function renderHealth() {
   const pill = (source, label, status, detail) => {
     const description = `${label} ${status}. ${detail || 'No verified source detail.'}`;
-    return `<span class="badge ${status === 'available' ? 'up' : status === 'stale' ? 'warn' : 'down'}" data-health-source="${esc(source)}" tabindex="0" aria-label="${esc(description)}" title="${esc(detail || '')}"><span class="dot ${status === 'available' ? 'pulse' : ''}"></span>${esc(label)} ${esc(status)}</span>`;
+    const up = ['available', 'pass'].includes(status);
+    return `<span class="badge ${up ? 'up' : status === 'stale' ? 'warn' : 'down'}" data-health-source="${esc(source)}" tabindex="0" aria-label="${esc(description)}" title="${esc(detail || '')}"><span class="dot ${up ? 'pulse' : ''}"></span>${esc(label)} ${esc(status)}</span>`;
   };
   const repo = repoData();
   const repoStatus = observationDisplayStatus(S.repo);
+  const suite = fullSuiteState();
   $('#health').innerHTML =
     pill('postgres', 'Postgres', observationDisplayStatus(S.runtime.db), observationSummary('database', S.runtime.db)) +
     pill('scoreboard', 'Scoreboard', S.scoreboard.status, S.scoreboard.reason) +
+    pill('full-suite', 'Tests', suite.state.toLowerCase(), fullSuiteSummary()) +
     pill('migrations', 'Migrations', S.migration?.status === 'verified' ? 'available' : 'unavailable', S.migration?.reason) +
     pill('state', 'State', observationDisplayStatus(S.state), observationSummary('state files', S.state)) +
     pill('adrs', 'ADRs', observationDisplayStatus(S.adrs), observationSummary('ADR register', S.adrs)) +
@@ -914,13 +1014,17 @@ function vQuality() {
   const repository = repoData();
   const t = repository ? repository.tests : [], groups = [...new Set(t.map(x => x.group))];
   const risks = S.model.risks;
+  const suite = fullSuiteState();
 
   $('#view-quality').innerHTML = `
     <div class="grid g4">
       ${kpi('Test functions', repository ? repository.total_tests : '—', repository
         ? `${t.length} files · ${groups.length} suites · static source inventory · ${freshness(S.repo.observed_at)}`
         : `repository ${esc(S.repo.status)} · ${esc(S.repo.reason || 'unavailable')}`)}
-      ${kpi('Last verified suite', 'not evidenced', 'No current commit/tree/database-bound run artifact is configured')}
+      ${kpi('Python suite evidence', suite.state, suite.data
+        ? `${suite.data.counts.passed} passed · ${suite.data.counts.failed} failed · ${suite.data.counts.errors} errors · non-crediting`
+        : `${esc(suite.reason)} · no historical result or zero-count fallback`,
+        { color: suite.state === 'PASS' ? hsl('--success') : suite.state === 'STALE' ? hsl('--warning') : hsl('--destructive') })}
       ${kpi('Curated risks', risks.length, `${risks.filter(r => r.severity_hypothesis === 'critical' || r.severity_hypothesis === 'high').length} critical/high hypotheses; not an issue tracker`)}
       ${kpi('Uncommitted', repository ? repository.dirty : '—', repository
         ? (repository.dirty ? 'working tree is dirty' : 'working tree clean; exact Git probe available')
@@ -931,8 +1035,7 @@ function vQuality() {
     <div class="grid g2" style="margin-top:14px">
       ${card('Test-function distribution', repository ? 'Static source inventory only; it is not collection or a pass result' : esc(observationSummary('repository', S.repo)), repository
         ? `<div class="chart-box"><canvas id="c-tests"></canvas></div>`
-        : `<div class="empty">No empty chart is substituted for an unavailable repository.</div>`,
-        { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue isolated suite</button>` })}
+        : `<div class="empty">No empty chart is substituted for an unavailable repository.</div>`)}
       ${card('Curated risk register', 'Planning register, not observed defect evidence; a prepared request selects one candidate for independent validation',
         `<div class="list" style="max-height:260px;overflow:auto">${risks.map(r => `<div class="row">
           <div class="g"><div class="h">${badge(r.severity_hypothesis + ' hypothesis', 'info')} ${esc(r.title)}</div>
@@ -940,8 +1043,8 @@ function vQuality() {
         </div>`).join('')}</div>`, { tight: true, action: 'A-29' })}
     </div>
 
-    <div class="section-head"><h2>Verification evidence</h2><p class="muted">Only persisted, commit/tree/database-bound run artifacts may claim PASS or FAIL</p></div>
-    ${card('Full-suite result', 'Authoritative run source not configured', `<div class="empty">No result is credited. Queue an isolated suite request; a later worker must attach immutable evidence before this view changes.</div>`, { extra: `<button type="button" class="btn xs primary" data-action-id="A-27">⌘ Queue request</button>` })}
+    <div class="section-head"><h2>Verification evidence</h2><p class="muted">Only persisted, commit/tree/database-bound run artifacts may claim PASS or FAIL; this signal earns no catalog credit</p></div>
+    ${fullSuiteEvidenceCard('Python full-suite evidence — non-crediting', { queue: true })}
 
     <div class="section-head"><h2>Test inventory</h2></div>
     ${card('', esc(observationSummary('repository', S.repo)), repository
@@ -1151,6 +1254,7 @@ function vLaunch() {
       `<div style="font-size:12.5px;line-height:1.6">${releaseGate
         ? `${badge(releaseStatus, releaseGate.passed === true ? 'done' : 'gap')} source snapshot ${esc(releaseSnapshot.snapshot_id || 'unidentified')}`
         : `${badge('unavailable', 'gap')} No verified current scoreboard snapshot is available; launch is a hard no-go.`}</div>`)}
+    ${fullSuiteEvidenceCard('Python full-suite evidence — non-crediting', { launch: true })}
     <div class="grid g4">
       ${kpi('Curated plan completion', R.pct + '%', `${R.done} declared done · ${lc.filter(x => x.declared_status === 'partial').length} partial · ${lc.filter(x => x.declared_status === 'todo').length} to do; non-crediting and not the release gate`)}
       ${kpi('Weight-3 plan items', lc.filter(x => x.declared_status === 'todo' && x.weight === 3).length, 'curated planning weights; not measured priority')}

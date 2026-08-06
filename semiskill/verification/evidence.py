@@ -338,7 +338,7 @@ def read_latest_run(root: str | Path) -> dict[str, Any]:
     except OSError as exc:
         raise FullSuiteEvidenceUnavailable("evidence_root_unavailable") from exc
     in_progress = base / "in-progress.json"
-    if in_progress.exists():
+    if _is_linklike(in_progress) or in_progress.exists():
         _read_regular(in_progress, maximum=MAX_LATEST_BYTES)
         raise FullSuiteEvidenceUnavailable("evidence_run_in_progress")
     latest_path = base / "latest.json"
@@ -363,6 +363,8 @@ def read_latest_run(root: str | Path) -> dict[str, Any]:
         raise FullSuiteEvidenceUnavailable("evidence_changed_during_read")
     if _read_regular(run_path, maximum=MAX_RUN_BYTES) != run_raw:
         raise FullSuiteEvidenceUnavailable("evidence_changed_during_read")
-    if in_progress.exists():
+    if _read_regular(output_path, maximum=MAX_LOG_BYTES) != output_raw:
+        raise FullSuiteEvidenceUnavailable("evidence_changed_during_read")
+    if _is_linklike(in_progress) or in_progress.exists():
         raise FullSuiteEvidenceUnavailable("evidence_run_in_progress")
     return run

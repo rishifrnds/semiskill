@@ -15,6 +15,7 @@ python dashboard/server.py        # http://127.0.0.1:8899
 | Git branch, commits and dirty files | Feature register and declared status |
 | Module inventory and LOC | Risks and launch checklist |
 | Static test-function inventory (no execution result) | Metric targets, proposed pricing and channels |
+| Immutable clean-source Python full-suite evidence (non-crediting) | |
 | Identity-bound read-only Postgres raw-artifact inventory | Integrity-pinned schema-v1 request templates |
 | Complete raw artifact counts when the database observation is available | Go-to-market hypotheses and draft assets |
 | Server-validated canonical scoreboard and progress | |
@@ -34,6 +35,7 @@ $env:SEMISKILL_PROGRESS_SNAPSHOT = "reports/scoreboard/progress.json" # optional
 $env:SEMISKILL_SCOREBOARD_MAX_AGE_SECONDS = "900" # 15..3600
 $env:SEMISKILL_PROGRESS_MAX_AGE_SECONDS = "300"   # 15..3600
 $env:SEMISKILL_STATE_MAX_AGE_SECONDS = "900"      # 15..3600
+$env:SEMISKILL_FULL_SUITE_MAX_AGE_SECONDS = "86400" # 15..604800
 ```
 
 The local loopback database default is accepted only when the environment is `development`.
@@ -80,6 +82,36 @@ epoch and limited to 10 seconds; a hidden page invalidates prior observations an
 return. Client-side freshness continues aging each source independently. Full-view rerenders retain
 focus, selection and nested scroll only when the user has not navigated or interacted since the
 request began; transport invalidation moves focus to the visible Refresh recovery control.
+
+## Immutable full-suite evidence
+
+The dashboard never starts the Python suite. From a clean repository root, a human or governed
+worker can invoke the one fixed serial command against an explicitly configured isolated database:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://<test-role>@<host>/semiskill_test"
+python -m semiskill.cli verify-full-suite --expected-database semiskill_test
+```
+
+The producer rejects passthrough test arguments, inherited test/Git/SemiSkill control variables, a
+non-`_test` database, database-identity drift, a dirty or changing Git source, concurrent producers,
+and incomplete outcome accounting. It bounds child output and process lifetime, records every
+outcome count, and writes an append-only self-hashed run/output pair under the gitignored fixed root
+`dashboard/runs/full-suite/`. Only after those immutable bytes are durable does it atomically update
+`latest.json`; an interrupted or ambiguous producer leaves an in-progress marker that suppresses an
+older PASS.
+
+`/api/state` only follows the fixed `latest -> run -> output` chain with bounded file reads. It does
+not scan for a fallback, repair files, connect to a database, invoke Git or start a process. The
+server binds the validated record to the separately observed exact clean commit/tree and exposes a
+sanitized `verification.full_suite` observation. Fresh PASS and FAIL evidence includes every count
+and immutable provenance. Stale evidence withholds the historical verdict/counts in the UI; missing,
+malformed, tampered, source-mismatched or in-progress evidence is unavailable with no zero fallback.
+
+This evidence has `credit: none`. It is a supporting quality signal only and cannot alter any skill
+review, approval, publication, role-coverage or funnel count, nor the canonical DV-84 release gate.
+The A-27 control writes only a non-crediting queue receipt for a separate worker; clicking it never
+runs the suite or changes the displayed evidence.
 
 ## Governed request loop
 

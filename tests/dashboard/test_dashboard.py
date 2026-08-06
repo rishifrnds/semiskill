@@ -2,6 +2,7 @@ import copy
 import hashlib
 import inspect
 import json
+import os
 import re
 import uuid
 from dataclasses import fields as dataclass_fields
@@ -21,6 +22,8 @@ from semiskill.artifacts.schema import (
 )
 from semiskill.authoring.snapshot import finalize_scoreboard, write_json_atomic
 from semiskill.spine import pipeline
+from semiskill.verification import evidence as suite_evidence
+from semiskill.verification import full_suite as suite_runner
 from tests.authoring.test_snapshot import _body
 
 
@@ -518,6 +521,11 @@ def _stub_build_state_dependencies(monkeypatch):
         "status": "not_executed", "reason": "no_authoritative_execution_result",
         "observed_at": None, "corpus_observed_at": None, "corpus": [], "execution": None,
     })
+    monkeypatch.setattr(server, "full_suite_signal", lambda **_kwargs: {
+        "status": "unavailable", "reason": "evidence_root_unavailable",
+        "observed_at": server._now(), "identity": None, "scope": None,
+        "freshness": None, "data": None,
+    })
     monkeypatch.setattr(server, "adrs", lambda: [])
     monkeypatch.setattr(server, "read_inbox", lambda: [])
 
@@ -531,6 +539,7 @@ def test_state_has_no_seed_or_raw_publication_count_fallback(monkeypatch):
     assert "approvals" not in state["runtime"]["db"]
     assert "api" not in state["runtime"]
     assert "attacks" not in state and state["redteam"]["status"] == "not_executed"
+    assert state["verification"]["full_suite"]["status"] == "unavailable"
     assert len(state["model"]["actions"]) == 36
     assert all("prompt" not in action and action.get("description") for action in state["model"]["actions"])
 
@@ -672,6 +681,56 @@ def test_curated_launch_plan_never_claims_release_readiness():
     assert "const releaseGate = releaseSnapshot?.release_gate || null" in launch
     assert "releaseGate.passed === true" in launch
     assert "S.model.release" not in launch and "readiness().passed" not in launch
+
+
+def test_full_suite_ui_exposes_all_states_counts_provenance_and_queue_only_boundary():
+    html = Path("dashboard/index.html").read_text(encoding="utf-8")
+    helper = html[html.index("function fullSuiteState()") : html.index("function chart(")]
+    quality = html[html.index("function vQuality()") : html.index("function vSecurity()")]
+    launch = html[html.index("function vLaunch()") : html.index("function vGrowth()")]
+    canonical = html[html.index("function canonicalSnapshot()") : html.index("function freshness(")]
+    planning = html[html.index("function readiness()") : html.index("function vOverview()")]
+
+    for state in ("PASS", "FAIL", "STALE", "UNAVAILABLE"):
+        assert state in helper
+    for field in (
+        "counts.collected", "counts.passed", "counts.failed", "counts.errors",
+        "counts.skipped", "counts.xfailed", "counts.xpassed", "counts.not_run",
+        "counts.collection_errors", "counts.deselected",
+    ):
+        assert field in helper
+    for provenance in (
+        "identity.run_id", "identity.run_sha256", "identity.source_commit",
+        "identity.source_tree", "data.database.database_name",
+        "data.database.identity_sha256", "artifact.run_ref", "artifact.run_sha256",
+        "tests · all · serial · credit none",
+    ):
+        assert provenance in helper
+    assert 'role="region"' in helper
+    assert '<caption class="sr-only">Full-suite outcome counts</caption>' in helper
+    assert '<th scope="col">' in helper
+    assert 'class="tbl-wrap" role="region" aria-label="Full-suite outcome counts" tabindex="0"' in helper
+    assert helper.count('data-action-id="A-27"') == 1
+    assert 'class="btn primary touch"' in helper
+    assert 'aria-describedby="full-suite-queue-boundary"' in helper
+    assert "does not run tests or change this evidence" in helper
+    assert "Historical result withheld" in helper
+    assert "effectiveAge" in helper and "effective age" in helper and "data.started_at" in helper
+    assert "observation.status === 'stale'" in helper
+    assert "observation.reason || 'full-suite evidence expired' : 'client freshness expired'" in helper
+    assert helper.count("${launchBoundary}") == 3
+    assert "countRows" not in helper[helper.index("if (suite.state === 'STALE')") : helper.index("const data = suite.data")]
+
+    assert "Python suite evidence" in quality
+    assert "fullSuiteEvidenceCard('Python full-suite evidence — non-crediting', { queue: true })" in quality
+    assert "Last verified suite" not in quality and "Authoritative run source not configured" not in quality
+    assert launch.index("Deterministic release gate") < launch.index("Python full-suite evidence")
+    assert "Supporting quality evidence only" in helper
+    assert "const releaseSnapshot = canonicalSnapshot()" in launch
+    assert "const releaseGate = releaseSnapshot?.release_gate || null" in launch
+    assert "S.verification" not in canonical and "S.verification" not in planning
+    assert ".btn.touch{min-height:44px" in html
+    assert '.tbl-wrap[tabindex="0"]:focus-visible' in html
 
 
 def test_curated_registers_are_explicitly_non_crediting_and_unvalidated():
@@ -967,6 +1026,235 @@ def _repo_observation(commit="a" * 40):
             "total_tests": 0, "total_loc": 0,
         },
     )
+
+
+def _write_suite_evidence(
+    root: Path,
+    *,
+    commit: str = "a" * 40,
+    tree: str = "b" * 40,
+    ended_at: str = "2026-08-06T09:59:30.000000Z",
+    verdict: str = "pass",
+) -> dict:
+    evidence_root = root / "dashboard" / "runs" / "full-suite"
+    (evidence_root / "runs").mkdir(parents=True)
+    (evidence_root / "outputs").mkdir()
+    run_id = str(uuid.uuid4())
+    output = b"bounded test output\n"
+    counts = {
+        "collected": 4, "passed": 3, "failed": 0, "errors": 0, "skipped": 1,
+        "xfailed": 0, "xpassed": 0, "not_run": 0, "collection_errors": 0,
+        "deselected": 0,
+    }
+    exit_code = 0
+    if verdict == "fail":
+        counts.update(passed=2, failed=1)
+        exit_code = 1
+    run = suite_evidence.finalize_run({
+        "schema_version": suite_evidence.RUN_SCHEMA,
+        "run_id": run_id,
+        "started_at": "2026-08-06T09:58:00.000000Z",
+        "ended_at": ended_at,
+        "duration_seconds": 30.0,
+        "verdict": verdict,
+        "exit_code": exit_code,
+        "result_complete": True,
+        "failure_reason": None,
+        "source": {
+            "vcs": "git", "object_format": "sha1", "commit": commit, "tree": tree,
+            "clean": True,
+        },
+        "database": {
+            "engine": "postgresql", "environment": "test",
+            "database_name": "semiskill_test", "host": "127.0.0.1", "port": 5432,
+            "identity_sha256": "sha256:" + "d" * 64,
+            "session_user_sha256": "sha256:" + "e" * 64,
+        },
+        "counts": counts,
+        "output": {
+            "ref": f"outputs/{run_id}.log", "sha256": suite_evidence.sha256_bytes(output),
+            "bytes": len(output),
+        },
+        "runner": {
+            "entrypoint": "semiskill verify-full-suite",
+            "command": [server.sys.executable, *suite_runner._COMMAND_TAIL],
+            "pytest_plugin": suite_evidence.PYTEST_PLUGIN,
+            "timeout_seconds": suite_evidence.FULL_SUITE_TIMEOUT_SECONDS,
+        },
+        "credit": "none",
+    })
+    (evidence_root / "outputs" / f"{run_id}.log").write_bytes(output)
+    (evidence_root / "runs" / f"{run_id}.json").write_bytes(suite_evidence.document_bytes(run))
+    (evidence_root / "latest.json").write_bytes(
+        suite_evidence.document_bytes(suite_evidence.latest_document(run))
+    )
+    return run
+
+
+@pytest.mark.parametrize("verdict", ["pass", "fail"])
+def test_full_suite_fresh_pass_or_fail_is_source_bound_and_non_crediting(
+    tmp_path, monkeypatch, verdict,
+):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    run = _write_suite_evidence(tmp_path, verdict=verdict)
+    repository = _repo_observation()
+
+    signal = server.full_suite_signal(repository=repository)
+    server._validate_full_suite_observation(signal, repository=repository)
+
+    assert signal["status"] == "available"
+    assert signal["scope"] == server._FULL_SUITE_SCOPE
+    assert signal["scope"]["credit"] == "none"
+    assert signal["data"]["verdict"] == verdict
+    assert signal["identity"]["run_sha256"] == run["run_sha256"]
+    assert signal["data"]["counts"] == run["counts"]
+    assert signal["data"]["database"]["database_name"] == "semiskill_test"
+    assert "host" not in signal["data"]["database"]
+    assert "runner" not in signal["data"] and "command" not in json.dumps(signal)
+
+
+def test_full_suite_missing_dirty_mismatched_or_tampered_evidence_is_unavailable(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    repository = _repo_observation()
+    assert server.full_suite_signal(repository=repository)["status"] == "unavailable"
+
+    run = _write_suite_evidence(tmp_path)
+    dirty = copy.deepcopy(repository)
+    dirty["data"]["dirty"] = 1
+    assert server.full_suite_signal(repository=dirty)["reason"] == "working_tree_dirty"
+    mismatch = _repo_observation(commit="f" * 40)
+    assert server.full_suite_signal(repository=mismatch)["reason"] == "source_commit_mismatch"
+    tree_mismatch = copy.deepcopy(repository)
+    tree_mismatch["identity"]["tree"] = "f" * 40
+    assert server.full_suite_signal(repository=tree_mismatch)["reason"] == "source_tree_mismatch"
+    object_format_mismatch = _repo_observation(commit="a" * 64)
+    object_format_mismatch["identity"]["tree"] = "b" * 64
+    assert server.full_suite_signal(
+        repository=object_format_mismatch,
+    )["reason"] == "source_object_format_mismatch"
+
+    run_path = tmp_path / "dashboard" / "runs" / "full-suite" / "runs" / f"{run['run_id']}.json"
+    run_path.write_bytes(run_path.read_bytes() + b" ")
+    tampered = server.full_suite_signal(repository=repository)
+    assert tampered["status"] == "unavailable"
+    assert tampered["identity"] is None and tampered["data"] is None
+
+
+def test_full_suite_expiry_and_future_skew_are_fail_closed(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setenv("SEMISKILL_FULL_SUITE_MAX_AGE_SECONDS", "60")
+    repository = _repo_observation()
+    _write_suite_evidence(tmp_path, ended_at="2026-08-06T09:58:59.900000Z")
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+
+    stale = server.full_suite_signal(repository=repository)
+    assert stale["status"] == "stale" and stale["reason"] == "full_suite_expired"
+    assert stale["freshness"]["age_seconds"] == 61
+
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T09:57:59Z")
+    future = server.full_suite_signal(repository=repository)
+    assert future["status"] == "unavailable"
+    assert future["reason"] == "full_suite_clock_skew"
+
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    monkeypatch.setenv("SEMISKILL_FULL_SUITE_MAX_AGE_SECONDS", "forever")
+    invalid_configuration = server.full_suite_signal(repository=repository)
+    assert invalid_configuration["status"] == "unavailable"
+    assert invalid_configuration["reason"] == "freshness_configuration_invalid"
+
+
+def test_full_suite_source_validator_rejects_forged_scope_counts_lineage_and_freshness(
+    tmp_path, monkeypatch,
+):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    _write_suite_evidence(tmp_path)
+    repository = _repo_observation()
+    signal = server.full_suite_signal(repository=repository)
+
+    mutations = []
+    forged = copy.deepcopy(signal)
+    forged["scope"]["credit"] = "catalog"
+    mutations.append(forged)
+    forged = copy.deepcopy(signal)
+    forged["data"]["counts"]["passed"] = True
+    mutations.append(forged)
+    forged = copy.deepcopy(signal)
+    forged["data"]["verdict"] = "fail"
+    mutations.append(forged)
+    forged = copy.deepcopy(signal)
+    forged["identity"]["source_commit"] = "f" * 40
+    mutations.append(forged)
+    forged = copy.deepcopy(signal)
+    forged["freshness"]["max_age_seconds"] += 1
+    mutations.append(forged)
+
+    for candidate in mutations:
+        observed = server._collect_observation(
+            lambda candidate=candidate: candidate,
+            lambda value: server._validate_full_suite_observation(
+                value, repository=repository,
+            ),
+        )
+        assert observed["status"] == "unavailable"
+        assert observed["identity"] is None and observed["data"] is None
+
+
+def test_full_suite_reader_performs_no_process_or_network_work(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    monkeypatch.setattr(server, "_now", lambda: "2026-08-06T10:00:00Z")
+    _write_suite_evidence(tmp_path)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("reader widened its authority")
+
+    monkeypatch.setattr(server.subprocess, "run", forbidden)
+    monkeypatch.setattr(server.socket, "socket", forbidden)
+    monkeypatch.setattr(Path, "mkdir", forbidden)
+    monkeypatch.setattr(Path, "write_bytes", forbidden)
+    monkeypatch.setattr(Path, "unlink", forbidden)
+    monkeypatch.setattr(server.os, "replace", forbidden)
+
+    signal = server.full_suite_signal(repository=_repo_observation())
+    assert signal["status"] == "available"
+
+
+def test_full_suite_reader_has_one_fixed_root_and_runtime_directory_is_ignored():
+    assert list(inspect.signature(server.full_suite_signal).parameters) == ["repository"]
+    ignored = Path(".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "dashboard/runs/" in ignored
+    readme = Path("dashboard/README.md").read_text(encoding="utf-8")
+    assert "latest -> run -> output" in readme
+    assert "credit: none" in readme
+
+
+def test_dashboard_git_probe_ignores_inherited_redirects(monkeypatch):
+    observed = {}
+
+    class Completed:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    def capture(command, **kwargs):
+        observed.update(command=command, environment=kwargs["env"])
+        return Completed()
+
+    monkeypatch.setenv("GIT_DIR", "hostile")
+    monkeypatch.setenv("GIT_WORK_TREE", "hostile")
+    monkeypatch.setattr(server.subprocess, "run", capture)
+
+    assert server._sh(["git", "status"])[0] == 0
+    assert "hostile" not in observed["environment"].values()
+    assert observed["environment"]["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert observed["environment"]["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert observed["command"][:5] == [
+        "git", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false",
+    ]
 
 
 def test_repo_command_failure_is_unavailable_not_clean_zero(monkeypatch):
@@ -1308,7 +1596,7 @@ def test_build_state_rejects_malformed_available_operational_observation(monkeyp
     assert state["runtime"]["db"]["status"] == "unavailable"
 
 
-@pytest.mark.parametrize("failed_source", ["repo", "state", "runtime", "adrs"])
+@pytest.mark.parametrize("failed_source", ["repo", "state", "runtime", "adrs", "full_suite"])
 def test_operational_failure_never_changes_full_canonical_funnel_or_release_gate(
     monkeypatch, failed_source,
 ):
@@ -1333,14 +1621,22 @@ def test_operational_failure_never_changes_full_canonical_funnel_or_release_gate
     monkeypatch.setattr(server, "state_files", lambda **_kwargs: copy.deepcopy(project_state))
     monkeypatch.setattr(server, "runtime_signals", lambda: copy.deepcopy(runtime))
     monkeypatch.setattr(server, "adrs", lambda **_kwargs: copy.deepcopy(decisions))
+    monkeypatch.setattr(server, "full_suite_signal", lambda **_kwargs: {
+        "status": "unavailable", "reason": "not_recorded", "observed_at": server._now(),
+        "identity": None, "scope": None, "freshness": None, "data": None,
+    })
     if failed_source == "repo":
         monkeypatch.setattr(server, "repo_signals", lambda: (_ for _ in ()).throw(OSError()))
     elif failed_source == "state":
         monkeypatch.setattr(server, "state_files", lambda **_kwargs: (_ for _ in ()).throw(OSError()))
     elif failed_source == "runtime":
         monkeypatch.setattr(server, "runtime_signals", lambda: (_ for _ in ()).throw(OSError()))
-    else:
+    elif failed_source == "adrs":
         monkeypatch.setattr(server, "adrs", lambda **_kwargs: (_ for _ in ()).throw(OSError()))
+    else:
+        monkeypatch.setattr(
+            server, "full_suite_signal", lambda **_kwargs: (_ for _ in ()).throw(OSError()),
+        )
 
     state = server.build_state(state_reader=lambda: (server.read_public_model(), []))
 
@@ -1348,6 +1644,38 @@ def test_operational_failure_never_changes_full_canonical_funnel_or_release_gate
     assert state["scoreboard"]["snapshot"]["registry"] == snapshot["registry"]
     assert state["scoreboard"]["snapshot"]["funnel"] == snapshot["funnel"]
     assert state["scoreboard"]["snapshot"]["exclusive_states"] == snapshot["exclusive_states"]
+    assert state["scoreboard"]["snapshot"]["release_gate"] == snapshot["release_gate"]
+
+
+@pytest.mark.parametrize("verdict", ["pass", "fail", "unavailable"])
+def test_full_suite_observation_is_separate_and_never_changes_canonical_scoreboard(
+    monkeypatch, verdict,
+):
+    _stub_build_state_dependencies(monkeypatch)
+    snapshot = _snapshot()
+    scoreboard = {
+        "status": "available", "reason": None, "snapshot": copy.deepcopy(snapshot),
+        "validation": {"status": "verified"},
+    }
+    monkeypatch.setattr(server, "canonical_snapshot_signals", lambda **_kwargs: {
+        "scoreboard": copy.deepcopy(scoreboard), "progress": {"status": "unavailable"},
+    })
+    if verdict == "unavailable":
+        suite = {
+            "status": "unavailable", "reason": "not_recorded", "observed_at": server._now(),
+            "identity": None, "scope": None, "freshness": None, "data": None,
+        }
+    else:
+        suite = _available_observation(data={"verdict": verdict})
+        suite["observed_at"] = server._now()
+    monkeypatch.setattr(server, "full_suite_signal", lambda **_kwargs: copy.deepcopy(suite))
+    monkeypatch.setattr(server, "_validate_full_suite_observation", lambda *_args, **_kwargs: None)
+
+    state = server.build_state(state_reader=lambda: (server.read_public_model(), []))
+
+    assert state["verification"]["full_suite"]["status"] == suite["status"]
+    assert state["scoreboard"] == scoreboard
+    assert state["scoreboard"]["snapshot"]["funnel"] == snapshot["funnel"]
     assert state["scoreboard"]["snapshot"]["release_gate"] == snapshot["release_gate"]
 
 
@@ -1389,7 +1717,7 @@ def test_dashboard_responsive_and_inflight_controls_preserve_access_and_idempote
     assert "kind: 'matrix'" in html
     assert "data-health-source" in html and "kind: 'health'" in html
     assert "'scroll', 'wheel', 'touchmove'" in html
-    assert 'class="badge ${status' in html and 'tabindex="0" aria-label=' in html
+    assert 'class="badge ${up' in html and 'tabindex="0" aria-label=' in html
     assert "$('#btn-refresh').focus({ preventScroll: true })" in html
     assert "cursor:pointer;user-select:none;white-space:nowrap" not in html
     assert "thead th:hover" not in html

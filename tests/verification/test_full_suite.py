@@ -194,6 +194,19 @@ def test_reader_rejects_symlinked_fixed_chain_component(tmp_path):
         read_latest_run(tmp_path)
 
 
+def test_reader_rejects_broken_symlink_in_progress_marker(tmp_path):
+    run = _run()
+    _write_bundle(tmp_path, run)
+    marker = tmp_path / "in-progress.json"
+    try:
+        marker.symlink_to(tmp_path / "missing-marker-target.json")
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+    assert marker.exists() is False
+    with pytest.raises(FullSuiteEvidenceUnavailable):
+        read_latest_run(tmp_path)
+
+
 def test_child_environment_removes_pytest_python_and_semiskill_injection(monkeypatch, tmp_path):
     monkeypatch.setenv("PYTEST_ADDOPTS", "-x -p hostile")
     monkeypatch.setenv("PYTEST_PLUGINS", "hostile")
