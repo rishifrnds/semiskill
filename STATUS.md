@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T10:46:27Z_
+_Last updated: 2026-08-06T10:46:59Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,9 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-009d checkpoint: the dashboard now consumes only validated, environment-bound canonical
-  scoreboard/progress snapshots, refreshes every 15 seconds, and exposes provenance/freshness;
-  the full isolated suite and browser-script parse are green and the commit is being recorded.
+- J-010a: make static/offline exports explicit single-permission scopes, stamp principal/snapshot/
+  source provenance, emit file hashes, and refuse mixed-label or unauthorized materialization.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -40,8 +39,9 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- Pending J-009d dashboard checkpoint; last recorded implementation commit is 0c0ec18.
+- 01275da — canonical fail-closed dashboard, 15-second refresh, provenance/freshness/worker state,
+  and stricter scoreboard timestamp/database/source validation.
 
 ## Last checkpoint commit
-- 0c0ec18: 657 passed, 4 skipped, 1 xpassed against recreated semiskill_test; the development
+- 01275da: 674 passed, 4 skipped, 1 xpassed; browser script and model JSON parse; the development
   snapshot remains 84/0/0/0/0 authored/reviewed/ready/approved/published.

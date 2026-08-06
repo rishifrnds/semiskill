@@ -540,9 +540,20 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-009d remove dashboard fixture fallbacks and consume only validated canonical snapshots
 
 
+- [J-009d] 2026-08-06T10:46:59Z  status: done
+  what: removed seed, raw-approval and ACL-filtered API count fallbacks from the local command centre;
+  it now loads semantically validated environment-bound scoreboard/progress documents, preserves
+  unavailable states, renders all registry role/level cells and exact skill states, exposes source
+  commit/database/freshness/worker provenance, and refreshes every 15 seconds
+  artifacts: 01275da, dashboard/server.py, dashboard/index.html, dashboard/README.md,
+  semiskill/authoring/snapshot.py, tests/dashboard/test_dashboard.py,
+  674 passed, 4 skipped, 1 xpassed; inline browser script and model JSON parsed
+  next: J-010a make every offline export explicitly permission-scoped and reject mixed labels
+
+
 ## In-Flight Step
-- [J-009d] make the dashboard consume validated canonical scoreboard/progress documents only,
-  refresh within 15 seconds, and expose provenance/freshness without seeds or inferred counts.
+- [J-010a] make static/offline catalog exports principal- and permission-scoped, visibly stamped,
+  hash-manifested, and fail closed on mixed labels before expanding the production read API.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
