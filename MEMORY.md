@@ -624,9 +624,21 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a8 execute the exact development adoption plan and regenerate canonical live state
 
 
+- [J-010a8] 2026-08-06T13:42:28Z  status: done
+  what: independently reproduced and executed the exact development adoption digest, atomically
+  adopted checksums for 0001-0010, removed only the attested empty historical probe, applied
+  0011-0015, reconciled every tracker/authority invariant, and restored the canonical live dashboard
+  artifacts: source commit 7e953cd; adoption artifact 6e35b460-df59-418c-9eee-c46803cbc0cb;
+  plan sha256:b4468c6acc026d385f8bf854a03984cf5886f6adfbb301802240092ba65384ad;
+  database identity sha256:85a8cb63ef46388373584988b555648732b80b136e5cc317f51412d6e624ebf1;
+  snapshot sha256:30491e583ae11c5819cc99d1e1e4cabf1cf6be73836c452871cc724698c1710d;
+  15/15 tracker hashes exact, 11/11 post-attestations true, projection rows 0, dashboard process 2348
+  next: J-010a9 make dashboard source/database/freshness validation fail closed
+
+
 ## In-Flight Step
-- [J-010a8] execute the committed read-only adoption plan against development, apply migrations
-  0011-0015 atomically, reconcile the resulting database, and regenerate the canonical snapshot.
+- [J-010a9] reject stale-commit, dirty-tree, database-drift and expired dashboard snapshots, expose
+  the migration witness, and verify the live command centre against the current source and database.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
