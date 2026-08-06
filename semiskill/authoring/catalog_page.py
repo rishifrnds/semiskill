@@ -28,12 +28,19 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from semiskill.artifacts.schema import ArtifactType
 from semiskill.artifacts.store import ArtifactStore
 from semiskill.authoring import facets as facet_vocab
+from semiskill.governance.publish import (
+    ApprovalChainInvalid,
+    resolve_frozen_approval_evidence,
+)
 from semiskill.wave import _published_index
 
 LEVEL_ORDER = list(facet_vocab.LEVELS)
+
+
+class CatalogRefused(Exception):
+    """A published record cannot be rendered without a valid frozen approval chain."""
 
 
 @dataclass(frozen=True)
@@ -52,22 +59,29 @@ class CatalogEntry:
     verdict: str
     aggregate_safety: float | None
     stages: list[dict]
+    approval_id: str
+    payload_sha256: str
+    automated_review_id: str
+    content_review_id: str
 
 
 def collect(store: ArtifactStore) -> list[CatalogEntry]:
     """Read the published catalog + each skill's real scan report."""
-    published = _published_index(store)
-    scans = [a for t in (ArtifactType.SCAN_RUN, ArtifactType.INJECTION_TEST)
-             for a in store.by_type(t)]
-    reviews = store.by_type(ArtifactType.REVIEW)
+    try:
+        published = _published_index(store)
+    except ApprovalChainInvalid as exc:
+        raise CatalogRefused(f"malformed active approval chain: {exc}") from exc
 
     out: list[CatalogEntry] = []
-    for slug, (sv, _approval) in sorted(published.items()):
+    for slug, (sv, approval) in sorted(published.items()):
+        try:
+            frozen = resolve_frozen_approval_evidence(
+                store, skill_version=sv, approval=approval,
+            )
+        except ApprovalChainInvalid as exc:
+            raise CatalogRefused(f"{slug}: malformed active approval chain: {exc}") from exc
         p = sv.payload
-        my_scans = sorted((a for a in scans if sv.artifact_id in a.input_refs),
-                          key=lambda a: a.payload.get("stage", 0))
-        my_reviews = [a for a in reviews if sv.artifact_id in a.input_refs]
-        review = max(my_reviews, key=lambda a: a.timestamp_start, default=None)
+        review = frozen.automated_review
         body = p.get("body", "")
         out.append(CatalogEntry(
             slug=slug, title=p.get("name") or slug, description=p.get("description", ""),
@@ -75,10 +89,21 @@ def collect(store: ArtifactStore) -> list[CatalogEntry]:
             function=p.get("function") or "", version=p.get("version", ""),
             owner=p.get("owner") or "", tags=list(p.get("tags") or []),
             body=body, slots=body.count("[[FILL:"),
-            verdict=(review.payload.get("verdict") if review else "unknown"),
-            aggregate_safety=(review.payload.get("aggregate_safety") if review else None),
-            stages=[{"stage": a.payload.get("stage"), "safety": float(a.payload.get("safety_score", 0)),
-                     "hard_fail": bool(a.payload.get("hard_fail"))} for a in my_scans]))
+            verdict=review.payload["verdict"],
+            aggregate_safety=float(review.payload["aggregate_safety"]),
+            stages=[{
+                "artifact_id": str(scan.artifact_id),
+                "stage": scan.payload["stage"],
+                "status": scan.payload["status"],
+                "sampled": scan.payload["sampled"],
+                "safety": float(scan.payload["safety_score"]),
+                "hard_fail": scan.payload["hard_fail"],
+            } for scan in frozen.scans],
+            approval_id=str(approval.artifact_id),
+            payload_sha256=approval.payload["skill"]["payload_sha256"],
+            automated_review_id=str(frozen.automated_review.artifact_id),
+            content_review_id=str(frozen.content_review.artifact_id),
+        ))
     return out
 
 
@@ -177,7 +202,10 @@ def render_html(entries: list[CatalogEntry], *, generated_at: str) -> str:
                     "role": e.role, "level": e.level, "function": e.function,
                     "version": e.version, "owner": e.owner, "tags": e.tags,
                     "slots": e.slots, "verdict": e.verdict,
-                    "safety": e.aggregate_safety, "stages": e.stages, "body": e.body}
+                    "safety": e.aggregate_safety, "stages": e.stages, "body": e.body,
+                    "approval_id": e.approval_id, "payload_sha256": e.payload_sha256,
+                    "automated_review_id": e.automated_review_id,
+                    "content_review_id": e.content_review_id}
                    for e in entries],
         "roles": roles, "levels": levels, "cells": cells,
     }
@@ -423,7 +451,8 @@ function open_(slug) {
   $('#d-scan').innerHTML =
     `<tr><th>Scan stage</th><th>Result</th></tr>` +
     s.stages.map(st => `<tr><td>stage ${st.stage}</td>` +
-      `<td>${st.hard_fail ? 'BLOCKED' : 'passed'} · ${st.safety.toFixed(3)}</td></tr>`).join('') +
+      `<td>${st.hard_fail ? 'BLOCKED' : esc(st.status.replaceAll('_', ' '))}` +
+      ` · ${st.safety.toFixed(3)}</td></tr>`).join('') +
     `<tr><td><b>aggregate</b></td><td><b>${esc(s.verdict)}` +
     `${s.safety != null ? ' · ' + s.safety.toFixed(3) : ''}</b></td></tr>`;
   $('#d-body').textContent = s.body;

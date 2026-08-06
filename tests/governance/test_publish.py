@@ -57,7 +57,8 @@ def _scan(sv, stage, *, status="passed", hard_fail=False):
         actor="pipeline",
         actor_kind=ActorKind.SERVICE_ACCOUNT,
         input_refs=[sv.artifact_id],
-        payload={"stage": stage, "status": status, "hard_fail": hard_fail,
+        payload={"stage": stage, "status": status,
+                 "sampled": status not in {"not_run", "not_sampled"}, "hard_fail": hard_fail,
                  "safety_score": 0.0 if hard_fail else 1.0, "findings": []},
     )
 

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable
 
-from semiskill.artifacts.schema import Artifact, ArtifactType
+from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind
 from semiskill.artifacts.store import ArtifactStore
 from semiskill.authoring.gate import READY, readiness_for_version
 from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
@@ -126,24 +126,43 @@ def load_wave(root: str | Path) -> list[WaveItem]:
 
 
 def _published_index(store: ArtifactStore) -> dict[str, tuple[Artifact, Artifact]]:
-    """Compatibility read model for current catalog consumers; approval/v1 hardening follows."""
-    approvals = store.by_type(ArtifactType.APPROVAL)
-    corrected = {artifact.corrects_ref for artifact in approvals if artifact.corrects_ref is not None}
+    """Return active exact approval/v1 publications; legacy approvals never enter the catalog."""
+    from semiskill.governance.publish import (
+        APPROVAL_SCHEMA,
+        resolve_frozen_approval_evidence,
+    )
+
+    approvals = [
+        artifact for artifact in store.by_type(ArtifactType.APPROVAL)
+        if artifact.actor_kind is ActorKind.HUMAN
+        and artifact.payload.get("schema_version") == APPROVAL_SCHEMA
+    ]
+    corrected = {
+        artifact.corrects_ref for artifact in approvals if artifact.corrects_ref is not None
+    }
     out: dict[str, tuple[Artifact, Artifact]] = {}
-    for skill_version in store.by_type(ArtifactType.SKILL_VERSION):
-        related = [
-            approval for approval in approvals
-            if skill_version.artifact_id in approval.input_refs
-            and approval.artifact_id not in corrected
-        ]
-        if not related:
+    for approval in approvals:
+        if (
+            approval.artifact_id in corrected
+            or approval.payload.get("decision") != "approve"
+            or approval.payload.get("published") is not True
+            or len(approval.input_refs) != 3
+        ):
             continue
-        latest = max(related, key=lambda artifact: artifact.timestamp_start)
-        if latest.payload.get("verdict") == "approve" and latest.payload.get("published") is True:
-            slug = skill_version.payload.get("slug")
-            prior = out.get(slug)
-            if slug and (prior is None or skill_version.timestamp_start >= prior[0].timestamp_start):
-                out[slug] = (skill_version, latest)
+        skill_version = store.get(approval.input_refs[0])
+        if skill_version is None or skill_version.artifact_type is not ArtifactType.SKILL_VERSION:
+            continue
+        resolve_frozen_approval_evidence(
+            store, skill_version=skill_version, approval=approval,
+        )
+        slug = skill_version.payload.get("slug")
+        prior = out.get(slug)
+        if slug and (
+            prior is None
+            or (approval.timestamp_start, str(approval.artifact_id))
+            > (prior[1].timestamp_start, str(prior[1].artifact_id))
+        ):
+            out[slug] = (skill_version, approval)
     return out
 
 

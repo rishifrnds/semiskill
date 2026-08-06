@@ -25,6 +25,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from semiskill.artifacts.store import ArtifactStore
+from semiskill.governance.publish import (
+    ApprovalChainInvalid,
+    resolve_frozen_approval_evidence,
+)
 from semiskill.wave import _published_index, payload_hash
 
 PACK_NAME = "semiskill-dv"
@@ -48,6 +52,11 @@ class PackedSkill:
     slots: int
     verdict: str
     aggregate_safety: float | None
+    approval_artifact_id: str
+    payload_sha256: str
+    automated_review_artifact_id: str
+    content_review_artifact_id: str
+    scan_artifact_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -64,12 +73,6 @@ class PackManifest:
                           indent=2, sort_keys=True)
 
 
-def _review_for(store: ArtifactStore, skill_version_id):
-    from semiskill.artifacts.schema import ArtifactType
-    reviews = [a for a in store.by_type(ArtifactType.REVIEW) if skill_version_id in a.input_refs]
-    return max(reviews, key=lambda a: a.timestamp_start, default=None)
-
-
 def build_pack(*, store: ArtifactStore, source_root: str | Path, out_dir: str | Path,
                pack_name: str = PACK_NAME, generated_at: str = "unset",
                include_tools: bool = True, make_zip: bool = True) -> tuple[Path, PackManifest]:
@@ -78,25 +81,26 @@ def build_pack(*, store: ArtifactStore, source_root: str | Path, out_dir: str | 
     out = Path(out_dir)
     pack_root = out / pack_name
 
-    published = _published_index(store)
+    try:
+        published = _published_index(store)
+    except ApprovalChainInvalid as exc:
+        raise PackRefused(f"malformed active approval chain: {exc}") from exc
     if not published:
         raise PackRefused("nothing is published — run `semiskill wave` first")
 
-    if pack_root.exists():
-        shutil.rmtree(pack_root)
-    pack_root.mkdir(parents=True)
-
-    packed: list[PackedSkill] = []
-    for slug, (sv, _approval) in sorted(published.items()):
+    preflight = []
+    for slug, (sv, approval) in sorted(published.items()):
+        try:
+            frozen = resolve_frozen_approval_evidence(
+                store, skill_version=sv, approval=approval,
+            )
+        except ApprovalChainInvalid as exc:
+            raise PackRefused(f"{slug}: malformed active approval chain: {exc}") from exc
         skill_md = src / slug / "SKILL.md"
         if not skill_md.exists():
             raise PackRefused(f"{slug} is published but its source is missing at {skill_md}")
-
-        raw = skill_md.read_bytes()          # what the engineer will actually receive
-        text = raw.decode("utf-8")                    # preserve exact approved line endings
-        # Recompute the payload the way the WAVE built it — from the whole directory, not just
-        # SKILL.md. A skill that bundles files (REVIEW.json, references/) publishes with them in the
-        # payload, so hashing SKILL.md alone reports drift on every such skill.
+        raw = skill_md.read_bytes()
+        text = raw.decode("utf-8")
         from semiskill.capture.intake import build_skill_version, load_skill_dir
         _, sibling_files = load_skill_dir(skill_md.parent)
         fresh = build_skill_version(skill_md=text, actor="pack", files=sibling_files).payload
@@ -104,13 +108,20 @@ def build_pack(*, store: ArtifactStore, source_root: str | Path, out_dir: str | 
             raise PackRefused(
                 f"{slug}: the source file has changed since it published. Packing it would ship "
                 f"bytes carrying a verification badge they did not earn. Re-run `semiskill wave`.")
+        preflight.append((slug, sv, approval, frozen, skill_md, raw, text, fresh))
 
+    if pack_root.exists():
+        shutil.rmtree(pack_root)
+    pack_root.mkdir(parents=True)
+
+    packed: list[PackedSkill] = []
+    for slug, sv, approval, frozen, skill_md, raw, text, fresh in preflight:
         dest = pack_root / slug
         dest.mkdir()
         # copy2, not a re-serialisation: the delivered bytes are the verified bytes
         shutil.copy2(skill_md, dest / "SKILL.md")
 
-        review = _review_for(store, sv.artifact_id)
+        review = frozen.automated_review
         packed.append(PackedSkill(
             name=slug, title=fresh.get("name") or slug, description=fresh.get("description", ""),
             role=fresh.get("role"), level=fresh.get("level"), function=fresh.get("function"),
@@ -118,8 +129,13 @@ def build_pack(*, store: ArtifactStore, source_root: str | Path, out_dir: str | 
             # checksum of the DELIVERED bytes, so a recipient can actually verify the file they hold
             sha256=hashlib.sha256(raw).hexdigest(), bytes_len=len(raw),
             slots=text.count("[[FILL:"),
-            verdict=(review.payload.get("verdict") if review else "unknown"),
-            aggregate_safety=(review.payload.get("aggregate_safety") if review else None)))
+            verdict=review.payload["verdict"],
+            aggregate_safety=float(review.payload["aggregate_safety"]),
+            approval_artifact_id=str(approval.artifact_id),
+            payload_sha256=approval.payload["skill"]["payload_sha256"],
+            automated_review_artifact_id=str(frozen.automated_review.artifact_id),
+            content_review_artifact_id=str(frozen.content_review.artifact_id),
+            scan_artifact_ids=tuple(str(scan.artifact_id) for scan in frozen.scans)))
 
     shared_src = src / "_shared"
     if shared_src.is_dir():

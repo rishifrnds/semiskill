@@ -184,7 +184,8 @@ q.addEventListener('input', () => {
 def render_skill(e: CatalogEntry, siblings: list[CatalogEntry], *, generated_at: str) -> str:
     stages = "".join(
         f'<tr><td>stage {s["stage"]}</td>'
-        f'<td>{"BLOCKED" if s["hard_fail"] else "passed"} · {s["safety"]:.3f}</td></tr>'
+        f'<td>{"BLOCKED" if s["hard_fail"] else s["status"].replace("_", " ")} '
+        f'· {s["safety"]:.3f}</td></tr>'
         for s in e.stages)
     related = "".join(
         f'<li><a href="{E(s.slug)}.html">{E(s.title)}</a>'

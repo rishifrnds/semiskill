@@ -5,11 +5,13 @@ The load-bearing ones are `test_packed_bytes_are_identical_to_the_source` and
 what an engineer installs is what passed the gate.
 """
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from semiskill.artifacts.migrate import apply_migrations
+from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.pack import PackRefused, build_pack
 from tests.support import publish_wave_sources
@@ -144,6 +146,32 @@ def test_manifest_records_verdict_and_checksums(pg_store, pg_dsn, source, tmp_pa
         assert s["aggregate_safety"] == 1.0
         assert len(s["sha256"]) == 64
         assert s["slots"] >= 1
+
+
+@pytest.mark.integration
+def test_manifest_is_frozen_to_the_active_approval_chain(pg_store, source, tmp_path):
+    fixtures = publish_wave_sources(pg_store, source)
+    fixture = next(item for item in fixtures if item.skill_version.payload["slug"] == "dv-alpha")
+    later = Artifact.new(
+        artifact_type=ArtifactType.REVIEW,
+        source_system=SourceSystem.CLI,
+        actor="later-controller",
+        actor_kind=ActorKind.AGENT,
+        input_refs=[fixture.skill_version.artifact_id],
+        payload={"review_kind": "security_aggregate", "schema_version": 1, "stage": 6,
+                 "verdict": "reject", "aggregate_safety": 0.0, "judge_required": True,
+                 "scan_artifact_ids": []},
+    )
+    pg_store.append(replace(later, permissions_label=fixture.skill_version.permissions_label))
+
+    root, _ = build_pack(store=pg_store, source_root=source, out_dir=tmp_path / "dist")
+    manifest = json.loads((root / "MANIFEST.json").read_text(encoding="utf-8"))
+    row = next(item for item in manifest["skills"] if item["name"] == "dv-alpha")
+    assert row["approval_artifact_id"] == str(fixture.approval.artifact_id)
+    assert row["automated_review_artifact_id"] == str(fixture.automated_review.artifact_id)
+    assert row["content_review_artifact_id"] == str(fixture.content_review.artifact_id)
+    assert row["scan_artifact_ids"] == [str(scan.artifact_id) for scan in fixture.scans]
+    assert row["verdict"] == "approve" and row["aggregate_safety"] == 1.0
 
 
 @pytest.mark.integration

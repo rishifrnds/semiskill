@@ -277,7 +277,20 @@ def readiness_for_version(store: ArtifactStore, skill_version: Artifact) -> Read
         )
     )
     latest = candidates[-1]
-    structural, unmet, findings = _review_validation(latest, skill_version, store)
+    return readiness_for_review(store, skill_version, latest)
+
+
+def readiness_for_review(
+    store: ArtifactStore,
+    skill_version: Artifact,
+    review: Artifact,
+) -> Readiness:
+    """Compute readiness for one immutable review without consulting later review rounds.
+
+    Publication admission uses :func:`readiness_for_version` to require the latest evidence. A
+    published badge uses this exact-review form so later review work cannot rewrite history.
+    """
+    structural, unmet, findings = _review_validation(review, skill_version, store)
     open_blocking = sum(
         finding.severity == "blocking" and finding.disposition in {"open", "disputed"}
         for finding in findings
@@ -295,7 +308,7 @@ def readiness_for_version(store: ArtifactStore, skill_version: Artifact) -> Read
         status = REVIEWED
     else:
         status = READY
-    return Readiness(status, latest, errors, open_blocking, open_non_blocking)
+    return Readiness(status, review, errors, open_blocking, open_non_blocking)
 
 
 # --- Legacy file migration readers. These are evidence-only and never create canonical readiness. ---

@@ -8,11 +8,13 @@ by the project's own rule.
 import csv
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from semiskill.artifacts.migrate import apply_migrations
+from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.catalog_page import build_catalog, collect, render_html, render_markdown
 from tests.support import publish_wave_sources
@@ -61,9 +63,51 @@ def test_collect_returns_published_skills_with_their_real_scan_report(populated)
     for e in entries:
         assert e.verdict == "approve"
         assert e.aggregate_safety == 1.0
-        assert [s["stage"] for s in e.stages] == [1, 3, 4]     # the stages that actually ran
+        assert [s["stage"] for s in e.stages] == [1, 2, 3, 4, 5]
+        assert all(s["status"] == "passed" and s["sampled"] for s in e.stages)
         assert all(not s["hard_fail"] for s in e.stages)
         assert e.slots == 1 and e.body and e.title.startswith("Title of")
+
+
+@pytest.mark.integration
+def test_catalog_badge_is_frozen_to_the_active_approval_chain(pg_store, tmp_path):
+    root = tmp_path / "skills"
+    d = root / "dv-frozen"
+    d.mkdir(parents=True)
+    (d / "SKILL.md").write_text(skill_md("dv-frozen"), encoding="utf-8")
+    fixture = publish_wave_sources(pg_store, root)[0]
+
+    later_scan = Artifact.new(
+        artifact_type=ArtifactType.SCAN_RUN,
+        source_system=SourceSystem.CLI,
+        actor="later-pipeline",
+        actor_kind=ActorKind.SERVICE_ACCOUNT,
+        input_refs=[fixture.skill_version.artifact_id],
+        payload={"stage": 1, "status": "failed", "sampled": True,
+                 "safety_score": 0.1, "hard_fail": True, "findings": []},
+    )
+    later_scan = replace(later_scan, permissions_label=fixture.skill_version.permissions_label)
+    pg_store.append(later_scan)
+    later_review = Artifact.new(
+        artifact_type=ArtifactType.REVIEW,
+        source_system=SourceSystem.CLI,
+        actor="later-controller",
+        actor_kind=ActorKind.AGENT,
+        input_refs=[fixture.skill_version.artifact_id, later_scan.artifact_id],
+        payload={"review_kind": "security_aggregate", "schema_version": 1, "stage": 6,
+                 "verdict": "reject", "aggregate_safety": 0.1, "judge_required": True,
+                 "scan_artifact_ids": [str(later_scan.artifact_id)]},
+    )
+    pg_store.append(replace(later_review, permissions_label=fixture.skill_version.permissions_label))
+
+    entry = collect(pg_store)[0]
+    assert entry.approval_id == str(fixture.approval.artifact_id)
+    assert entry.automated_review_id == str(fixture.automated_review.artifact_id)
+    assert entry.content_review_id == str(fixture.content_review.artifact_id)
+    assert [stage["artifact_id"] for stage in entry.stages] == [
+        str(scan.artifact_id) for scan in fixture.scans
+    ]
+    assert entry.verdict == "approve" and entry.aggregate_safety == 1.0
 
 
 @pytest.mark.integration
