@@ -10,7 +10,7 @@ metadata:
   semiskill-role: emulation-engineer
   semiskill-level: staff
   semiskill-owner: dv-guild
-  semiskill-version: 1.1.0
+  semiskill-version: 1.2.0
   semiskill-review-by: 2027-04-09
   semiskill-tags: emulation, prototyping, visibility, trigger, waveform, checkpoint, debug
 ---
@@ -53,6 +53,7 @@ covers the front end of that flow, though not its synthesis stage.
 | Trace budget | [[FILL: how much capture our platform gives us, in the units it reports — signals, samples, depth or bytes — and whether that budget is per run or shared across the whole design]] | emulation infra owner |
 | Trigger mechanism | [[FILL: how a trigger is expressed for us — a file, a condition on named signals, a call from the testbench — and the strings our flow prints when it arms and when it fires]] | emulation lead |
 | Run log and markers | [[FILL: where the emulation run log and its capture report land, and the strings that mean the run failed and that it finished clean]] | emulation lead |
+| Capture report vocabulary | [[FILL: what our capture report calls the range of cycles or samples it actually captured — the first and last of them — the unit it states that range in, and what it prints when the buffer did not fill]] | emulation infra owner |
 | Name mapping | [[FILL: whether our flow writes a file mapping RTL hierarchical names to the names the emulator database uses, and where it lands]] | emulation infra owner |
 | Checkpoint convention | [[FILL: whether our flow can save and restore emulator state, at what cadence it saves, where the saves land, and what is not inside one]] | emulation infra owner |
 | Turnaround costs | [[FILL: what a recompile, a run, a trigger-armed rerun and an export each cost us in wall clock]] | emulation lead |

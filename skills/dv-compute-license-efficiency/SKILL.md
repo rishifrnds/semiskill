@@ -94,7 +94,8 @@ per job per night, one row per coverage item per test. Read them by pattern, nev
 1. **Grep, Read and Glob work on files on disk**, not on a table pasted into a chat. If the numbers
    arrived pasted, ask for the path they came from before Grepping anything; if no path exists, say
    so and mark every figure taken from the paste unverified.
-2. **Glob first, at most eight times** — the closure record; the tier definitions; the test list
+2. **Glob before opening anything, at most eight times across the whole exercise** — the closure
+   record; the tier definitions; the test list
    source, which is a second slot with a second owner and is often but not always the same file (where
    one file answers both, that Glob stays unspent); this period's summary; the comparison period's
    summary; the ranking report; the farm accounting export; the bug-find record.

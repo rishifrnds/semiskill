@@ -65,8 +65,22 @@ def _json_block(obj, element_id: str) -> str:
     return f'<script id="{element_id}" type="application/json">{payload}</script>'
 
 
+# A preview build renders skills that have NOT passed the gate, so it must not wear the published
+# site's footer, which promises every field came from a published skill. `build_site(preview=...)`
+# sets this for the duration of the build; the default is the honest published-catalog wording.
+_PREVIEW: str = ""
+
+
 def _shell(*, title: str, depth: int, body: str, generated_at: str, scripts: str = "") -> str:
     up = "../" * depth
+    banner = (f'<div class="preview-banner"><b>PREVIEW — not the published catalog.</b> '
+              f'{E(_PREVIEW)}</div>' if _PREVIEW else "")
+    footer = (f'PREVIEW build · {E(generated_at)} · These skills have NOT all passed the '
+              f'verification gate. Each card shows its real gate status; scan scores are real, '
+              f'the content review is not complete.'
+              if _PREVIEW else
+              f'Generated from the verified catalog · {E(generated_at)} · Nothing here is estimated '
+              f'or illustrative — every field comes from a published skill and its real scan report.')
     return f"""<!doctype html>
 <html lang="en" class="dark">
 <head>
@@ -84,12 +98,12 @@ def _shell(*, title: str, depth: int, body: str, generated_at: str, scripts: str
     <a href="{up}install.html">Install</a>
   </nav>
 </header>
+{banner}
 <main>
 {body}
 </main>
 <footer>
-  Generated from the verified catalog · {E(generated_at)} · Nothing here is estimated or
-  illustrative — every field comes from a published skill and its real scan report.
+  {footer}
 </footer>
 {scripts}
 </body>
@@ -344,9 +358,36 @@ def render_install(entries: list[CatalogEntry], *, generated_at: str) -> str:
     return _shell(title="Install · DV Agent Skills", depth=0, body=body, generated_at=generated_at)
 
 
-def build_site(*, store: ArtifactStore, out_dir: str | Path,
-               generated_at: str = "unset") -> SiteResult:
-    entries = sorted(collect(store), key=_rank_key)
+def build_site(*, store: ArtifactStore | None = None, out_dir: str | Path,
+               generated_at: str = "unset",
+               entries: list[CatalogEntry] | None = None,
+               preview: str = "") -> SiteResult:
+    """Render the catalog site.
+
+    By default the source is the PUBLISHED catalog, and that invariant is load-bearing — an
+    unpublished skill must never reach the site. `entries` exists for one purpose: a clearly-marked
+    PREVIEW build of authored-but-not-yet-verified skills, which every page then declares in a
+    banner and its footer. Passing `entries` without `preview` is refused, so a preview can never be
+    mistaken for the real catalog by omission.
+    """
+    if entries is not None and not preview:
+        raise ValueError("entries= builds a preview and requires preview=<what it is>; refusing to "
+                         "render unpublished skills in the published site's clothing")
+    global _PREVIEW
+    _PREVIEW = preview
+    try:
+        return _build(store=store, out_dir=out_dir, generated_at=generated_at, entries=entries)
+    finally:
+        _PREVIEW = ""
+
+
+def _build(*, store: ArtifactStore | None, out_dir: str | Path,
+           generated_at: str, entries: list[CatalogEntry] | None) -> SiteResult:
+    if entries is None:
+        if store is None:
+            raise ValueError("build_site needs either a store or an explicit entries list")
+        entries = collect(store)
+    entries = sorted(entries, key=_rank_key)
     out = Path(out_dir)
     (out / "skills").mkdir(parents=True, exist_ok=True)
     (out / "roles").mkdir(parents=True, exist_ok=True)
@@ -525,6 +566,16 @@ table.plain td{padding:6px 14px 6px 0;vertical-align:top}
 
 footer{max-width:1180px;margin:0 auto;padding:18px 22px 40px;font-size:12px;
   color:hsl(var(--muted-foreground));border-top:1px solid hsl(var(--border))}
+.preview-banner{max-width:1180px;margin:14px auto 0;padding:11px 15px;font-size:13px;
+  border-radius:var(--radius);background:hsl(38 92% 50% / .11);
+  border:1px solid hsl(38 92% 50% / .45);color:hsl(38 92% 72%)}
+.preview-banner b{color:hsl(38 96% 80%)}
+.b.gate-ready{background:hsl(142 70% 45% / .16);border-color:hsl(142 70% 45% / .5);
+  color:hsl(142 70% 72%)}
+.b.gate-open{background:hsl(38 92% 50% / .14);border-color:hsl(38 92% 50% / .45);
+  color:hsl(38 92% 74%)}
+.b.gate-none{background:hsl(0 0% 50% / .12);border-color:hsl(0 0% 50% / .38);
+  color:hsl(0 0% 72%)}
 .toast{position:fixed;right:18px;bottom:18px;background:hsl(var(--card));
   border:1px solid hsl(var(--primary)/.4);border-radius:var(--radius);padding:11px 15px;
   font-size:12.5px;box-shadow:0 12px 32px rgba(0,0,0,.55)}

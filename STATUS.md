@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-05T17:10Z_
+_Last updated: 2026-08-06T00:05Z_
 
 ## Phase
 Phase J: 84 authored DV skills through a REAL content gate (adversarial review -> fix -> INDEPENDENT
@@ -12,7 +12,11 @@ recheck -> REVIEW.json), then publish and prove 16 roles x >=5 on the scoreboard
 
 ## Session
 - ID: 20260805T031906Z-Rishi_PC-f97e05 · lock held: yes
-- **Halted on the session token limit.** Resume with `HANDOFF.md` (paste-ready prompt inside).
+- **Execution delegated to another model (GLM) to conserve tokens.** This session's role is now
+  review and quality control. Procedure: `docs/WORKFLOW.md`. Prompts: `docs/PROMPT_LIBRARY.md`.
+- Three round-2 workflows were launched and STOPPED on request. 3 skills carry partial fix edits
+  (dv-compute-license-efficiency, dv-emulation-dump-strategy, dv-uvm-agent-checker) — all three
+  still lint 1.000, and no gate record was written for them, so they correctly remain not-ready.
 
 ## Gate state — measured from REVIEW.json on disk, not from any claim
 - ready **3** · not-ready with real findings **32** · never-reviewed **49** · **published 0**
