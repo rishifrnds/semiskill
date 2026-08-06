@@ -583,9 +583,18 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010a4 bind the pack and export CLI to the exact-label capability
 
 
+- [J-010a4] 2026-08-06T11:45:13Z  status: done
+  what: replaced source-copy packaging with an exact-scope frozen-byte release, deterministic ZIP
+  and evidence manifest; raw repository `_shared` and authoring tools are excluded, unresolved
+  dependencies fail closed, and all export CLI commands require an explicit snapshot and label
+  artifacts: 5ea37da, semiskill/authoring/pack.py, semiskill/cli.py,
+  tests/authoring/test_pack.py, tests/cli/test_cli.py, 86 focused tests passed
+  next: J-010a5 remove unexecuted red-team fixture claims from the live dashboard
+
+
 ## In-Flight Step
-- [J-010a4] bind pack/catalog/site CLI commands to explicit OS/Entra export scopes and make the
-  pack reproduce only approval-bound bytes while refusing unresolved shared dependencies.
+- [J-010a5] remove unexecuted red-team fixture claims and false credit from the live dashboard,
+  exposing input inventory as not executed until an immutable result artifact exists.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
