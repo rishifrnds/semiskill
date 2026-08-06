@@ -34,4 +34,6 @@ Thumbs.db
 .idea/
 .vscode/
 reports/journal.jsonl
+reports/scoreboard/latest.json
+reports/progress/latest.json
 dist/

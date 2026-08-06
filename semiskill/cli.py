@@ -242,11 +242,11 @@ def cmd_catalog(args, store, out) -> int:
 def cmd_scoreboard(args, store, out) -> int:
     """Coverage of the planned registry by the PUBLISHED catalog. Deterministic by design — a
     scoreboard that can be talked into optimism is worse than none."""
-    import json
     from datetime import datetime, timezone
     from semiskill.artifacts.store import PostgresArtifactStore
-    from semiskill.authoring.scoreboard import build_scoreboard, render
-    from semiskill.authoring.snapshot import build_scoreboard_snapshot, write_json_atomic
+    from semiskill.authoring.snapshot import (
+        build_scoreboard_snapshot, render_scoreboard_snapshot, write_json_atomic,
+    )
 
     if args.snapshot_out == "-":
         print("snapshot refused: --snapshot-out requires an atomic filesystem path", file=out)
@@ -257,11 +257,6 @@ def cmd_scoreboard(args, store, out) -> int:
     dsn = args.dsn or Config.from_env().database_url
     store = store or PostgresArtifactStore(dsn)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    sb = build_scoreboard(store=store, registry_path=args.registry, skills_root=args.skills,
-                          target=args.fail_under, strict_gate=args.strict_gate,
-                          generated_at=generated_at,
-                          lint=not args.no_lint)
-    snapshot = None
     if args.snapshot_out:
         try:
             snapshot = build_scoreboard_snapshot(
@@ -276,18 +271,24 @@ def cmd_scoreboard(args, store, out) -> int:
         except Exception:  # snapshot paths, database details and parser traces stay local
             print("snapshot generation failed; any prior snapshot was left unchanged", file=out)
             return 2
-    style = "json" if args.json else ("markdown" if args.markdown else "text")
-    if args.json and snapshot is not None:
-        print(json.dumps(snapshot, indent=2, sort_keys=True), file=out)
-    else:
-        print(render(sb, style=style), file=out)
-        if snapshot is not None:
+        style = "json" if args.json else ("markdown" if args.markdown else "text")
+        print(render_scoreboard_snapshot(snapshot, style=style), file=out)
+        if not args.json:
             print(
                 f"\nauthoritative snapshot: {args.snapshot_out}\n"
                 f"snapshot id: {snapshot['snapshot_id']}",
                 file=out,
             )
-    return 0 if (snapshot["release_gate"]["passed"] if snapshot is not None else sb.ok) else 1
+        return 0 if snapshot["release_gate"]["passed"] else 1
+
+    # Explicit compatibility path: no canonical file is written and legacy JSON/text remains stable.
+    from semiskill.authoring.scoreboard import build_scoreboard, render
+    sb = build_scoreboard(store=store, registry_path=args.registry, skills_root=args.skills,
+                          target=args.fail_under, strict_gate=args.strict_gate,
+                          generated_at=generated_at, lint=not args.no_lint)
+    style = "json" if args.json else ("markdown" if args.markdown else "text")
+    print(render(sb, style=style), file=out)
+    return 0 if sb.ok else 1
 
 
 def cmd_site(args, store, out) -> int:

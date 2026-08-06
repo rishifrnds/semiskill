@@ -1,4 +1,5 @@
 import json
+import hashlib
 import threading
 import urllib.error
 import urllib.request
@@ -56,22 +57,20 @@ def _get_with_headers(base, path):
 
 
 def _snapshot():
-    return finalize_scoreboard({
-        "scope": {"phase": "dv-84"},
-        "sources": {"database": {"database_name": "semiskill_test"}},
-        "registry": {"active": 84, "declined": 20, "roles": 16},
-        "funnel": {"authored": 84, "published": 0},
-        "conservation": {"passed": True, "checks": {}},
-        "roles": [], "cells": [], "anomalies": {},
-        "release_gate": {"passed": False, "checks": []},
-    }, generated_at="2026-08-06T00:00:00Z")
+    from tests.authoring.test_snapshot import _body
+    return finalize_scoreboard(_body(), generated_at="2026-08-06T00:00:00Z")
 
 
 @contextmanager
-def _snapshot_server(scoreboard_provider, progress_provider=None):
+def _snapshot_server(
+    scoreboard_provider, progress_provider=None, *, authorized=True,
+    snapshot_environment="test",
+):
     httpd = serve(
         port=0, dsn="postgresql://unreachable:secret@127.0.0.1:1/never_used",
         scoreboard_provider=scoreboard_provider, progress_provider=progress_provider,
+        operator_authorizer=(lambda _headers: True) if authorized else None,
+        snapshot_environment=snapshot_environment,
     )
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -134,6 +133,16 @@ def test_scoreboard_returns_validated_injected_document_without_database():
     assert headers["Cache-Control"] == "no-store"
 
 
+@pytest.mark.parametrize("path", ["/scoreboard", "/progress"])
+def test_snapshot_endpoints_require_verified_operator_authorizer(path):
+    snapshot = _snapshot()
+    with _snapshot_server(lambda: snapshot, authorized=False) as base:
+        code, body, headers = _get_with_headers(base, path)
+    assert code == 403
+    assert body["error"]["code"] == "OPERATOR_AUTH_REQUIRED"
+    assert headers["Cache-Control"] == "no-store"
+
+
 def test_progress_is_bound_to_the_current_scoreboard_snapshot():
     snapshot = _snapshot()
     received = []
@@ -185,4 +194,27 @@ def test_mismatched_progress_provider_is_503():
 
     with _snapshot_server(lambda: snapshot, mismatched) as base:
         code, body, _headers = _get_with_headers(base, "/progress")
+    assert code == 503 and body["error"]["code"] == "SNAPSHOT_UNAVAILABLE"
+
+
+def test_snapshot_database_environment_must_match_api_runtime():
+    snapshot = _snapshot()
+    with _snapshot_server(
+        lambda: snapshot, snapshot_environment="production",
+    ) as base:
+        code, body, _headers = _get_with_headers(base, "/scoreboard")
+    assert code == 503 and body["error"]["code"] == "SNAPSHOT_UNAVAILABLE"
+
+
+def test_self_hashed_semantic_fabrication_is_503():
+    snapshot = _snapshot()
+    snapshot["registry"]["active"] = 84
+    canonical = dict(snapshot)
+    canonical.pop("snapshot_id")
+    canonical.pop("generated_at")
+    snapshot["snapshot_id"] = "sha256:" + hashlib.sha256(json.dumps(
+        canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")).hexdigest()
+    with _snapshot_server(lambda: snapshot) as base:
+        code, body, _headers = _get_with_headers(base, "/scoreboard")
     assert code == 503 and body["error"]["code"] == "SNAPSHOT_UNAVAILABLE"

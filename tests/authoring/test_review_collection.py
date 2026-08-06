@@ -192,6 +192,21 @@ def test_collector_rejects_duplicate_root_or_branch_without_appending():
     assert store.append_many_calls == calls and store.get(second.artifact_id) is second
 
 
+def test_collector_normalizes_malformed_stored_attempt_to_batch_rejection():
+    a = version("dv-a")
+    store = Store([a])
+    first = collect(store, [a], [result(a)])[0]
+    malformed = replace(first, payload={**first.payload, "attempt": None})
+    store.rows.append(malformed)
+    calls = store.append_many_calls
+    with pytest.raises(BatchRejected, match="existing review lineage has an invalid attempt"):
+        collect(store, [a], [result(
+            a, attempt=2, run_id="run-2", prior_review_ref=str(first.artifact_id),
+            reviewer_identity="reviewer:round-2", fixer_identity="fixer:round-2",
+        )])
+    assert store.append_many_calls == calls
+
+
 def test_legacy_import_preserves_raw_record_but_is_non_authoritative(tmp_path):
     source = tmp_path / "skills" / "dv-a" / "REVIEW.json"
     source.parent.mkdir(parents=True)

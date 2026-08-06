@@ -175,6 +175,18 @@ def test_duplicate_or_branched_attempts_fail_closed():
     assert "content review lineage has duplicate attempt 2" in state.errors
 
 
+def test_structurally_invalid_earlier_round_cannot_anchor_ready_recheck():
+    sv = skill()
+    malformed_first = review(sv, reviewer_identity="same", fixer_identity="same")
+    apparently_ready = review(
+        sv, attempt=2, run_id="run-2", prior_review=malformed_first,
+        reviewer_identity="fresh-reviewer", fixer_identity="fresh-fixer",
+    )
+    state = readiness_for_version(Store([sv, malformed_first, apparently_ready]), sv)
+    assert state.status == INVALID
+    assert "reviewer and fixer identities are not independent" in state.errors
+
+
 def test_slug_version_role_and_level_must_match_skill_version():
     sv = skill()
     art = review(sv)

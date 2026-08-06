@@ -48,6 +48,8 @@ def make_handler(
     *,
     scoreboard_provider: Callable[[], dict] | None = None,
     progress_provider: Callable[[str], dict] | None = None,
+    operator_authorizer: Callable[[object], bool] | None = None,
+    snapshot_environment: str | None = None,
 ):
     from semiskill.authoring.snapshot import (
         SnapshotUnavailable,
@@ -57,13 +59,21 @@ def make_handler(
         validate_scoreboard_snapshot,
     )
 
+    runtime_environment = snapshot_environment or os.environ.get(
+        "SEMISKILL_ENVIRONMENT", "development",
+    )
+
     def canonical_scoreboard() -> dict:
         if scoreboard_provider is not None:
-            return validate_scoreboard_snapshot(scoreboard_provider())
-        path = os.environ.get("SEMISKILL_SCOREBOARD_SNAPSHOT")
-        if not path:
-            raise SnapshotUnavailable("scoreboard snapshot path is not configured")
-        return load_scoreboard_snapshot(path)
+            snapshot = validate_scoreboard_snapshot(scoreboard_provider())
+        else:
+            path = os.environ.get("SEMISKILL_SCOREBOARD_SNAPSHOT")
+            if not path:
+                raise SnapshotUnavailable("scoreboard snapshot path is not configured")
+            snapshot = load_scoreboard_snapshot(path)
+        if snapshot["sources"]["database"].get("environment") != runtime_environment:
+            raise SnapshotUnavailable("scoreboard runtime environment does not match")
+        return snapshot
 
     def current_progress(snapshot_id: str) -> dict:
         if progress_provider is not None:
@@ -95,6 +105,22 @@ def make_handler(
                 },
             }, no_store=True)
 
+        def _operator_refused(self):
+            return self._send(403, {
+                "error": {
+                    "code": "OPERATOR_AUTH_REQUIRED",
+                    "message": "verified catalog-operator identity required",
+                },
+            }, no_store=True)
+
+        def _operator_allowed(self) -> bool:
+            if operator_authorizer is None:
+                return False
+            try:
+                return operator_authorizer(self.headers) is True
+            except Exception:
+                return False
+
         def do_GET(self):
             u = urlparse(self.path)
             parts = [p for p in u.path.split("/") if p]
@@ -104,11 +130,15 @@ def make_handler(
                 if u.path == "/health":
                     return self._send(200, {"status": "ok"})
                 if u.path == "/scoreboard":
+                    if not self._operator_allowed():
+                        return self._operator_refused()
                     try:
                         return self._send(200, canonical_scoreboard(), no_store=True)
                     except Exception:  # provider details must not cross the API boundary
                         return self._snapshot_unavailable()
                 if u.path == "/progress":
+                    if not self._operator_allowed():
+                        return self._operator_refused()
                     try:
                         snapshot = canonical_scoreboard()
                         return self._send(
@@ -157,10 +187,13 @@ def serve(
     *,
     scoreboard_provider: Callable[[], dict] | None = None,
     progress_provider: Callable[[str], dict] | None = None,
+    operator_authorizer: Callable[[object], bool] | None = None,
+    snapshot_environment: str | None = None,
 ) -> ThreadingHTTPServer:
     dsn = dsn or Config.from_env().database_url
     return ThreadingHTTPServer((host, port), make_handler(
         dsn, scoreboard_provider=scoreboard_provider, progress_provider=progress_provider,
+        operator_authorizer=operator_authorizer, snapshot_environment=snapshot_environment,
     ))
 
 

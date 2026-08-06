@@ -217,6 +217,22 @@ def test_scoreboard_snapshot_is_explicit_loadable_and_written_when_incomplete(tm
     assert str(target) in out.getvalue() and snapshot["snapshot_id"] in out.getvalue()
 
 
+def test_canonical_snapshot_path_never_invokes_legacy_scoreboard(tmp_path, monkeypatch):
+    root, registry = _scoreboard_inputs(tmp_path)
+    target = tmp_path / "scoreboard.json"
+
+    def legacy_must_not_run(**_kwargs):
+        raise AssertionError("legacy scoreboard was invoked")
+
+    monkeypatch.setattr("semiskill.authoring.scoreboard.build_scoreboard", legacy_must_not_run)
+    rc = main([
+        "scoreboard", "--registry", str(registry), "--skills", str(root),
+        "--dsn", "postgresql://unused/semiskill_dev", "--fail-under", "1",
+        "--snapshot-out", str(target),
+    ], store=FakeStore(), out=io.StringIO())
+    assert rc == 1 and load_scoreboard_snapshot(target)["registry"]["active"] == 1
+
+
 def test_scoreboard_without_snapshot_out_has_no_file_side_effect(tmp_path):
     root, registry = _scoreboard_inputs(tmp_path)
     rc = main([

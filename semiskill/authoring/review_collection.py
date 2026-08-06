@@ -118,6 +118,8 @@ def collect_review_batch(
             and artifact.input_refs[0] == skill_version.artifact_id
         ]
         existing_attempts = [artifact.payload.get("attempt") for artifact in existing]
+        if any(type(value) is not int or value < 1 for value in existing_attempts):
+            raise BatchRejected(f"{slug}: existing review lineage has an invalid attempt")
         if attempt in existing_attempts:
             raise BatchRejected(f"{slug}: content review attempt {attempt} already exists")
         if attempt == 1 and existing:

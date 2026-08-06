@@ -15,10 +15,208 @@ from pathlib import Path
 
 SCOREBOARD_SCHEMA = "semiskill.scoreboard/v1"
 PROGRESS_SCHEMA = "semiskill.progress/v1"
+_FLAG_NAMES = (
+    "authored", "strict_lint_pass", "security_pass", "reviewed",
+    "recheck_ready", "approved", "published",
+)
+_STATE_NAMES = (
+    "missing", "lint_blocked", "consistency_blocked", "security_pending",
+    "security_blocked", "review_pending", "review_blocked", "recheck_ready",
+    "approval_rejected", "published", "published_stale", "invalid",
+)
+_BLOCKER_SOURCES = ("lint", "consistency", "scan", "review", "approval")
 
 
 class SnapshotUnavailable(RuntimeError):
     """The configured snapshot source is absent, malformed, or internally inconsistent."""
+
+
+def _semantic_validate_scoreboard(document: dict) -> None:
+    """Recompute every count exposed by a persisted/provider-supplied scoreboard."""
+    try:
+        registry = document["registry"]
+        funnel = document["funnel"]
+        scope = document["scope"]
+        cells = document["cells"]
+        roles = document["roles"]
+        anomalies = document["anomalies"]
+        exclusive_states = document["exclusive_states"]
+        consistency = document["consistency"]
+        conservation = document["conservation"]
+        release_gate = document["release_gate"]
+    except KeyError as exc:
+        raise SnapshotUnavailable("scoreboard semantic section is missing") from exc
+
+    for mapping, names in (
+        (registry, ("total", "active", "declined", "roles")),
+        (scope, ("expected_active", "expected_declined", "expected_roles", "target_per_role")),
+    ):
+        if not isinstance(mapping, dict) or any(type(mapping.get(name)) is not int for name in names):
+            raise SnapshotUnavailable("scoreboard registry/scope counts are invalid")
+    if any(registry[name] < 0 for name in ("total", "active", "declined", "roles")):
+        raise SnapshotUnavailable("scoreboard registry counts cannot be negative")
+    if scope["target_per_role"] < 1:
+        raise SnapshotUnavailable("scoreboard target_per_role must be positive")
+    database = document.get("sources", {}).get("database")
+    if not isinstance(database, dict) or database.get("environment") not in {
+        "development", "test", "production",
+    }:
+        raise SnapshotUnavailable("scoreboard database environment is invalid")
+
+    active_cells: list[dict] = []
+    declined_cells: list[dict] = []
+    slugs: set[str] = set()
+    for cell in cells:
+        if not isinstance(cell, dict) or not isinstance(cell.get("slug"), str) or not cell["slug"]:
+            raise SnapshotUnavailable("scoreboard cell identity is invalid")
+        if cell["slug"] in slugs:
+            raise SnapshotUnavailable("scoreboard cell slugs must be unique")
+        slugs.add(cell["slug"])
+        if not isinstance(cell.get("role"), str) or not cell["role"]:
+            raise SnapshotUnavailable("scoreboard cell role is invalid")
+        flags = cell.get("stage_flags")
+        if not isinstance(flags, dict) or any(type(flags.get(name)) is not bool for name in _FLAG_NAMES):
+            raise SnapshotUnavailable("scoreboard cell stage flags are invalid")
+        blockers = cell.get("blockers")
+        if not isinstance(blockers, list) or any(
+            not isinstance(blocker, dict)
+            or not isinstance(blocker.get("source"), str)
+            or not isinstance(blocker.get("code"), str)
+            for blocker in blockers
+        ):
+            raise SnapshotUnavailable("scoreboard cell blockers are invalid")
+        status = cell.get("registry_status")
+        if status == "active":
+            if cell.get("state") not in _STATE_NAMES:
+                raise SnapshotUnavailable("active scoreboard cell state is invalid")
+            active_cells.append(cell)
+        elif status == "declined":
+            if cell.get("state") != "declined" or any(flags.values()):
+                raise SnapshotUnavailable("declined cells cannot credit the funnel")
+            declined_cells.append(cell)
+        else:
+            raise SnapshotUnavailable("scoreboard cell registry_status is invalid")
+
+    expected_registry = {
+        "total": len(cells),
+        "active": len(active_cells),
+        "declined": len(declined_cells),
+        "roles": len({cell["role"] for cell in active_cells}),
+    }
+    if any(registry.get(key) != value for key, value in expected_registry.items()):
+        raise SnapshotUnavailable("scoreboard registry counts do not match its cells")
+
+    if type(funnel.get("active")) is not int or funnel["active"] != len(active_cells):
+        raise SnapshotUnavailable("scoreboard active funnel count does not match its cells")
+    for name in _FLAG_NAMES:
+        expected = sum(cell["stage_flags"][name] for cell in active_cells)
+        if type(funnel.get(name)) is not int or funnel[name] != expected:
+            raise SnapshotUnavailable(f"scoreboard funnel {name!r} does not match its cells")
+    blocked = funnel.get("blocked")
+    if not isinstance(blocked, dict):
+        raise SnapshotUnavailable("scoreboard blocked funnel is invalid")
+    expected_blocked = sum(bool(cell["blockers"]) for cell in active_cells)
+    if type(blocked.get("total")) is not int or blocked["total"] != expected_blocked:
+        raise SnapshotUnavailable("scoreboard blocked total does not match its cells")
+    for source in _BLOCKER_SOURCES:
+        expected = sum(
+            any(blocker["source"] == source for blocker in cell["blockers"])
+            for cell in active_cells
+        )
+        if type(blocked.get(source)) is not int or blocked[source] != expected:
+            raise SnapshotUnavailable("scoreboard blocked source count does not match its cells")
+
+    expected_states = {
+        name: sum(cell["state"] == name for cell in active_cells) for name in _STATE_NAMES
+    }
+    if exclusive_states != expected_states:
+        raise SnapshotUnavailable("scoreboard exclusive states do not match its cells")
+
+    if len(roles) != registry["roles"]:
+        raise SnapshotUnavailable("scoreboard role count does not match the registry")
+    seen_roles: set[str] = set()
+    for role in roles:
+        if not isinstance(role, dict) or not isinstance(role.get("role"), str):
+            raise SnapshotUnavailable("scoreboard role row is invalid")
+        name = role["role"]
+        if name in seen_roles:
+            raise SnapshotUnavailable("scoreboard role rows must be unique")
+        seen_roles.add(name)
+        mine = [cell for cell in active_cells if cell["role"] == name]
+        declined = sum(cell["role"] == name for cell in declined_cells)
+        published = sum(cell["stage_flags"]["published"] for cell in mine)
+        target = scope["target_per_role"]
+        expected_role = {
+            "active": len(mine), "declined_provenance": declined,
+            "published": published, "target": target,
+            "gap": max(0, target - published), "meets_target": published >= target,
+        }
+        if any(role.get(key) != value for key, value in expected_role.items()):
+            raise SnapshotUnavailable("scoreboard role coverage does not match its cells")
+    if seen_roles != {cell["role"] for cell in active_cells}:
+        raise SnapshotUnavailable("scoreboard role rows do not cover all active cells")
+
+    if not isinstance(anomalies, dict) or any(
+        not isinstance(values, list)
+        or any(not isinstance(value, str) for value in values)
+        or values != sorted(set(values))
+        for values in anomalies.values()
+    ):
+        raise SnapshotUnavailable("scoreboard anomaly arrays must be sorted unique strings")
+    expected_conservation_checks = {
+        "registry_partition": registry["total"] == registry["active"] + registry["declined"],
+        "active_state_partition": sum(expected_states.values()) == registry["active"],
+        "role_active_partition": sum(role["active"] for role in roles) == registry["active"],
+        "role_published_partition": (
+            sum(role["published"] for role in roles) == funnel["published"]
+        ),
+        "review_partition": funnel["reviewed"] >= funnel["recheck_ready"],
+        "approval_publication_partition": funnel["approved"] == funnel["published"],
+        "funnel_bounds": all(0 <= funnel[name] <= registry["active"] for name in _FLAG_NAMES),
+    }
+    if conservation != {
+        "passed": all(expected_conservation_checks.values()),
+        "checks": expected_conservation_checks,
+    }:
+        raise SnapshotUnavailable("scoreboard conservation claims do not match its cells")
+    if type(consistency.get("errors")) is not int or consistency["errors"] < 0:
+        raise SnapshotUnavailable("scoreboard consistency error count is invalid")
+
+    release_expected = {
+        "REGISTRY_ACTIVE": (registry["active"], scope["expected_active"]),
+        "REGISTRY_DECLINED": (registry["declined"], scope["expected_declined"]),
+        "REGISTRY_ROLES": (registry["roles"], scope["expected_roles"]),
+        "ALL_AUTHORED": (funnel["authored"], registry["active"]),
+        "ALL_STRICT_LINT": (funnel["strict_lint_pass"], registry["active"]),
+        "ALL_REVIEWED": (funnel["reviewed"], registry["active"]),
+        "ALL_RECHECK_READY": (funnel["recheck_ready"], registry["active"]),
+        "ALL_APPROVED": (funnel["approved"], registry["active"]),
+        "ALL_PUBLISHED": (funnel["published"], registry["active"]),
+        "ALL_ROLES_TARGET": (sum(role["meets_target"] for role in roles), registry["roles"]),
+        "CONSISTENCY_ERRORS": (consistency["errors"], 0),
+        "BLOCKERS": (blocked["total"], 0),
+        "ANOMALIES": (sum(len(values) for values in anomalies.values()), 0),
+        "CONSERVATION": (int(conservation["passed"]), 1),
+    }
+    checks = release_gate.get("checks")
+    if not isinstance(checks, list) or len(checks) != len(release_expected):
+        raise SnapshotUnavailable("scoreboard release checks are missing or duplicated")
+    seen_codes: set[str] = set()
+    for check in checks:
+        if not isinstance(check, dict) or check.get("code") not in release_expected:
+            raise SnapshotUnavailable("scoreboard release check is invalid")
+        code = check["code"]
+        if code in seen_codes:
+            raise SnapshotUnavailable("scoreboard release check codes must be unique")
+        seen_codes.add(code)
+        actual, expected = release_expected[code]
+        if check.get("actual") != actual or check.get("expected") != expected or (
+            check.get("passed") is not (actual == expected)
+        ):
+            raise SnapshotUnavailable("scoreboard release check does not match authoritative state")
+    expected_release = all(actual == expected for actual, expected in release_expected.values())
+    if seen_codes != set(release_expected) or release_gate.get("passed") is not expected_release:
+        raise SnapshotUnavailable("scoreboard release gate does not match its checks")
 
 
 def _canonical_bytes(document: dict) -> bytes:
@@ -57,12 +255,58 @@ def _validate_scoreboard(document: object) -> dict:
     expected_id = "sha256:" + hashlib.sha256(_canonical_bytes(document)).hexdigest()
     if document["snapshot_id"] != expected_id:
         raise SnapshotUnavailable("scoreboard snapshot_id does not match its canonical content")
+    _semantic_validate_scoreboard(document)
     return document
 
 
 def validate_scoreboard_snapshot(document: object) -> dict:
     """Validate an in-memory provider result before it crosses a read API boundary."""
     return _validate_scoreboard(deepcopy(document))
+
+
+def render_scoreboard_snapshot(document: object, *, style: str = "text") -> str:
+    """Render only values from a semantically validated canonical snapshot."""
+    snapshot = validate_scoreboard_snapshot(document)
+    if style == "json":
+        return json.dumps(snapshot, indent=2, sort_keys=True)
+    funnel = snapshot["funnel"]
+    roles = snapshot["roles"]
+    if style == "markdown":
+        lines = [
+            f"### Canonical catalog scoreboard — {funnel['published']}/{funnel['active']} published",
+            "",
+            "| Role | Published | Target | Gap |",
+            "|---|---:|---:|---:|",
+        ]
+        lines.extend(
+            f"| {role['role']} | {role['published']} | {role['target']} | {role['gap']} |"
+            for role in roles
+        )
+        lines.extend(["", f"Release gate: {'pass' if snapshot['release_gate']['passed'] else 'blocked'}"])
+        return "\n".join(lines)
+    if style != "text":
+        raise ValueError(f"unknown scoreboard snapshot render style: {style!r}")
+    lines = [
+        f"canonical scoreboard · generated {snapshot['generated_at']}",
+        f"registry {snapshot['registry']['active']} active + {snapshot['registry']['declined']} declined",
+        (f"authored {funnel['authored']} · strict lint {funnel['strict_lint_pass']} · "
+         f"security {funnel['security_pass']} · reviewed {funnel['reviewed']} · "
+         f"ready {funnel['recheck_ready']} · approved {funnel['approved']} · "
+         f"published {funnel['published']}"),
+        "",
+    ]
+    lines.extend(
+        f"  {('ok' if role['meets_target'] else 'SHORT'):5} {role['role']:34} "
+        f"{role['published']}/{role['target']}"
+        for role in roles
+    )
+    failed = [check for check in snapshot["release_gate"]["checks"] if not check["passed"]]
+    lines.extend(["", f"release gate: {'pass' if not failed else 'blocked'}"])
+    lines.extend(
+        f"  - {check['code']}: {check['actual']} (expected {check['expected']})"
+        for check in failed
+    )
+    return "\n".join(lines)
 
 
 def write_json_atomic(path: str | Path, document: dict) -> Path:
@@ -306,6 +550,7 @@ def build_scoreboard_snapshot(
     from semiskill.capture.intake import build_skill_version, load_skill_dir, payload_fingerprint
     from semiskill.governance.publish import (
         APPROVAL_SCHEMA, ApprovalChainInvalid, resolve_frozen_approval_evidence,
+        resolve_frozen_rejection_evidence,
     )
 
     registry_file = Path(registry_path)
@@ -369,6 +614,8 @@ def build_scoreboard_snapshot(
             errors.append("authentication")
         if payload.get("environment") not in {"development", "test", "production"}:
             errors.append("environment")
+        elif payload.get("environment") != environment:
+            errors.append("snapshot_environment")
         elif payload.get("environment") == "production" and (
             not isinstance(authentication, dict)
             or authentication.get("provider") != "entra_oidc"
@@ -470,7 +717,14 @@ def build_scoreboard_snapshot(
             if skill_version is None or skill_version.artifact_type is not ArtifactType.SKILL_VERSION:
                 invalid_ids.add(approval.artifact_id)
             else:
-                active_rejections.add(skill_version.artifact_id)
+                try:
+                    resolve_frozen_rejection_evidence(
+                        store, skill_version=skill_version, approval=approval,
+                    )
+                except ApprovalChainInvalid:
+                    invalid_ids.add(approval.artifact_id)
+                else:
+                    active_rejections.add(skill_version.artifact_id)
 
     for approval_id, publication in valid_positive.items():
         approval = publication[1]
@@ -528,6 +782,7 @@ def build_scoreboard_snapshot(
         "stale_approval_hashes": [],
         "invalid_review_lineage": [],
         "invalid_approval_chains": sorted(invalid_approval_chains),
+        "permission_label_drift": [],
         "duplicate_active_publications": duplicate_active_publications,
         "missing_required_stages": [],
         "post_approval_blockers": [],
@@ -556,6 +811,9 @@ def build_scoreboard_snapshot(
                 "facets": {"registry": {"role": row["role"], "level": row["level"]},
                            "source": {"role": None, "level": None},
                            "published": {"role": None, "level": None}, "drift": False},
+                "permissions": {"registry_expected": None, "skill_version": None,
+                                "content_review": None, "approval": None,
+                                "scan_labels": [], "all_match": False},
                 "checks": {"lint": {"status": "missing", "predicted_verdict": None,
                                       "errors": 0, "warnings": 0, "advisories": 0,
                                       "finding_codes": []},
@@ -659,6 +917,26 @@ def build_scoreboard_snapshot(
         if "MISSING_REQUIRED_STAGE" in security.get("errors", []):
             anomalies["missing_required_stages"].append(slug)
 
+        security_ids = {
+            stage["artifact_id"] for stage in security.get("stages", [])
+            if stage.get("stage") != 6 and stage.get("artifact_id")
+        }
+        scan_permission_labels = sorted({
+            artifact.permissions_label for artifact in scans
+            if str(artifact.artifact_id) in security_ids
+        })
+        expected_permission = "public"
+        permission_values = [
+            selected_version.permissions_label if selected_version else None,
+            content_review.permissions_label if content_review else None,
+            approval.permissions_label if approval else None,
+            *scan_permission_labels,
+        ]
+        present_permissions = [value for value in permission_values if value is not None]
+        permission_drift = any(value != expected_permission for value in present_permissions)
+        if permission_drift:
+            anomalies["permission_label_drift"].append(slug)
+
         if current_publication:
             later_content = [
                 review for review in reviews
@@ -714,6 +992,9 @@ def build_scoreboard_snapshot(
                              "artifact_id": str(approval.artifact_id)})
         if facet_drift:
             blockers.append({"code": "FACET_DRIFT", "source": "registry", "artifact_id": None})
+        if permission_drift:
+            blockers.append({"code": "PERMISSION_LABEL_DRIFT", "source": "registry",
+                             "artifact_id": None})
 
         rejected = bool(selected_version and selected_version.artifact_id in active_rejections)
         if rejected:
@@ -775,6 +1056,14 @@ def build_scoreboard_snapshot(
             "facets": {"registry": {"role": row["role"], "level": row["level"]},
                        "source": source_facets, "published": published_facets,
                        "drift": bool(facet_drift)},
+            "permissions": {
+                "registry_expected": expected_permission,
+                "skill_version": selected_version.permissions_label if selected_version else None,
+                "content_review": content_review.permissions_label if content_review else None,
+                "approval": approval.permissions_label if approval else None,
+                "scan_labels": scan_permission_labels,
+                "all_match": bool(present_permissions) and not permission_drift,
+            },
             "checks": {
                 "lint": {"status": "passed" if strict_lint_pass else (
                     "missing" if lint_item is None else "failed"),
@@ -820,7 +1109,7 @@ def build_scoreboard_snapshot(
         })
 
     for values in anomalies.values():
-        values.sort()
+        values[:] = sorted(set(values))
     cells.sort(key=lambda cell: (
         cell["role"], level_order.get(cell["level"], 999), cell["level"], cell["slug"],
     ))

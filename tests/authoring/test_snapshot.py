@@ -13,16 +13,47 @@ from semiskill.authoring.snapshot import (
 
 
 def _body():
+    states = {
+        name: 0 for name in (
+            "missing", "lint_blocked", "consistency_blocked", "security_pending",
+            "security_blocked", "review_pending", "review_blocked", "recheck_ready",
+            "approval_rejected", "published", "published_stale", "invalid",
+        )
+    }
+    funnel = {
+        "active": 0, "authored": 0, "strict_lint_pass": 0, "security_pass": 0,
+        "reviewed": 0, "recheck_ready": 0, "approved": 0, "published": 0,
+        "blocked": {"total": 0, "lint": 0, "consistency": 0, "scan": 0,
+                    "review": 0, "approval": 0},
+    }
+    conservation_checks = {
+        "registry_partition": True, "active_state_partition": True,
+        "role_active_partition": True, "role_published_partition": True,
+        "review_partition": True, "approval_publication_partition": True,
+        "funnel_bounds": True,
+    }
+    release_values = {
+        "REGISTRY_ACTIVE": (0, 0), "REGISTRY_DECLINED": (0, 0),
+        "REGISTRY_ROLES": (0, 0), "ALL_AUTHORED": (0, 0),
+        "ALL_STRICT_LINT": (0, 0), "ALL_REVIEWED": (0, 0),
+        "ALL_RECHECK_READY": (0, 0), "ALL_APPROVED": (0, 0),
+        "ALL_PUBLISHED": (0, 0), "ALL_ROLES_TARGET": (0, 0),
+        "CONSISTENCY_ERRORS": (0, 0), "BLOCKERS": (0, 0),
+        "ANOMALIES": (0, 0), "CONSERVATION": (1, 1),
+    }
     return {
-        "scope": {"phase": "dv-84", "expected_active": 84},
-        "sources": {"database": {"database_name": "semiskill"}},
-        "registry": {"active": 84, "declined": 20, "roles": 16},
-        "funnel": {"authored": 84, "published": 0},
-        "conservation": {"passed": True, "checks": {}},
-        "roles": [],
-        "cells": [],
-        "anomalies": {},
-        "release_gate": {"passed": False, "checks": []},
+        "scope": {"phase": "test", "expected_active": 0, "expected_declined": 0,
+                  "expected_roles": 0, "target_per_role": 1},
+        "sources": {"database": {"database_name": "semiskill_test", "environment": "test"}},
+        "registry": {"total": 0, "active": 0, "declined": 0, "roles": 0, "levels": []},
+        "funnel": funnel, "exclusive_states": states,
+        "conservation": {"passed": True, "checks": conservation_checks},
+        "roles": [], "cells": [], "anomalies": {},
+        "consistency": {"errors": 0, "warnings": 0, "registry_error": None},
+        "release_gate": {"passed": True, "checks": [
+            {"code": code, "actual": actual, "expected": expected, "passed": actual == expected}
+            for code, (actual, expected) in release_values.items()
+        ]},
     }
 
 
@@ -58,6 +89,14 @@ def test_tampered_snapshot_id_fails_closed(tmp_path):
     path.write_text(json.dumps(snapshot), encoding="utf-8")
     with pytest.raises(SnapshotUnavailable, match="snapshot_id"):
         load_scoreboard_snapshot(path)
+
+
+def test_self_hashed_but_semantically_fabricated_counts_fail_closed():
+    body = _body()
+    body["registry"]["active"] = 84
+    body["scope"]["expected_active"] = 84
+    with pytest.raises(SnapshotUnavailable, match="registry counts"):
+        finalize_scoreboard(body, generated_at="2026-08-06T00:00:00Z")
 
 
 def test_progress_must_reference_the_loaded_scoreboard(tmp_path):

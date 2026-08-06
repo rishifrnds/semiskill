@@ -289,6 +289,9 @@ def readiness_for_version(store: ArtifactStore, skill_version: Artifact) -> Read
     for attempt, rows in sorted(by_attempt.items()):
         if len(rows) != 1:
             lineage_errors.append(f"content review lineage has duplicate attempt {attempt}")
+    for candidate in candidates:
+        structural, _unmet, _findings = _review_validation(candidate, skill_version, store)
+        lineage_errors.extend(structural)
     if by_attempt:
         maximum = max(by_attempt)
         missing = sorted(set(range(1, maximum + 1)) - set(by_attempt))
@@ -318,10 +321,9 @@ def readiness_for_version(store: ArtifactStore, skill_version: Artifact) -> Read
     )
     latest = candidates[-1]
     if lineage_errors:
-        structural, _unmet, _findings = _review_validation(latest, skill_version, store)
-        return Readiness(
-            INVALID, latest, tuple(sorted(set([*lineage_errors, *structural]))),
-        )
+        errors = tuple(sorted(set(lineage_errors)))
+        status = STALE if set(errors) == {"payload hash does not match skill version"} else INVALID
+        return Readiness(status, latest, errors)
     return readiness_for_review(store, skill_version, latest)
 
 

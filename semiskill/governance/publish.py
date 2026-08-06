@@ -244,6 +244,64 @@ def resolve_frozen_approval_evidence(
     return FrozenApprovalEvidence(approval, automated, content, tuple(scans))
 
 
+def resolve_frozen_rejection_evidence(
+    store: ArtifactStore,
+    *,
+    skill_version: Artifact,
+    approval: Artifact,
+) -> FrozenApprovalEvidence:
+    """Validate the exact evidence chain for a non-publishing human rejection."""
+    def invalid(message: str) -> None:
+        raise ApprovalChainInvalid(message)
+
+    payload = approval.payload
+    if (
+        approval.artifact_type is not ArtifactType.APPROVAL
+        or approval.actor_kind is not ActorKind.HUMAN
+        or payload.get("schema_version") != APPROVAL_SCHEMA
+        or payload.get("decision") != "reject"
+        or payload.get("published") is not False
+    ):
+        invalid("artifact is not an authoritative human rejection/v1")
+    if approval.permissions_label != skill_version.permissions_label:
+        invalid("rejection permission label differs from the skill version")
+    skill = payload.get("skill")
+    evidence = payload.get("evidence")
+    expected_skill = {
+        "artifact_id": str(skill_version.artifact_id),
+        "slug": skill_version.payload.get("slug"),
+        "version": skill_version.payload.get("version"),
+        "payload_sha256": payload_fingerprint(skill_version.payload),
+    }
+    if not isinstance(skill, dict) or any(
+        skill.get(key) != value for key, value in expected_skill.items()
+    ):
+        invalid("rejection skill identity does not match the exact skill version")
+    if not isinstance(evidence, dict) or len(approval.input_refs) != 3:
+        invalid("rejection evidence references are malformed")
+    if approval.input_refs[0] != skill_version.artifact_id:
+        invalid("rejection does not reference the exact skill version")
+    if evidence.get("automated_review_id") != str(approval.input_refs[1]) or (
+        evidence.get("content_review_id") != str(approval.input_refs[2])
+    ):
+        invalid("rejection evidence payload disagrees with input_refs")
+    automated = store.get(approval.input_refs[1])
+    content = store.get(approval.input_refs[2])
+    if automated is None or automated.artifact_type is not ArtifactType.REVIEW:
+        invalid("rejection automated review is missing or invalid")
+    if content is None or content.artifact_type is not ArtifactType.REVIEW:
+        invalid("rejection content review is missing or invalid")
+    try:
+        scans = _validate_frozen_evidence(
+            store=store, skill_version=skill_version, automated=automated, content=content,
+        )
+    except PublishRefused as exc:
+        raise ApprovalChainInvalid(str(exc)) from exc
+    if evidence.get("scan_artifact_ids") != [str(scan.artifact_id) for scan in scans]:
+        invalid("rejection scan IDs disagree with the automated review chain")
+    return FrozenApprovalEvidence(approval, automated, content, tuple(scans))
+
+
 def decide_publication(
     *,
     store: ArtifactStore,

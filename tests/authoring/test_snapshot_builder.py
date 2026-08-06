@@ -9,8 +9,8 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.authoring.gate import make_content_review
 from semiskill.authoring.snapshot import SnapshotUnavailable, build_scoreboard_snapshot
-from semiskill.capture.intake import build_skill_version
-from tests.support import content_checks, publish_wave_sources
+from semiskill.capture.intake import build_skill_version, load_skill_dir
+from tests.support import content_checks, publish_test_skill, publish_wave_sources
 
 MIGRATIONS = Path("semiskill/artifacts/migrations")
 
@@ -296,6 +296,97 @@ def test_every_non_authoritative_published_claim_is_anomalous(store, tmp_path):
 
 
 @pytest.mark.integration
+def test_generic_skill_permission_label_drift_is_visible_and_release_blocking(store, tmp_path):
+    root = tmp_path / "skills"
+    directory = root / "dv-one"
+    directory.mkdir(parents=True)
+    directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
+    skill_md, files = load_skill_dir(directory)
+    skill_version = store.append(build_skill_version(
+        skill_md=skill_md, actor="author", permissions_label="team", files=files,
+    ))
+    publish_test_skill(store, skill_version)
+    registry = _registry(tmp_path / "registry.json", [
+        {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
+    ])
+    snapshot = build_scoreboard_snapshot(
+        store=store, registry_path=registry, skills_root=root,
+        generated_at="2026-08-06T00:00:00Z", expected_active=1, expected_declined=0,
+        expected_roles=1, target_per_role=1, environment="test",
+        source_commit="test", repository_dirty=False,
+    )
+    cell = snapshot["cells"][0]
+    assert cell["permissions"] == {
+        "registry_expected": "public", "skill_version": "team",
+        "content_review": "team", "approval": "team", "scan_labels": ["team"],
+        "all_match": False,
+    }
+    assert snapshot["anomalies"]["permission_label_drift"] == ["dv-one"]
+    assert any(blocker["code"] == "PERMISSION_LABEL_DRIFT" for blocker in cell["blockers"])
+
+
+@pytest.mark.integration
+def test_snapshot_environment_rejects_approval_from_other_environment(store, tmp_path):
+    root = tmp_path / "skills"
+    directory = root / "dv-one"
+    directory.mkdir(parents=True)
+    directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
+    fixture = publish_wave_sources(store, root)[0]
+    memory = MemoryStore(_rows(store), database_name="semiskill_dev")
+    registry = _registry(tmp_path / "registry.json", [
+        {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
+    ])
+    snapshot = build_scoreboard_snapshot(
+        store=memory, registry_path=registry, skills_root=root,
+        generated_at="2026-08-06T00:00:00Z", expected_active=1, expected_declined=0,
+        expected_roles=1, target_per_role=1, environment="development",
+        source_commit="test", repository_dirty=False,
+    )
+    assert snapshot["funnel"]["published"] == 0
+    assert snapshot["anomalies"]["invalid_approval_chains"] == [
+        str(fixture.approval.artifact_id),
+    ]
+
+
+@pytest.mark.integration
+def test_detached_rejection_evidence_cannot_block_skill(store, tmp_path):
+    root = tmp_path / "skills"
+    for slug in ("dv-one", "dv-two"):
+        directory = root / slug
+        directory.mkdir(parents=True)
+        directory.joinpath("SKILL.md").write_text(_skill(slug), encoding="utf-8")
+    first, second = publish_wave_sources(store, root)
+    payload = {
+        **second.approval.payload,
+        "decision": "reject", "verdict": "reject", "published": False,
+        "skill": first.approval.payload["skill"],
+    }
+    forged = Artifact.new(
+        artifact_type=ArtifactType.APPROVAL, source_system=SourceSystem.WEB,
+        actor="rejector", actor_kind=ActorKind.HUMAN,
+        input_refs=[first.skill_version.artifact_id, second.automated_review.artifact_id,
+                    second.content_review.artifact_id],
+        payload=payload,
+    )
+    forged = replace(forged, permissions_label="public")
+    rows = [row for row in _rows(store) if row.artifact_type is not ArtifactType.APPROVAL]
+    memory = MemoryStore([*rows, forged], database_name="semiskill_test")
+    registry = _registry(tmp_path / "registry.json", [
+        {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
+        {"slug": "dv-two", "role": "dv-engineer", "level": "senior"},
+    ], target=2)
+    snapshot = build_scoreboard_snapshot(
+        store=memory, registry_path=registry, skills_root=root,
+        generated_at="2026-08-06T00:00:00Z", expected_active=2, expected_declined=0,
+        expected_roles=1, target_per_role=2, environment="test",
+        source_commit="test", repository_dirty=False,
+    )
+    first_cell = next(cell for cell in snapshot["cells"] if cell["slug"] == "dv-one")
+    assert first_cell["state"] != "approval_rejected"
+    assert snapshot["anomalies"]["invalid_approval_chains"] == [str(forged.artifact_id)]
+
+
+@pytest.mark.integration
 def test_cross_skill_correction_is_invalid_and_cannot_suppress_publication(store, tmp_path):
     root = tmp_path / "skills"
     for slug in ("dv-one", "dv-two"):
@@ -314,7 +405,7 @@ def test_cross_skill_correction_is_invalid_and_cannot_suppress_publication(store
         corrects_ref=first.approval.artifact_id,
         rollback_ref=second.approval.rollback_ref,
     )
-    memory = MemoryStore([*_rows(store), forged])
+    memory = MemoryStore([*_rows(store), forged], database_name="semiskill_test")
     registry = _registry(tmp_path / "registry.json", [
         {"slug": slug, "role": "dv-engineer", "level": "senior"}
         for slug in ("dv-one", "dv-two")
@@ -323,7 +414,8 @@ def test_cross_skill_correction_is_invalid_and_cannot_suppress_publication(store
     snapshot = build_scoreboard_snapshot(
         store=memory, registry_path=registry, skills_root=root,
         generated_at="2026-08-06T00:00:00Z", expected_active=2, expected_declined=0,
-        expected_roles=1, target_per_role=2, source_commit="test", repository_dirty=False,
+        expected_roles=1, target_per_role=2, environment="test",
+        source_commit="test", repository_dirty=False,
     )
     assert snapshot["funnel"]["published"] == 2
     assert snapshot["anomalies"]["invalid_approval_chains"] == [str(forged.artifact_id)]
@@ -350,7 +442,7 @@ def test_branched_approval_corrections_are_invalid_and_do_not_hide_valid_head(st
             corrects_ref=fixture.approval.artifact_id,
             rollback_ref=fixture.approval.rollback_ref,
         ))
-    memory = MemoryStore([*_rows(store), *branches])
+    memory = MemoryStore([*_rows(store), *branches], database_name="semiskill_test")
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
     ])
@@ -358,7 +450,8 @@ def test_branched_approval_corrections_are_invalid_and_do_not_hide_valid_head(st
     snapshot = build_scoreboard_snapshot(
         store=memory, registry_path=registry, skills_root=root,
         generated_at="2026-08-06T00:00:00Z", expected_active=1, expected_declined=0,
-        expected_roles=1, target_per_role=1, source_commit="test", repository_dirty=False,
+        expected_roles=1, target_per_role=1, environment="test",
+        source_commit="test", repository_dirty=False,
     )
     assert snapshot["funnel"]["published"] == 1
     assert snapshot["anomalies"]["invalid_approval_chains"] == sorted(
