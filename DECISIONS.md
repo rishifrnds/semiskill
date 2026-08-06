@@ -408,6 +408,29 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   subprocesses and must not be confused with test execution.
 - Related: ADR-014, ADR-016, J-010b3a; dashboard/server.py; dashboard/index.html
 
+## [ADR-018] Dashboard contract views are projected from executable source vocabularies
+- Date: 2026-08-06
+- Status: accepted
+- Context: The dashboard duplicated artifact fields/types and described obsolete pipeline and
+  publication APIs. Those hand-written views omitted current provenance/correction fields and could
+  continue claiming short-circuit or callback publication behavior after the executable contracts
+  changed.
+- Decision: `/api/state` projects the canonical `Artifact` dataclass fields and every constrained
+  enum/vocabulary from the imported schema module. Pipeline/publication panels describe the current
+  complete-trail stage-6 review and authenticated `decide_publication`/`decide_unpublication`
+  contracts, exact evidence binding and verified projection; presentation code cannot maintain an
+  independent schema list.
+- Alternatives considered:
+  - Update the hand-written list — rejected because it would drift again and already omitted six
+    artifact types plus actor/cost/correction fields.
+  - Read Python source text in the browser — rejected because parsing source is fragile and exposes
+    implementation text rather than a typed runtime projection.
+- Consequences: The state response adds `artifact_schema` and retires the duplicated browser list.
+  Schema changes become immediately visible with source deployment and regression tests compare the
+  projection to the imported dataclass/enums. This is a source contract, not test-run or launch proof.
+- Related: ADR-001, ADR-011, ADR-017, J-010b3b; semiskill/artifacts/schema.py;
+  dashboard/server.py; dashboard/index.html
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-06T17:17:54Z_
+_Last updated: 2026-08-06T17:18:38Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,8 +17,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-010b3b checkpoint: pipeline, authenticated publication, migrations/capabilities, rollback and
-  artifact-schema views now match executable contracts; exact implementation commit is pending.
+- J-010b3c: make feature, risk, launch, analytics and go-to-market registers explicitly curated and
+  non-crediting; remove fabricated measurements, rankings, proof and incompatible funnel cohorts.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
@@ -32,8 +32,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   development database and matching empty-worker progress; release gate remains blocked at 0/84.
 
 ## Immediate order
-1. Commit the independently audited J-010b3b contract-reconciliation slice.
-2. Separate every curated feature/risk/market hypothesis from observed green evidence.
+1. Separate every curated feature/risk/market hypothesis from observed green evidence.
+2. Add strict source-bound full-suite evidence, then complete accessibility/browser QA.
 3. Resolve the approval-bound `_shared` payload topology and build the production Next.js catalog.
 4. Re-review/fix/recheck all 84, human-approve in batches <=10, publish and verify 84/84.
 
@@ -47,8 +47,8 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
   remains fail-closed on BLK-001 until distinct identities and tenant configuration exist.
 
 ## Last implementation commit
-- 6a4c8cd - removed request-time pytest/Docker/HTTP probes and made static test inventory explicitly
-  non-crediting; 117 focused tests plus static/lint/syntax/pin gates.
+- 931e76e - reconciled pipeline/publication/migration/schema views with executable source contracts;
+  119 dashboard and 34 targeted tests plus independent zero-P0/P1/P2 truth review.
 
 ## Last checkpoint commit
 - 6c04c86: recorded the hardened request-queue checkpoint and ADR-016.

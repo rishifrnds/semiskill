@@ -691,9 +691,21 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010b3b reconcile stale pipeline, publication and artifact-schema claims
 
 
+- [J-010b3b] 2026-08-06T17:18:38Z  status: done
+  what: reconciled pipeline hard-fail and complete-trail semantics, authenticated exact-evidence
+  publication and unpublication, migrations/capability descriptions and approval projection; the
+  browser now imports all 17 artifact fields and complete constrained vocabularies directly from the
+  canonical schema instead of duplicating a stale subset
+  artifacts: 931e76e, ADR-018, semiskill/spine/pipeline.py, dashboard/server.py,
+  dashboard/index.html, dashboard/model.json, dashboard/model.sha256,
+  tests/dashboard/test_dashboard.py; 119 dashboard tests and 34 targeted pipeline/publication tests;
+  independent truth audit found zero scoped P0/P1/P2
+  next: J-010b3c separate curated plans and hypotheses from observed evidence
+
+
 ## In-Flight Step
-- [J-010b3b] reconcile the dashboard pipeline, publication, migration and artifact-schema views with
-  current source contracts, then remove any curated record that receives observed green credit.
+- [J-010b3c] make feature, risk, launch, analytics and go-to-market registers explicitly curated and
+  non-crediting; remove fabricated measurements, rankings, proof and incompatible funnel cohorts.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
