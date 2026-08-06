@@ -439,9 +439,18 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-008d execute legacy import/archive and close the temporary REVIEW.json compatibility seam
 
 
+- [J-008d] 2026-08-06T07:06:42Z  status: done
+  what: imported all 35 legacy file reviews into the dev artifact store as unbound,
+  non-authoritative provenance (35 of 38 artifacts), moved each source record to a hash-addressed
+  archive path, and made exact original SKILL.md text part of the canonical payload fingerprint
+  artifacts: dea76c8, archive/content-reviews/, semiskill/capture/intake.py,
+  semiskill/authoring/pack.py, development artifact IDs recorded by tools/collect_wave.py output
+  next: J-008e make wave queue-only and reject embedded review metadata
+
+
 ## In-Flight Step
-- [J-008d] import/archive legacy evidence, reject embedded review metadata, and preserve exact
-  SKILL.md bytes in the canonical version fingerprint.
+- [J-008e] remove automatic/ungated publication from wave, reuse exact captured versions, expose
+  approval inputs, and reject embedded review metadata.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
