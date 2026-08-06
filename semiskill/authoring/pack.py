@@ -93,7 +93,7 @@ def build_pack(*, store: ArtifactStore, source_root: str | Path, out_dir: str | 
             raise PackRefused(f"{slug} is published but its source is missing at {skill_md}")
 
         raw = skill_md.read_bytes()          # what the engineer will actually receive
-        text = skill_md.read_text(encoding="utf-8")   # newline-normalised, as intake sees it
+        text = raw.decode("utf-8")                    # preserve exact approved line endings
         # Recompute the payload the way the WAVE built it — from the whole directory, not just
         # SKILL.md. A skill that bundles files (REVIEW.json, references/) publishes with them in the
         # payload, so hashing SKILL.md alone reports drift on every such skill.

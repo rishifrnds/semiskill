@@ -25,7 +25,7 @@ _LEGACY_GOVERNANCE_FILES = frozenset({"REVIEW.json"})
 # and timestamps are intentionally absent.
 PAYLOAD_FINGERPRINT_FIELDS = (
     "slug", "name", "description", "version", "function", "role", "level", "tags",
-    "allowed_tools", "body", "files",
+    "allowed_tools", "skill_md", "body", "files",
 )
 
 
@@ -125,6 +125,7 @@ def build_skill_version(*, skill_md: str, actor: str,
         "owner": _field(fm, "owner") or actor,
         "tags": _str_list(_field(fm, "tags")),
         "allowed_tools": _str_list(fm.get("allowed-tools") or fm.get("allowed_tools")),
+        "skill_md": _sanitize(skill_md),                         # exact canonical source text
         "body": _sanitize(parsed.body),                          # UNTRUSTED submitter content
         "files": {k: _sanitize(v) for k, v in (files or {}).items()},  # UNTRUSTED submitter content
     }
@@ -142,7 +143,12 @@ def load_skill_dir(path: str | Path) -> tuple[str, dict[str, str]]:
     skill_md_path = p / "SKILL.md"
     if not skill_md_path.exists():
         raise ValueError(f"no SKILL.md found in {p}")
-    skill_md = skill_md_path.read_text(encoding="utf-8")
+    # Decode bytes directly so Python does not translate CRLF to LF on Windows. Formatting and line
+    # endings are part of the approved source identity and the exact text shown on detail pages.
+    try:
+        skill_md = skill_md_path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"SKILL.md is not valid UTF-8: {skill_md_path}") from exc
     files: dict[str, str] = {}
     for f in sorted(x for x in p.rglob("*") if x.is_file() and x.name != "SKILL.md"):
         rel = f.relative_to(p).as_posix()

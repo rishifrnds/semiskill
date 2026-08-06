@@ -52,6 +52,7 @@ def test_build_skill_version_populates_facets_and_untrusted_body():
     assert p["tags"] == ["uvm", "verification", "systemverilog"]
     assert p["allowed_tools"] == ["Read", "Write", "Grep"]
     assert "UNTRUSTED" in p["body"]              # body carried verbatim, not executed
+    assert p["skill_md"] == SKILL_MD             # exact canonical source for detail/pack identity
 
 
 def test_build_slug_defaults_from_name():
@@ -74,6 +75,16 @@ def test_permissions_label_applied():
 def test_nul_bytes_sanitized():
     art = build_skill_version(skill_md="---\nname: N\n---\nbody\x00with\x00nul", actor="a")
     assert "\x00" not in art.payload["body"]      # jsonb-safe (would otherwise crash the store)
+    assert "\x00" not in art.payload["skill_md"]
+
+
+def test_formatting_only_source_change_changes_the_payload_fingerprint():
+    from semiskill.capture.intake import payload_fingerprint
+
+    first = build_skill_version(skill_md="---\nname: x\ndescription: hi\n---\nbody", actor="a")
+    second = build_skill_version(skill_md="---\nname: x\ndescription: 'hi'\n---\nbody", actor="a")
+    assert first.payload["description"] == second.payload["description"]
+    assert payload_fingerprint(first.payload) != payload_fingerprint(second.payload)
 
 
 # ── ADR-008: Agent Skills open-standard frontmatter ────────────────────────────
