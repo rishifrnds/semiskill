@@ -4,7 +4,7 @@ Target length: under 40 lines. Full rules: see STATE_RULES.md.
 -->
 
 # STATUS — SemiSkill
-_Last updated: 2026-08-06T08:00:26Z_
+_Last updated: 2026-08-06T08:27:41Z_
 
 ## Phase
 Phase J: harden the content-review and human-approval gates, independently verify all 84 active DV
@@ -17,14 +17,17 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Coordinator is the sole writer; pooled agents are read-only or return patches for serial apply.
 
 ## Active step
-- J-009c: expose explicit snapshot generation and fail-closed read-only `/scoreboard` and
-  `/progress` providers; no API or dashboard path may infer counts or use fixture fallbacks.
+- J-009c1: close QA-discovered publication/ingestion P0s before the dashboard consumes snapshots:
+  verified SQL projection, no symlink/reparse escape, no lossy binary payload identity, and bound
+  production Entra provenance.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has at least 5 authored skills.
 - Disk: 84 authored · legacy REVIEW.json files 0 · canonical ready 0 (old claims provisional).
 - Catalog: 0 registered published; dev DB contains 2 unregistered test fixtures.
 - Consistency: 0 errors, 60 warnings. Full isolated Python suite: 486 passed, 1 xpassed.
+- Canonical snapshot: 84 authored/strict-lint-pass, 0 security/review/approval/publication;
+  conservation true, anomalies zero, release blocked on the five expected downstream checks.
 
 ## Immediate order
 1. Build deterministic scoreboard snapshot and remove dashboard fixture fallback.
@@ -37,10 +40,9 @@ skills, then publish and prove 16 roles at >=5 on the deterministic scoreboard.
 - Maximum 3 concurrent worker tasks; only the coordinator mutates the repository.
 
 ## Last implementation commit
-- 8936e12 — approval/v1 requires exact skill/hash, frozen automated scans, latest independent
-  content recheck, reason, authenticated OS/Entra identity and explicit decision; production is
-  Entra-only, legacy approvals are non-authoritative, and unpublish is an authenticated correction.
+- 61105e5 — snapshot/API reconciliation is operator-authorized, environment-bound and
+  semantically validated; exact rejection/review/approval/permission provenance fails closed.
 
 ## Last checkpoint commit
-- dab1562: the canonical 84/20 snapshot now reconciles every cell, exact hashes and evidence
-  chains, anomalies, funnel/role conservation and strict release checks; 21 focused tests pass.
+- 61105e5: canonical snapshot generation and read APIs pass 87 focused serial tests; the live
+  development snapshot reports 84/0/0/0/0 authored/reviewed/ready/approved/published.

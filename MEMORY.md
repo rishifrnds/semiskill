@@ -516,9 +516,19 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-009c expose explicit snapshot generation and fail-closed read-only API endpoints
 
 
+- [J-009c] 2026-08-06T08:27:41Z  status: done
+  what: exposed opt-in atomic canonical snapshot generation and operator-authorized, environment-
+  bound read APIs; provider/file snapshots now recompute every registry/cell/funnel/role/release
+  equation, review and approval lineages fail closed, rejects require exact evidence, permission
+  provenance is explicit, and the Terra explainer can only interpret validated JSON
+  artifacts: c6ee01d, 5f4cea7, 61105e5, reports/scoreboard/latest.json,
+  semiskill/authoring/snapshot.py, semiskill/api.py, semiskill/cli.py, 87 focused tests
+  next: J-009c1 close the SQL catalog projection and skill-directory containment defects found by QA
+
+
 ## In-Flight Step
-- [J-009c] expose explicit canonical snapshot generation through the CLI and injected read-only
-  `/scoreboard` and `/progress` API providers; unavailable or malformed snapshots return 503.
+- [J-009c1] make the SQL catalog projection depend on verified exact evidence, reject symlink and
+  binary payload escapes during ingestion, and bind production Entra claims to configured trust.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
