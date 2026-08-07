@@ -1255,9 +1255,30 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none. Stage 2 still cannot pass anywhere, by design, until BLK-003 closes.
   next: J-010e6 run the full suite, then either persist the binding or build the Stage-5 adapter
 
+- [J-010e6] 2026-08-07T12:17:22Z  status: done
+  what: recorded a clean-source full-suite PASS covering the three new Stage-2 modules, and
+    diagnosed the intermittent failure that preceded it rather than accepting the green run
+  artifacts: this J-010e6 checkpoint,
+    dashboard/runs/full-suite/runs/a6792604-42ec-4111-a801-b55de5a43669.json
+  verification: run `a6792604-42ec-4111-a801-b55de5a43669` on clean source `28379ab`; 1198
+    collected, 1191 passed, 7 skipped, 0 failed, 0 errors; isolated `semiskill_test` at 0023;
+    run SHA-256 `7c230d0ae73d24b465c2a160c0114438b0b5d68dd45cc2a33234f435c84026fc`.
+  finding (NEW, not fixed): the immediately preceding run `b4270338` failed one test with
+    `psycopg.OperationalError: Address already in use (0x00002740/10048)` - Windows ephemeral port
+    exhaustion, not a defect in the new modules, which touch no database. `PostgresArtifactStore`
+    opens a FRESH connection per call (`store.get` calls `psycopg.connect` every time). The Windows
+    dynamic range is 16,384 ports with a ~4 minute TIME_WAIT, and 2,901 sockets were observed in
+    TIME_WAIT during the run. Adding ~81 tests this session pushed connection churn near that
+    ceiling, so the suite is now intermittently unable to connect.
+  why-it-matters: this failure mode gets worse with every test added and is indistinguishable from
+    a real defect at a glance. A passing re-run is NOT a fix. The real remedy is connection reuse or
+    pooling in the artifact store, which changes a core component and deserves its own ADR.
+  credit: none toward security_pass, review, approval or publication.
+  next: J-010e7 either pool artifact-store connections (ADR-worthy) or start the Stage-5 adapter
+
 ## In-Flight Step
 
-- none. J-010e6 is selected but not started.
+- none. J-010e7 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
