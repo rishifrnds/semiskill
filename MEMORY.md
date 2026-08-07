@@ -855,8 +855,29 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010c3] generate the exact read-only 0015->0023 development migration plan, obtain explicit
-  digest-bound human approval before execution, then add authenticated one-skill review contracts.
+- [J-010c3] 2026-08-07T01:40:44Z  status: abandoned
+  what: generated the exact read-only 0015->0023 development migration plan at `91cdd50`
+  reason: the first source-bound full-suite run on that commit returned a complete FAIL, so asking a
+  human to approve its migration digest would preserve a known non-green checkpoint
+  artifacts: migration plan sha256:948d874415c4b7aecf2cdb0dabb19b46afa0f93f981847ea5773cbac10bd4364,
+  C:/Users/rishi/.codex/visualizations/2026/08/06/019fd5bf-32dd-7c23-bc64-75d408656e96/
+  migration-0015-to-0023-plan.json
+
+
+## In-Flight Step
+- [J-010c3a] 2026-08-07T01:40:44Z  status: done
+  what: ran and preserved the first immutable full suite for the forward-migration checkpoint, then
+  grouped its 26 failures/errors into test-environment isolation, invalid legacy review fixtures,
+  cross-version permission drift and now-impossible invalid-state simulation
+  artifacts: this J-010c3a checkpoint,
+  dashboard/runs/full-suite/runs/7bfb4263-98ab-4836-8b17-ce4e8f13db83.json,
+  sha256:f55d1d9a04eae5887087fb2ca621695966ee5b373b590811a2dd7a70455b5117;
+  1047 passed, 13 failed, 13 errors, 7 skipped and 1 xpassed on exact `semiskill_test`
+  next: J-010c3b correct the four root causes and rerun the source-bound suite
+
+
+## In-Flight Step
+- [J-010c3b] fix the four root causes in the source-bound full-suite FAIL and rerun it serially.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
