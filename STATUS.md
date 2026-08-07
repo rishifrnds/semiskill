@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T09:55:06Z_
+_Last updated: 2026-08-07T11:56:09Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010e3 (build and test the ADR-024 Stage-2 adapter) is selected.
+- none in flight. J-010e4 (Stage-2 report validation and fail-closed coverage) is selected.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -76,6 +76,17 @@ captures: stage 1 `passed`, **stage 2 `not_run`**, stage 3 `passed`, stage 4 `pa
 - `docs/UNBLOCK_SPECS.md` originally claimed the judge was "the single reason" and that fixing it
   yields `security_pass: 84`. That is false and is now corrected in place. Implementing SPEC A alone
   would leave all 84 blocked.
+
+## Stage-2 build progress (ADR-024)
+Approval-gated, not code-gated. The code can be finished and tested now; only BLK-003 unblocks credit.
+
+- DONE (J-010e3): host-side staging projection, `semiskill/scanners/stage2_staging.py`. Untrusted
+  paths normalized and refused before any write; payload-supplied scanner config isolated and
+  recorded; staged tree compared to the expected coverage set exactly. 32 adversarial tests.
+- NEXT (J-010e4): bounded exact-key report validation - reject unknown fields/severities, duplicate
+  finding IDs, absolute/traversing paths, mismatched counts and container-supplied identity.
+- THEN (J-010e5): identity binding - slug/version/payload hash, image platform-manifest digest,
+  independently computed `rule_pack_sha256`, adapter commit, policy/schema/engine hashes.
 
 ## Immediate order
 1. Re-run the immutable full suite on this clean source for a current PASS record, then regenerate

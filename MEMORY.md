@@ -1189,9 +1189,30 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication.
   next: J-010e3 build and test the ADR-024 Stage-2 adapter, whose only remaining gate is approval
 
+- [J-010e3] 2026-08-07T11:56:09Z  status: done
+  what: built the ADR-024 Stage-2 host-side staging projection - the trusted-host half that decides
+    what reaches the scanner and what the expected coverage set is
+  artifacts: this J-010e3 checkpoint, semiskill/scanners/stage2_staging.py,
+    tests/scanners/test_stage2_staging.py
+  verification: 32 adversarial tests written first and observed failing (module absent), then
+    passing. All of tests/scanners: 59 passed, 0 failed. Sanity-checked against a REAL captured
+    payload from the store (`dv-minimal-reproducer`), which projects to exactly `SKILL.md` plus the
+    three canonical vendored `_shared` files, with nothing isolated.
+  contract: paths are untrusted input, so backslash and forward slash are normalized identically
+    (a POSIX-legal filename like `refs\\..\\..\\x` becomes a traversal on Windows), Unicode is
+    NFC-normalized before duplicate detection, and absolute/drive-qualified/traversing/empty/NUL/
+    directory paths are refused. Every path is validated BEFORE any byte is written, so a refusal
+    never leaves a half-projected root. Payload-supplied scanner configuration (`.semgrepignore`
+    and friends) is ISOLATED and recorded rather than dropped - a skill must not be able to exclude
+    itself from the rules that judge it, and silent containment is indistinguishable from a
+    coverage hole. The staged tree is finally compared to the expected set exactly.
+  credit: none. This is the host side only; no Stage-2 result can earn credit until AppSec approves
+    the image, rule pack and supply-chain record (BLK-003).
+  next: J-010e4 bounded exact-key report validation and the fail-closed coverage rules
+
 ## In-Flight Step
 
-- none. J-010e3 is selected but not started.
+- none. J-010e4 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
