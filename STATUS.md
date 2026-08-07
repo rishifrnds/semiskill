@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T11:58:23Z_
+_Last updated: 2026-08-07T12:00:46Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010e5 (Stage-2 identity binding and scanner wiring) is selected.
+- none in flight. J-010e6 (full suite, then persist the binding or start Stage 5) is selected.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -87,9 +87,15 @@ Approval-gated, not code-gated. The code can be finished and tested now; only BL
   Unknown and missing fields both refuse; provenance-shaped keys are refused so the container cannot
   assert its own identity; coverage must match the staged set exactly; any skip, error, truncation,
   timeout or resource kill is blocking. 36 tests.
-- NEXT (J-010e5): host-side identity binding - slug/version/payload hash, image platform-manifest
-  digest, independently computed `rule_pack_sha256`, adapter commit, policy/schema/engine hashes -
-  and wiring both halves into an injectable Stage-2 scanner.
+- DONE (J-010e5): host adapter, `semiskill/scanners/stage2_adapter.py`. An unapproved chain can
+  never pass and never even invokes the engine (BLK-003 enforced in code). Every failure path -
+  unapproved, rule-pack mismatch, hostile path, engine crash, invalid report, partial coverage -
+  returns the blocking `not_run` marker instead of a clean score. The rule-pack hash is recomputed
+  by the host, not taken on trust. 13 tests.
+- KNOWN GAP: the binding record is returned but not yet persisted into the scan artifact;
+  `pipeline._write_scan` has a fixed payload shape, so that needs a schema/migration change.
+- STILL BLOCKED: Stage 2 cannot pass anywhere until AppSec/legal promote the exact image manifest
+  digest and rule pack (BLK-003). The code is ready for that promotion; the approval is not.
 
 ## Immediate order
 1. Re-run the immutable full suite on this clean source for a current PASS record, then regenerate

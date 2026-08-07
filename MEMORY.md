@@ -1231,9 +1231,33 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     supply-chain record (BLK-003).
   next: J-010e5 bind host-side identity and wire staging + report into an injectable Stage-2 scanner
 
+- [J-010e5] 2026-08-07T12:00:46Z  status: done
+  what: wired staging and report validation into the ADR-024 Stage-2 host adapter and bound
+    host-computed identity to the result
+  artifacts: this J-010e5 checkpoint, semiskill/scanners/stage2_adapter.py,
+    tests/scanners/test_stage2_adapter.py
+  verification: 13 tests written first and observed failing (module absent), then passing.
+    tests/scanners + tests/spine: 126 passed, 0 failed.
+  invariant-1: an unapproved supply chain can NEVER pass. `Stage2Policy.approved` defaults to False
+    and gates execution, so BLK-003 is enforced in code rather than prose - and the engine is not
+    invoked at all, which a test asserts directly.
+  invariant-2: every failure is absent evidence, never a pass. Unapproved chain, rule-pack hash
+    mismatch, hostile path, engine crash, invalid report and partial coverage all return the
+    `security-audit-skipped` finding, which `pipeline._write_scan` maps to `not_run` and
+    `snapshot.py` then treats as `REQUIRED_STAGE_BLOCKED`. The previous runner's fail-open gap -
+    scoring 1.000 when it had not run - is closed.
+  identity: the rule-pack hash is RECOMPUTED by the host, never taken on trust from the policy
+    text; the image must be an exact `sha256:` manifest digest, not a tag; the binding carries slug,
+    payload fingerprint, image digest, rule-pack hash, adapter commit, analyzed and isolated files.
+  known-gap: the binding record is returned by `scan_with_binding` but NOT yet persisted into the
+    scan artifact - `pipeline._write_scan` has a fixed payload shape, so persisting it needs a
+    schema/migration change. Recorded rather than silently dropped.
+  credit: none. Stage 2 still cannot pass anywhere, by design, until BLK-003 closes.
+  next: J-010e6 run the full suite, then either persist the binding or build the Stage-5 adapter
+
 ## In-Flight Step
 
-- none. J-010e5 is selected but not started.
+- none. J-010e6 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
