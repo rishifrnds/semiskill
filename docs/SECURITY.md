@@ -45,9 +45,19 @@ the human publish gate is the safety property. Retrieved content is wrapped as U
 
 ## Egress & redaction
 Egress is **deny-by-default** — no pipeline agent has open internet or write access beyond its
-explicit actuator. Stage-2's `npx` and any external judge run only inside the egress-controlled
-sandbox with a pinned registry. NUL bytes in untrusted submissions are sanitized at the L1 boundary
-(a jsonb-store DoS). Secret/PII detection (stage 4) flags credentials before a skill can be approved.
+explicit actuator. The legacy Stage-2 `npx @claude-flow/cli` runner is not production-authoritative:
+it misses the Markdown behavior payload, can write to the target, depends on networked audit data and
+does not fail closed on every read/report error. ADR-024 replaces it with an internally built, signed,
+digest-pinned deterministic scanner image and bundled rule pack. Trusted staging isolates payload
+scanner controls; the fixed OSS-only invocation disables inline suppression and git/ignore behavior,
+enumerates unknown extensions, and fails on every missing, ignored, skipped, partial or parse-error
+file. The host binds the report and promotion approval to the exact image platform manifest,
+independently computed rule-pack SHA-256, adapter source commit/digest and policy/schema hashes.
+Until that immutable chain, file reconciliation and supply-chain review are complete, Stage 2 is
+visible `not_run` evidence and blocks publication. The Stage-5 adapter must be
+loopback-only, proxy/redirect/tool-free and bound to an independently approved calibration artifact.
+NUL bytes in untrusted submissions are sanitized at L1 (a jsonb-store DoS); Stage 4 flags secrets/PII
+before approval.
 
 ## Rollback drill
 `governance/rollback.unpublish_skill` appends a correcting `approval` (published=false, quarantined)

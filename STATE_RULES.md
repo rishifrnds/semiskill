@@ -35,16 +35,25 @@ abandoned/rolled-back steps. Corrections use the suffix form:
 
 ## Checkpoint discipline
 
-After every atomic step, in this exact order:
+At the clean start of every atomic step, after the self-check and before editing, run
+`git pull --rebase` if a remote exists. Skip silently if no remote. If it fails, STOP and report.
+Never defer this pull until the worktree is dirty.
 
-1. `git pull --rebase` if a remote exists (`git remote -v` non-empty).
-   Skip silently if no remote. If rebase fails, STOP and report.
-2. `git add -A && git commit -m "wip: <STEP-ID> <what>"` — always before state updates
-3. Append entry to MEMORY.md Completed Steps with full marker
-4. Overwrite STATUS.md (including session block + crash-resume note)
-5. Update DECISIONS.md if an architectural choice was made
-6. Update BLOCKERS.md if blockers changed; run escalation scan
-7. Refresh `.session-lock` timestamp
+After the atomic work, in this exact order:
+
+1. Run the step's scoped verification and record the result without overstating its credit.
+2. Append the completed entry to MEMORY.md and overwrite STATUS.md, including the session block and
+   crash-resume note. When the entry describes the commit that will contain it, use the exact
+   self-reference `artifacts: this <STEP-ID> checkpoint, ...`; a Git commit cannot contain its own
+   SHA because that SHA hashes the file tree. Use an actual SHA when recording an already-existing
+   commit.
+3. Update DECISIONS.md if an architectural choice was made.
+4. Update BLOCKERS.md if blockers changed; run the escalation scan.
+5. Refresh `.session-lock` timestamp.
+6. `git add -A && git commit -m "wip: <STEP-ID> <what>"` so implementation, verification summary and
+   state land atomically in one commit.
+7. Verify the worktree is clean and the commit subject contains the same STEP-ID. Push separately
+   only when authorized.
 
 Never leave more than 10 minutes of work without a checkpoint. A power-off
 at minute 11 that loses work is a process failure, not a hardware failure.
@@ -61,8 +70,9 @@ repair state before proceeding.
 
 - ☐ `git status` shows clean working tree (prior step's changes committed)
 - ☐ `git log -1 --format=%ct` timestamp is within the last 15 minutes
-- ☐ MEMORY.md's last Completed entry has `status: done` AND its `artifacts`
-  line references the last commit SHA (`git rev-parse --short HEAD`)
+- ☐ MEMORY.md's last Completed entry has `status: done` AND its `artifacts` line either references
+  the last commit SHA (`git rev-parse --short HEAD`) or uses the exact `this <STEP-ID> checkpoint`
+  self-reference while the last commit subject contains that STEP-ID
 - ☐ STATUS.md's "Last updated" timestamp is within the last 15 minutes
 - ☐ STATUS.md session ID matches this session's id AND matches `.session-lock`
 - ☐ STATUS.md's "Active step" matches MEMORY.md's most recent entry OR
@@ -88,7 +98,7 @@ is later than when the work actually occurred.
 ```
 [STEP-ID] <ISO-8601 timestamp>  status: done
   what: <one-line description>
-  artifacts: <commit SHA first, then file paths, URLs, ADR-IDs>
+  artifacts: <existing commit SHA first OR exact "this <STEP-ID> checkpoint", then paths/URLs/ADRs>
   next: <STEP-ID of what follows, or "end-of-phase">
 
 [STEP-ID] <ISO-8601 timestamp>  status: abandoned
@@ -107,8 +117,10 @@ is later than when the work actually occurred.
   reason: <why the correction is needed>
 ```
 
-Prose is never a completion marker. Only `status: done` + timestamp + commit
-SHA counts. Completed entries are NEVER edited — use `status: correction`.
+Prose is never a completion marker. Only `status: done` + timestamp plus either an existing commit
+SHA or the exact `this <STEP-ID> checkpoint` self-reference counts; a self-reference counts only when
+the containing commit subject names the same STEP-ID. Completed entries are NEVER edited — use
+`status: correction`.
 
 At most ONE In-Flight step exists at any time. Starting a new step requires
 the previous one to be moved to Completed, Abandoned, or Rolled-Back.
@@ -231,5 +243,5 @@ Add `.session-lock` to `.gitignore`.
 - Never proceed with a failed self-check.
 - Prose is never a completion marker. Only `status: done` + timestamp counts.
 - One writer per project at a time (enforced by `.session-lock`).
-- `git pull --rebase` before every commit when a remote exists.
+- `git pull --rebase` at the clean start of every atomic step, before edits, when a remote exists.
 - Atomic steps never exceed 20 minutes — split if longer.

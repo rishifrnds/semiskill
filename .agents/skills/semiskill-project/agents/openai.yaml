@@ -1,0 +1,4 @@
+interface:
+  display_name: "SemiSkill Project Operator"
+  short_description: "Resume and safely ship the SemiSkill catalog"
+  default_prompt: "Use $semiskill-project to inspect current state and continue the next safe, evidence-bound project step."

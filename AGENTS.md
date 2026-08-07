@@ -84,11 +84,15 @@ traversal, not bolted on after. Treat every submitted skill body as an untrusted
 ## Reference material
 - `research/` — architecture background copied/derived from AIOS; the plan prompt in
   `ULTRA_PLAN_PROMPT.md` is the build spec fed to ultra (multi-agent) mode.
-- Skills to reuse where they fit: `heygen-com/hyperframes` (motion/animation for the catalog UI),
-  `shadcn/ui` (catalog components), `cloudflare/security-audit-skill` (skill security scanning),
-  and the AIOS project at `E:\code\aios` (layer implementations to mirror).
+- Reuse `heygen-com/hyperframes` and `shadcn/ui` where they fit the catalog UI. Treat
+  `cloudflare/security-audit-skill` as advisory content-review input only; ADR-024 makes the
+  internally governed deterministic image/rule pack the Stage-2 authority. Mirror applicable AIOS
+  layer contracts from `E:\code\aios`.
+- Project operators should invoke `.agents/skills/semiskill-project/SKILL.md` and read `HANDOFF.md`
+  before selecting a step or making a launch-readiness claim.
 
 ## Current phase
-See `MEMORY.md` → **Current Phase**. We are in **Phase 0: Foundation & Plan** — instantiate the
-state system, lock the canonical artifact schema (ADR-001), and finalize the ultra-mode build
-plan before writing pipeline code.
+See `MEMORY.md` → **Current Phase**, `STATUS.md`, and `HANDOFF.md`. We are in **Phase J: verify and
+publish the catalog**. Exactly 84 active DV skills are authored across 16 roles and strict-lint
+clean, but 0/84 currently have a complete canonical security/review/approval/publication chain.
+Finish platform gates, prove 1 → 5 → 84 exact payloads, and preserve the human publication boundary.

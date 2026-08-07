@@ -1,6 +1,5 @@
 <!--
-Active blockers ONLY. Delete entries the moment they resolve — log the
-resolution in MEMORY.md as a step with `resolves: BLK-NNN`.
+Active blockers ONLY. Delete entries the moment they resolve and log the resolution in MEMORY.md.
 Full rules: see STATE_RULES.md.
 -->
 
@@ -17,20 +16,52 @@ Full rules: see STATE_RULES.md.
   identities, then supply their approved configuration through the documented environment contract.
 - Escalate at: 2026-08-08T13:29:31Z
 
-<!-- Note for the build phase — these are decisions to confirm with the user, not yet blockers:
-  - SharePoint hosting model: SPFx web part vs. SharePoint list + embedded SPA vs. Power Platform.
-  - Where the artifact store / pipeline runs (Azure Functions, container, on-prem) given egress control.
-  - Which security scanners are in-scope for v1 (cloudflare/security-audit-skill + static + injection corpus).
-Surface these as ADRs or questions when the build starts, per CLAUDE.md.
--->
+## [BLK-002] Development migration needs a new exact human-approved plan digest
+- Raised: 2026-08-07T03:10:37Z
+- Blocks: Gate-1 development migration, canonical review issuance and scoreboard v3
+- Type: user-input-needed
+- Description: The development database remains at 0015. Both previous plans are source-bound to
+  obsolete commits and cannot be approved or executed after the handoff/project-skill update.
+- What I tried: preserved the two old digests as explicitly superseded evidence and kept the
+  development store unchanged.
+- What I need to unblock: after the final clean commit and a current immutable full-suite PASS,
+  generate a replacement read-only plan and obtain explicit approval of its exact digest.
+- Escalate at: 2026-08-09T03:10:37Z
 
-<!-- Template for a new blocker — copy, fill in, append above this comment:
-## [BLK-001] <short title>
+## [BLK-003] Stage-2 scanner image and rule pack lack supply-chain approval
+- Raised: 2026-08-07T03:10:37Z
+- Blocks: Stage-2 production credit and the first end-to-end skill publication
+- Type: external-dependency
+- Description: ADR-024 selects an internally built and signed Semgrep OSS-mode derivative, but the internal
+  image, bundled SemiSkill rules, SBOM/CVE record, license review and signature policy do not yet
+  exist as approved artifacts. The former claude-flow path is not a valid fallback.
+- What I tried: audited the current runner, recorded its fail-open coverage/egress/write defects and
+  pinned provisional upstream coordinates for controlled evaluation only.
+- What I need to unblock: AppSec and legal/supply-chain owners must approve the exact image platform
+  manifest, rule-pack SHA-256, adapter source commit/digest and policy/schema hashes after the adapter
+  and adversarial tests pass.
+- Escalate at: 2026-08-09T03:10:37Z
+
+## [BLK-004] Stage-5 held-out calibration needs independent human labels
+- Raised: 2026-08-07T03:10:37Z
+- Blocks: calibrated Stage-5 credit and the initial/high-risk corpus gate
+- Type: external-dependency
+- Description: The local model/runtime can be pinned, but no approved held-out corpus, blinded human
+  labels, adjudication record, acceptance thresholds or drift baseline exists. The current Ollama
+  wildcard listener also fails the planned loopback-only activation contract.
+- What I tried: recorded exact local model artifacts and proposed a bounded loopback adapter and a
+  120-example balanced calibration design without treating the proposal as completed evidence.
+- What I need to unblock: nominate two independent labelers and one adjudicator, ratify the corpus
+  and metrics, complete blinded labeling, and configure the runtime loopback-only.
+- Escalate at: 2026-08-09T03:10:37Z
+
+<!-- Template for a new blocker:
+## [BLK-NNN] <short title>
 - Raised: <ISO timestamp>
 - Blocks: <STEP-ID | phase | project>
 - Type: external-dependency | ambiguity | bug | missing-credential | decision-pending | user-input-needed
-- Description: <2–3 sentences>
-- What I tried: <bulleted list, or "nothing yet">
+- Description: <2-3 sentences>
+- What I tried: <summary>
 - What I need to unblock: <concrete action>
 - Escalate at: <Raised + 48h, ISO timestamp>
 -->

@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T03:04:15Z_
+_Last updated: 2026-08-07T03:30:11Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -9,36 +9,47 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 ## Session
 - ID: 20260806T064411Z-RISHI_PC-1faced - lock held: yes
 - Crash-resume: approved takeover after stale PID 415686 was confirmed absent.
-- Coordinator is the sole writer; pooled agents remain read-only.
+- Coordinator PID 21120 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- J-010d1: refresh the canonical handoff, project skill, learnings and related state; verify,
-  regenerate the source-bound migration plan, commit and push synchronized `main`.
+- J-010d2: commit/push synchronized `main`, verify exact local/remote equality, then produce a new
+  immutable serial full-suite run on the resulting clean source.
 
 ## Measured baseline
-- Registry: 84 active + 20 declined across 16 roles; every role has >=5 authored skills.
-- Catalog: 84 authored and strict-lint clean; 0 security-complete, canonical-ready, approved or
-  projection-backed published.
-- Database: isolated `semiskill_test` reaches 0023; development `semiskill` remains at 0015.
-- Migration: the unapproved `b36f250` plan digest `ed397d...` is superseded by the user-authorized
-  handoff/skill/state update; regenerate an exact plan from the new clean commit before approval.
-- Verification: immutable run `d7af92e6-f0fc-455c-b368-739355bf0043` on `b36f250` passed 1078,
-  failed 0, errored 0, skipped 7, with no xfailed/xpassed.
-- Test isolation: post-test artifacts/projections/contracts/cells are zero, protected triggers 4/4
-  enabled and cluster capability memberships restored.
-- Dashboard 8899 exposes the immutable PASS; canonical scoreboard remains unavailable/stale.
+- Registry/filesystem: 84 active + 20 declined, 16 roles, every role >=5, 84 skill directories.
+- Authoring: 84/84 strict-lint clean; pack consistency 0 errors and 60 warnings.
+- Canonical funnel: 0 security-complete, 0 canonically reviewed, 0 recheck-ready, 0 authenticated
+  human-approved and 0 projection-backed published.
+- Canonical anomaly set: unavailable because scoreboard v3 has not been regenerated; never infer zero
+  anomalies from the stale v2 snapshot.
+- Development DB last read-only observation: `2026-08-07T03:17:28Z`, identity
+  `sha256:9b98194d3901734a63746f50dbe98dc1c161fd99bc9fd497080cba2c6a2002a9`, 39
+  non-crediting artifacts and no approval. Migration authority is unavailable; schema was last
+  observed at 0015 by the now-superseded source-bound plan. Isolated test DB last reached 0023.
+- J-010c3c checkpoint: `83b876f`; immutable full-suite evidence source: `b36f250`. That historical,
+  non-crediting run recorded 1,078 passed, 7 skipped and 0 failed/errors/xfailed/xpassed, but is stale
+  for the current documentation/project-skill source.
+- Both migration-plan digests `948d...` and `ed397d...` are obsolete and must never execute.
 
 ## Immediate order
-1. Finish and push the handoff/project-skill/learnings/state checkpoint, then generate a replacement
-   clean-source migration plan.
-2. Obtain exact digest approval, execute 0016-0023 and implement safe review issuance + scoreboard v3.
-3. Implement the pinned Stage-2 and calibrated Stage-5 adapters; vertically publish 1 -> 5 -> 84.
+1. Commit J-010d1, push synchronized `main`, and verify clean local/remote equality.
+2. Run a new immutable serial full suite on that exact clean source.
+3. Generate a replacement read-only 0015-to-0023 migration plan and stop for exact digest approval.
+4. Implement/verify Stage 2, calibrated Stage 5, review issuance and scoreboard v3; prove 1 -> 5 -> 84.
+
+## Active blockers
+- BLK-001: production Entra/OIDC, SharePoint and least-privilege identities are absent.
+- BLK-002: a new exact source-bound migration plan needs explicit digest approval.
+- BLK-003: the internal Stage-2 image/rule pack needs AppSec/legal/supply-chain approval.
+- BLK-004: Stage-5 needs loopback-only runtime plus independent labels/adjudication/calibration.
 
 ## Standing hazards
-- Never run database tests concurrently; use only the exact isolated `_test` database.
-- Shared dependencies changed all 84 hashes, so historical reviews credit none.
-- Scoreboard v2 nested evidence/progress validation has an independently reproduced P0 gap.
-- BLK-001: production Entra/OIDC, SharePoint and service identities are not configured.
+- Never run database tests concurrently; use only the explicit isolated `_test` database.
+- Shared dependencies changed all 84 full payload hashes, so historical reviews credit none.
+- A lint hash covers `SKILL.md` only; review/approval uses the full captured payload hash.
+- Scoreboard v2 nested evidence/progress validation has a reproduced P0 gap and is stale.
+- An unavailable observation, migration authority or scoreboard remains unavailable—not zero or pass.
+
 ## Last checkpoint
-- J-010c3c: clean-source full-suite PASS and exact, now-superseded migration plan at `b36f250`.
-- The current user-authorized documentation/state update intentionally requires a replacement plan.
+- J-010d1 is the containing documentation/state checkpoint (`artifacts: this J-010d1 checkpoint`).
+- It intentionally makes the `b36f250` run and `ed397d...` plan stale for current-source authority.

@@ -84,16 +84,19 @@ traversal, not bolted on after. Treat every submitted skill body as an untrusted
 ## Reference material
 - `research/` — architecture background copied/derived from AIOS; the plan prompt in
   `ULTRA_PLAN_PROMPT.md` is the build spec fed to ultra (multi-agent) mode.
-- Skills to reuse where they fit: `heygen-com/hyperframes` (motion/animation for the catalog UI),
-  `shadcn/ui` (catalog components), `cloudflare/security-audit-skill` (skill security scanning),
-  and the AIOS project at `E:\code\aios` (layer implementations to mirror).
+- Reuse `heygen-com/hyperframes` and `shadcn/ui` where they fit the catalog UI. Treat
+  `cloudflare/security-audit-skill` as advisory content-review input only; ADR-024 makes the
+  internally governed deterministic image/rule pack the Stage-2 authority. Mirror applicable AIOS
+  layer contracts from `E:\code\aios`.
+- Project operators should invoke `.agents/skills/semiskill-project/SKILL.md` and read `HANDOFF.md`
+  before selecting a step or making a launch-readiness claim.
 
 ## Current phase
 See `MEMORY.md` → **Current Phase** and `STATUS.md` for the right-now snapshot. Phases 0/A–H are
 archived under `archive/`. We are in **Phase J: verify and publish the catalog** — 84 DV skills are
-authored across 16 roles (≥5 each) and all lint clean, but publication is gated on an *independent*
-content recheck per skill, and most do not have one yet. Measure, never assume: `HANDOFF.md` has the
-resume prompt and the commands that report real state.
+authored across 16 roles (≥5 each) and all lint clean, but 0/84 currently have a complete canonical
+security/review/approval/publication chain. Measure, never assume: `HANDOFF.md` has the complete
+inventory and evidence, and `.agents/skills/semiskill-project/SKILL.md` defines the resume workflow.
 
 ## Before authoring, reviewing or changing a check — read these
 - **`docs/AUTHORING_CONTRACT.md`** — the single source of truth for what a skill must be: standing

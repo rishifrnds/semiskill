@@ -146,3 +146,60 @@ verdict has a failure mode where it records **something that did not happen**:
 The last one is real: this session began by measuring the previous session's claim and finding
 83 authored, 6 with a gate record, **0 published**. Measure before you trust a record — including
 your own.
+
+---
+
+## 2026-08-07 — Source-bound gates and launch truth
+
+### A green platform suite is not a green catalog
+
+The immutable full suite proved 1,078 repository tests on one exact clean commit and isolated test
+database. It proved **zero** skill reviews, approvals or publications. Keep platform proof and catalog
+credit as separate funnels; otherwise a large passing test number can visually overpower the more
+important `0/84` release result.
+
+### There are two hashes, and only the full payload hash governs approval
+
+Strict lint reports a hash of `SKILL.md`. Every current DV skill also imports three canonical
+`_shared` files that affect its instructions. Review, approval, badge, export and publication must use
+the full captured payload hash that includes those vendored bytes. Displaying the lint hash beside an
+approval action without naming its narrower scope is a high-risk operator-interface bug.
+
+### A migration approval expires when source changes
+
+A read-only plan can be perfectly formed and still become unusable one documentation commit later if
+the migration contract binds the repository commit/tree. Preserve the old plan as provenance, mark it
+superseded, and generate a new plan after the final clean checkpoint. Never interpret “continue” or
+“push everything” as approval of an older digest.
+
+### A scanner that misses the behavior file cannot be Stage 2
+
+The audited claude-flow path primarily scans JS/TS/JSON/YAML/env files, can write inside the target,
+depends on networked `npm audit`, and swallows some errors. Parsing its output more carefully cannot
+repair those authority failures. The replacement must reconcile the scanner's exact file inventory
+against every captured payload file, run read-only and without network, and fail closed on any error
+or extra output. File coverage alone is insufficient: payload-owned `.semgrepignore` and inline
+`nosem` can suppress findings while a file still appears scanned. Trusted staging must isolate
+scanner controls, disable suppressions and fail on every ignored, skipped, partial or parse-error file.
+
+### “Local model” is not the same as “local-only model”
+
+Ollama was installed locally but listening on wildcard IPv6. An adapter that calls `127.0.0.1` does
+not by itself prevent another interface from reaching the daemon. Activation must verify the daemon's
+actual listener, disable proxies/redirects/tools, bind the exact model/prompt/calibration hashes and
+refuse credit until independent held-out labels establish the error signal.
+
+### One command centre needs one observation contract
+
+API, dashboard and export should not independently reimplement freshness, database identity,
+scoreboard validation or fallback rules. A shared strict observation module prevents one surface from
+showing stale green while another correctly says unavailable. Business planning data remains useful,
+but its hypotheses must never share the visual or schema authority of observed launch evidence.
+
+### A commit cannot contain its own Git SHA
+
+The original state rules asked MEMORY to name the latest commit SHA inside that same commit. Git
+hashes the tree containing MEMORY, so the requirement is self-referential and cannot be satisfied.
+The durable convention is an exact `this <STEP-ID> checkpoint` marker whose containing commit subject
+must name the same STEP-ID; real SHAs remain mandatory when recording an already-existing commit.
+Making this explicit prevents every fresh operator from correctly stopping on an impossible gate.

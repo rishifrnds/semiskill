@@ -760,7 +760,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   non-crediting Quality/Launch presentation
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010b3e2b] 2026-08-06T21:04:36Z  status: done
   what: added a fixed-root, file-only full-suite reader bound to the separately validated exact clean
   commit/tree; Quality, Launch and health surfaces now distinguish PASS, FAIL, STALE and UNAVAILABLE,
@@ -777,7 +777,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   test database, then verify the dashboard consumes that immutable run
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010b3e3a] 2026-08-06T21:12:15Z  status: done
   what: executed the first immutable full suite, preserved its truthful FAIL, traced both failures to
   unit tests that implicitly consumed the runner's intentionally pinned privileged adapter DSNs, and
@@ -790,7 +790,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   dashboard's exact file-only projection
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010b3e3b] 2026-08-06T21:24:11Z  status: done
   what: reran the complete suite to a source-bound PASS, proved the strict dashboard projection at
   desktop/mobile widths, and fixed the only browser finding - a missing favicon request - with an
@@ -805,7 +805,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   the live Quality/Launch browser verification without further source edits
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010b3e3c] 2026-08-06T21:33:52Z  status: done
   what: produced the final source-bound suite PASS for the favicon-corrected clean checkpoint and
   independently verified its non-crediting Quality and Launch presentation at desktop/mobile widths
@@ -820,7 +820,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010c1 resolve the approval-bound `_shared` payload topology
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010c1] 2026-08-06T23:47:36Z  status: done
   what: bound every skill version to its exact shared dependency closure; replaced mutable review
   readiness with authenticated append-only one-skill leases, typed review lineage and deterministic
@@ -838,7 +838,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   scoreboard v3
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010c2] 2026-08-07T01:16:58Z  status: done
   what: added a fail-closed, authenticated and commit-bound 0015->0023 forward-migration plan and
   execution boundary with exact schema/corpus/registry attestations, semantic retry and a strict
@@ -854,7 +854,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   approval before execution, then add authenticated one-skill review-contract issuance
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010c3] 2026-08-07T01:40:44Z  status: abandoned
   what: generated the exact read-only 0015->0023 development migration plan at `91cdd50`
   reason: the first source-bound full-suite run on that commit returned a complete FAIL, so asking a
@@ -864,7 +864,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   migration-0015-to-0023-plan.json
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010c3a] 2026-08-07T01:40:44Z  status: done
   what: ran and preserved the first immutable full suite for the forward-migration checkpoint, then
   grouped its 26 failures/errors into test-environment isolation, invalid legacy review fixtures,
@@ -876,7 +876,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010c3b correct the four root causes and rerun the source-bound suite
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010c3b] 2026-08-07T01:54:11Z  status: done
   what: preserved every tightened production gate while repairing stale role/level and permission
   fixtures, exact review-contract witnesses in adversarial MemoryStore state, full-suite adapter
@@ -891,7 +891,7 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   read-only development migration plan only after a complete PASS
 
 
-## In-Flight Step
+## Completed Steps (continued)
 - [J-010c3c] 2026-08-07T03:04:15Z  status: done
   what: produced a clean-source immutable full-suite PASS at `b36f250` and generated the exact
   read-only 0015-to-0023 development migration plan; subsequent read-only pooled audits prepared
@@ -907,17 +907,111 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: J-010d1 refresh the canonical handoff, project skill, learnings and state, then regenerate
   the exact migration plan and push the synchronized main branch
 
-- [J-010d1] refresh the canonical handoff, project skill, learnings and related state; verify,
-  regenerate the source-bound migration plan, commit and push synchronized `main`.
+- [J-010d1a-correction-of-J-010b3e2b] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `12c0bac`; `e12f403` is the implementation commit
+  corrects: J-010b3e2b
+  reason: independent state reconciliation separated implementation evidence from its checkpoint
+
+- [J-010d1b-correction-of-J-010b3e3a] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `d58b488`; `814187e` is the implementation commit
+  corrects: J-010b3e3a
+  reason: independent state reconciliation separated implementation evidence from its checkpoint
+
+- [J-010d1c-correction-of-J-010b3e3b] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `eb0357a`; `a673e39` is the implementation commit
+  corrects: J-010b3e3b
+  reason: independent state reconciliation separated implementation evidence from its checkpoint
+
+- [J-010d1d-correction-of-J-010b3e3c] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `7fb92c1`; `eb0357a` was prior checkpoint evidence
+  corrects: J-010b3e3c
+  reason: independent state reconciliation separated source evidence from its checkpoint
+
+- [J-010d1e-correction-of-J-010c1] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `037435e` and introduced ADR-023 only; ADR-024 is introduced
+    by J-010d1, not J-010c1
+  corrects: J-010c1
+  reason: the original self-reference also named an ADR that did not exist in that checkpoint
+
+- [J-010d1f-correction-of-J-010c2] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `91cdd50`
+  corrects: J-010c2
+  reason: independent state reconciliation resolved the original self-reference
+
+- [J-010d1g-correction-of-J-010c3a] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `ca7096f`
+  corrects: J-010c3a
+  reason: independent state reconciliation resolved the original self-reference
+
+- [J-010d1h-correction-of-J-010c3b] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `b36f250`
+  corrects: J-010c3b
+  reason: independent state reconciliation resolved the original self-reference
+
+- [J-010d1i-correction-of-J-010c3c] 2026-08-07T03:19:10Z  status: correction
+  delayed: true
+  what: the durable checkpoint commit is `83b876f`; `b36f250` is the immutable suite evidence source
+  corrects: J-010c3c
+  reason: independent state reconciliation separated source-bound evidence from its checkpoint
+
+- [J-010d1j-correction-of-I-006-launch] 2026-08-07T03:26:24Z  status: correction
+  delayed: true
+  what: the old launch entry is abandoned and non-crediting; later measurement disproved its claim
+    that 77 skills completed the full gate
+  corrects: I-006 launch
+  reason: append-only repair of a historical active marker and phantom completion claim
+
+- [J-010d1k-correction-of-J-003-partial] 2026-08-07T03:26:24Z  status: correction
+  delayed: true
+  what: the interrupted partial review wave is superseded and non-crediting; current exact hashes
+    must restart through canonical review issuance
+  corrects: J-003 partial
+  reason: append-only repair of a historical active marker after the shared-payload gate changed
+
+## Completed Steps (continued)
+
+- [J-010d1] 2026-08-07T03:30:11Z  status: done
+  delayed: true, reason: three independent audits exposed scanner-suppression, state self-reference,
+    stale-command and historical-marker defects that required correction beyond the atomic ceiling
+  what: created the canonical 84-skill/launch handoff and reusable project-operator skill; recorded
+    exact Stage-2, Stage-5, migration and market blockers; repaired checkpoint semantics and
+    append-only history; updated security, learnings, README and agent instructions
+  artifacts: this J-010d1 checkpoint, HANDOFF.md, .agents/skills/semiskill-project/SKILL.md,
+    ADR-024, ADR-025, BLOCKERS.md, STATUS.md, STATE_RULES.md, docs/LEARNINGS.md, docs/SECURITY.md;
+    project skill validator passed; strict lint 84/84 clean with 0 errors/advisories; consistency
+    0 errors/60 warnings; registry 84 active + 20 declined across 16 roles; diff check passed; three
+    read-only closure audits reported no remaining scoped P0/P1/P2
+  next: J-010d2 synchronize/push main and produce a new clean-source immutable full-suite run
+
+## In-Flight Step
+
+- [J-010d2] 2026-08-07T03:30:11Z  status: in-flight
+  what: commit and push the reconciled main branch, verify local/remote equality, then run a new
+    source-bound immutable full suite before replacement migration planning
+  next: J-010d3 generate the replacement read-only migration plan and request exact digest approval
 
 ## Pending Steps
-1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
-2. [J-009] canonical scoreboard snapshot + live dashboard without seed/fixture fallback
-3. [J-010] ACL/provenance-bound catalog API and skills.sh-shaped list/detail UI
-4. [J-011] re-review and close the 3 nominal-ready skills
-5. [J-012] fix + fresh recheck the 32 reviewed-not-ready skills in batches <=10
-6. [J-013] review + fix + fresh recheck the 49 never-reviewed skills in batches <=10
-7. [J-014] explicit human approvals, publish 84, regenerate site/pack, adversarial final verify
+1. [J-010d2] synchronize/push `main`, run a new clean-source immutable full suite and verify its
+   non-crediting dashboard projection
+2. [J-010d3] generate a replacement 0015-to-0023 plan, obtain exact digest approval and migrate
+3. [J-010d4] implement authenticated one-skill review issuance, scoreboard v3/progress v2 and one
+   shared live observation contract
+4. [J-010d5] implement and promote the ADR-024 Stage-2 scanner plus calibrated loopback Stage 5
+5. [J-011] prove one exact skill and then the five-skill vertical cohort end to end
+6. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready
+7. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls
+8. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate
+
+The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
+its exact current full payload hash and fresh independent evidence.
 
 ## Current Phase
 Phase J: Finish and ship the security-verified 84-skill DV catalog

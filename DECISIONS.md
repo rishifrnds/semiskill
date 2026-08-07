@@ -564,6 +564,69 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: ADR-010, ADR-014, J-010c1; semiskill/capture/intake.py;
   semiskill/authoring/pack.py; docs/WORKFLOW.md; docs/PROMPT_LIBRARY.md
 
+## [ADR-024] Stage 2 uses an internally governed deterministic scanner image
+- Date: 2026-08-07
+- Status: accepted
+- Context: The planned live `@claude-flow/cli security scan` path is not a trustworthy Stage-2
+  authority. It may write into the submitted target, depends on networked `npm audit`, does not
+  cover the Markdown `SKILL.md` payload that governs behavior, and can swallow read/report errors
+  before emitting an apparently clean result. This conflicts with the exact-payload, no-egress,
+  fail-closed publication contract.
+- Decision: Stage 2 will run an internally built, mirrored and signed Semgrep OSS-mode derivative
+  with a bundled SemiSkill rule pack. The trusted host projects the exact captured payload into
+  scanner-owned staging, rejects or isolates payload-controlled scanner configuration, explicitly
+  enumerates every file, and invokes a digest-pinned engine with `--oss-only`, `--disable-nosem`,
+  `--no-git-ignore`, `--scan-unknown-extensions`, metrics/version checks disabled and no auth token.
+  Execution is read-only, networkless and non-root with dropped capabilities and
+  `no-new-privileges`. Any ignored, skipped, parse-error, partial, truncated or missing file is
+  blocking. The host validates one bounded exact-key report and binds slug/version/payload, exact
+  image platform-manifest digest, independently computed `rule_pack_sha256`, adapter source
+  commit/digest, policy/schema/engine hashes, exact coverage, errors/skips and resource outcome;
+  container output cannot assert its own trusted identity or digest. AppSec/legal/signature promotion
+  approves this immutable chain rather than a tag or version label. The former Ruflo/claude-flow
+  runner is retired as a Stage-2 authority; agentic security review may remain advisory content
+  evidence only.
+- Alternatives considered:
+  - Keep the current CLI and parse around its output - rejected because formatting wrappers do not
+    repair missing Markdown coverage, target writes, network dependence or swallowed errors.
+  - Call the upstream image directly in production - rejected because a public tag/index is not an
+    approved internal supply-chain artifact and cannot bind the company rule pack.
+  - Replace deterministic scanning with an LLM review - rejected because agent prose cannot provide
+    exhaustive exact-file coverage or deterministic policy enforcement.
+- Consequences: No live Stage-2 result earns credit until AppSec, SBOM/CVE, legal/license, engine
+  attestation and signature review approves the internal image and rules. The provisional upstream
+  coordinates in `HANDOFF.md` include proprietary/Pro setup metadata and prove neither CE provenance
+  nor OSS-only execution; they are evaluation inputs only. New adapter, suppression-control,
+  exact-coverage, hostile-payload, timeout/output/resource-bound and image-policy tests are required.
+  ADR-006 is superseded only for the Stage-2 runner choice; its broader defense-in-depth intent
+  remains.
+- Related: ADR-006, ADR-014, ADR-023, J-010d1; `HANDOFF.md`; `docs/SECURITY.md`
+
+## [ADR-025] Checkpoint state and implementation commit atomically with an explicit self-reference
+- Date: 2026-08-07
+- Status: accepted
+- Context: The original checkpoint order required a commit before updating MEMORY/STATUS, while the
+  commit hook required a step commit to include one of those files and the next self-check required a
+  clean tree whose latest commit SHA appeared inside that same commit. A Git commit cannot contain
+  its own SHA because the SHA hashes the file tree, so literal compliance was impossible and fresh
+  operators correctly stopped on contradictory state.
+- Decision: Prepare implementation, verification summary and state together, then commit them once.
+  A completed entry for its containing commit uses the exact auditable marker
+  `artifacts: this <STEP-ID> checkpoint`; an entry that records an already-existing commit uses its
+  real SHA. The next self-check binds a self-reference to the matching STEP-ID in the commit subject.
+- Alternatives considered:
+  - Make a second state-only commit - rejected because the second commit again could not contain its
+    own SHA and would leave the last-completed check pointing behind HEAD.
+  - Predict or amend until a self-containing SHA converges - rejected because Git's content-addressed
+    commit model provides no practical fixed point and the result would be brittle ceremony.
+  - Leave state dirty after every implementation commit - rejected because crash recovery and the
+    next-step clean-tree gate would fail by design.
+- Consequences: `STATE_RULES.md`, the project skill and commit hook now share one achievable atomic
+  convention. The marker is not a free-form prose substitute: it must name the exact STEP-ID and the
+  containing commit subject must match. Remote push remains a separate authorized action.
+- Related: J-010d1; `STATE_RULES.md`; `.git/hooks/commit-msg`;
+  `.agents/skills/semiskill-project/SKILL.md`
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>
