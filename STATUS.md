@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T09:45:28Z_
+_Last updated: 2026-08-07T09:54:08Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010e1 (re-run the immutable suite for a current PASS) is selected.
+- none in flight. J-010e2 (correct the false single-blocker claim in UNBLOCK_SPECS) is selected.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -83,16 +83,16 @@ rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 - BLK-003: the internal Stage-2 image/rule pack needs AppSec/legal/supply-chain approval.
 - BLK-004: Stage-5 needs loopback-only runtime plus independent labels/adjudication/calibration.
 
-## Full-suite status
-Both failures found on `a1d8746` are now addressed; a confirming run is J-010e1.
+## Full-suite status: current PASS
+Run `5eb6210d-8f6a-41a1-a48b-8190a696b416` on clean source `854ae71`
+(tree `a493c56ca1699ec64b9e0b531bd4bf41dbba7e28`): 1117 collected, 1110 passed, 7 skipped,
+0 failed, 0 errors, against isolated `semiskill_test` at 0023.
 
-- README red-team regression: FIXED (introduced by `105b3cb`, hidden because the prior full-suite
-  run predated that commit).
-- Response-delivery race: FIXED in J-010d9. `dashboard/server.py::Handler._json` now drains a
-  bounded, time-limited amount of unread request body before a rejection responds and closes, so a
-  correct 415/421/403 is no longer discarded by an RST. Reproduced deterministically with 25
-  consecutive rejections before the fix; 111/111 pass after it.
-- Until a clean run is recorded, treat the full suite as NOT a current PASS.
+- This is the first clean-source PASS since `b36f250`. It unblocks gates that require one - a new
+  source-bound migration plan, a release checkpoint - and moves NO skill through the security gate.
+- It goes stale the moment the source changes. Re-run before binding any new decision to it.
+- Both prior failures are fixed: the README red-team regression (from `105b3cb`) and the
+  response-delivery race (J-010d9).
 
 ## Standing hazards
 - Never run database tests concurrently; use only the explicit isolated `_test` database.

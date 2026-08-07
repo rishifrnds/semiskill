@@ -1158,9 +1158,25 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication.
   next: J-010e1 re-run the immutable full suite for a current PASS record
 
+- [J-010e1] 2026-08-07T09:54:08Z  status: done
+  what: recorded a current clean-source immutable full-suite PASS, the first since `b36f250`
+  artifacts: this J-010e1 checkpoint,
+    dashboard/runs/full-suite/runs/5eb6210d-8f6a-41a1-a48b-8190a696b416.json, HANDOFF.md, STATUS.md
+  verification: run `5eb6210d-8f6a-41a1-a48b-8190a696b416`; source commit
+    `854ae714eec13bf216d697b7ec2c2ea2565fe1e6`, tree `a493c56ca1699ec64b9e0b531bd4bf41dbba7e28`,
+    `clean: true`; 1117 collected, 1110 passed, 7 skipped, 0 failed, 0 errors, 0 xfailed/xpassed;
+    isolated `semiskill_test` at 0023; run SHA-256
+    `52aec9b0e2b7f8d67dcfe9581acc1f1be66e0754e02c34597f8b94f07e27c83f`, output SHA-256
+    `936972ccba1eab17c634b6e7cfbe769511a037e81c6bf810b36ca0fcf22d1e66`.
+  credit: none toward skill review, approval, publication or launch readiness. This is platform
+    proof only, and it goes stale the moment the source changes.
+  unblocks: gates that require a current full-suite PASS - notably a new source-bound migration plan
+    and any release checkpoint. It does NOT move any skill through the security gate.
+  next: J-010e2 correct the false single-blocker claim in docs/UNBLOCK_SPECS.md
+
 ## In-Flight Step
 
-- none. J-010e1 is selected but not started.
+- none. J-010e2 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before

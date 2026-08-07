@@ -79,19 +79,19 @@ Its one genuinely valuable finding is the SPEC A contradiction in gap 9 below.
 
 ## Exact platform proof already completed
 
-The last clean-source immutable full-suite run is historical platform proof:
+The current clean-source immutable full-suite run is the standing platform proof:
 
-- Run ID: `d7af92e6-f0fc-455c-b368-739355bf0043`
-- Source commit/tree: `b36f250` / `ba6494dbffac3662bf3d8b42c65725f4f597b2a9`
-- Run artifact SHA-256: `33045ec0f96509209441e9bf855f8e37cc2dd3fc5419546ff809bdd664044f8f`
-- Output SHA-256: `9dfa6e78eda9bedd7bbfc6d663661b119fe0d05f1e40140b4e966191443186c2`
-- Result: 1,085 collected; 1,078 passed; 7 skipped; 0 failed; 0 errors; 0 xfailed/xpassed
+- Run ID: `5eb6210d-8f6a-41a1-a48b-8190a696b416`
+- Source commit/tree: `854ae71` / `a493c56ca1699ec64b9e0b531bd4bf41dbba7e28` (`clean: true`)
+- Run artifact SHA-256: `52aec9b0e2b7f8d67dcfe9581acc1f1be66e0754e02c34597f8b94f07e27c83f`
+- Output SHA-256: `936972ccba1eab17c634b6e7cfbe769511a037e81c6bf810b36ca0fcf22d1e66`
+- Result: 1,117 collected; 1,110 passed; 7 skipped; 0 failed; 0 errors; 0 xfailed/xpassed
 - Database: exact isolated `semiskill_test`, migration 0023
 - Credit: **none** toward skill review, approval, publication, or launch readiness
 
-This documentation/project-skill checkpoint changes the source after `b36f250`, so the run remains
-immutable history but becomes stale for any new source-bound release decision. Produce another
-clean-source run before approving a new migration or release checkpoint.
+It supersedes the historical `b36f250` run (1,078 passed), which had gone stale and was concealing a
+README regression introduced by `105b3cb`. Any source change after `854ae71` makes this run stale
+too; produce another before approving a migration or release checkpoint.
 
 ## Superseded migration evidence
 
