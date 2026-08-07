@@ -991,24 +991,56 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     read-only closure audits reported no remaining scoped P0/P1/P2
   next: J-010d2 synchronize/push main and produce a new clean-source immutable full-suite run
 
+- [J-010d2] 2026-08-07T07:16:49Z  status: abandoned
+  delayed: true, reason: recorded at takeover; the step's own session died before it could checkpoint
+  what: commit/push the reconciled main branch, verify local/remote equality, then run a new
+    source-bound immutable full suite before replacement migration planning
+  reason: superseded by events. An unrecorded session (~2026-08-07T05:48Z-06:12Z, PID 21120, since
+    confirmed absent) skipped this step's push/full-suite preconditions and instead committed
+    `c8f5fa3` (reports/migration-plan.json, no STEP-ID), reportedly executed the 0015->0023 forward
+    migration, and ran the wave across all 84 skills. The step's premise ("development schema is
+    0015 and no wave has run") no longer describes reality, so it cannot be completed as written.
+  artifacts: c8f5fa3 (unrecorded, no STEP-ID); superseded by J-010d3
+
+- [J-010d3] 2026-08-07T07:16:49Z  status: done
+  delayed: true, reason: state repair at crash takeover; the work being recorded was performed by a
+    prior session that died without checkpointing, so this entry's timestamp is NOW, not then
+  what: took over the stale crash lock with explicit user approval, preserved the crashed session's
+    evidence, and reconciled STATUS/BLOCKERS/HANDOFF to measured truth instead of inherited prose
+  artifacts: this J-010d3 checkpoint, docs/UNBLOCK_SPECS.md, tools/issue_batch.py,
+    tests/tools/test_issue_batch.py, reports/scoreboard.json, 9 reports/wave-*.json|md from
+    2026-08-07T05:52-05:54Z, STATUS.md, BLOCKERS.md, HANDOFF.md, MEMORY.md
+  verification: strict authoring lint exit 0, `84/84 clean, 0 errors, 0 advisories`;
+    `python -m py_compile tools/issue_batch.py tests/tools/test_issue_batch.py` OK; git remote
+    0 behind / 1 ahead so no rebase was pending. NO database verification was possible: the Docker
+    daemon is down and `psycopg.connect` to the development store raised ConnectionTimeout, so the
+    crashed session's migration-executed and 84-captured claims are UNVERIFIED file evidence, not
+    confirmed state. Credit toward review, approval, publication or launch readiness: none.
+  next: J-010d4 resolve the SPEC A judge-policy contradiction that blocks all 84 at the scan gate
+
 ## In-Flight Step
 
-- [J-010d2] 2026-08-07T03:30:11Z  status: in-flight
-  what: commit and push the reconciled main branch, verify local/remote equality, then run a new
-    source-bound immutable full suite before replacement migration planning
-  next: J-010d3 generate the replacement read-only migration plan and request exact digest approval
+- none. J-010d4 is selected but not started; it requires the development database to be reachable
+  before any claim about the scan gate can be verified.
 
 ## Pending Steps
-1. [J-010d2] synchronize/push `main`, run a new clean-source immutable full suite and verify its
-   non-crediting dashboard projection
-2. [J-010d3] generate a replacement 0015-to-0023 plan, obtain exact digest approval and migrate
-3. [J-010d4] implement authenticated one-skill review issuance, scoreboard v3/progress v2 and one
-   shared live observation contract
-4. [J-010d5] implement and promote the ADR-024 Stage-2 scanner plus calibrated loopback Stage 5
-5. [J-011] prove one exact skill and then the five-skill vertical cohort end to end
-6. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready
-7. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls
-8. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate
+1. [J-010d4] resolve the SPEC A judge-policy contradiction: `run_pipeline` writes stage 5
+   `not_sampled` when no judge scanner is supplied, while `snapshot.py` raises
+   `REQUIRED_JUDGE_NOT_PASSED` for `judge_required` skills, so no skill in this environment can
+   reach `security_pass`. Scope exactly one of the two rules; write the failing test first.
+2. [J-010d5] bring the development store back up and independently re-verify the crashed session's
+   two unverified claims: schema really at 0023, and 84 `skill_version` + scan artifacts really
+   present. Record whatever is actually observed, including a mismatch.
+3. [J-010d6] review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate`
+   before it is allowed to lease any real work; it is currently unreviewed inherited code.
+4. [J-010d7] implement scoreboard v3/progress v2 strict nested validation and one shared live
+   observation contract; v2 remains diagnostic and cannot authorize review or release.
+5. [J-010d8] implement and promote the ADR-024 Stage-2 scanner plus calibrated loopback Stage 5
+6. [J-010d9] run a new clean-source immutable serial full suite and push synchronized `main`
+7. [J-011] prove one exact skill and then the five-skill vertical cohort end to end
+8. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready
+9. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls
+10. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.

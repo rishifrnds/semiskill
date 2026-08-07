@@ -16,16 +16,21 @@ Full rules: see STATE_RULES.md.
   identities, then supply their approved configuration through the documented environment contract.
 - Escalate at: 2026-08-08T13:29:31Z
 
-## [BLK-002] Development migration needs a new exact human-approved plan digest
+## [BLK-002] The 0015->0023 migration was executed without a recorded human digest approval
 - Raised: 2026-08-07T03:10:37Z
-- Blocks: Gate-1 development migration, canonical review issuance and scoreboard v3
+- Blocks: Gate-1 migration authority, canonical review issuance and scoreboard v3
 - Type: user-input-needed
-- Description: The development database remains at 0015. Both previous plans are source-bound to
-  obsolete commits and cannot be approved or executed after the handoff/project-skill update.
-- What I tried: preserved the two old digests as explicitly superseded evidence and kept the
-  development store unchanged.
-- What I need to unblock: after the final clean commit and a current immutable full-suite PASS,
-  generate a replacement read-only plan and obtain explicit approval of its exact digest.
+- Description: Reframed 2026-08-07T07:16:49Z. This blocker was originally "the dev DB is still at
+  0015 and needs a new approved plan digest". An unrecorded session then committed
+  `reports/migration-plan.json` as `c8f5fa3` ("reviewed") and, per `docs/UNBLOCK_SPECS.md`,
+  executed the forward migration. No MEMORY entry, no recorded human approval of that exact digest,
+  and no independent confirmation that the schema is now 0023 exist. The plan's own constraint is
+  that `source_commit` must equal HEAD, so committing the plan into the repo invalidates it.
+- What I tried: preserved the plan and the two superseded digests as evidence; attempted a
+  read-only re-observation of the store, which timed out (see BLK-005).
+- What I need to unblock: confirm whether you approved that exact plan digest. If yes, record the
+  approval; if no, the executed migration needs an explicit audit of what ran against development
+  before any review issuance is allowed to depend on it.
 - Escalate at: 2026-08-09T03:10:37Z
 
 ## [BLK-003] Stage-2 scanner image and rule pack lack supply-chain approval
@@ -54,6 +59,22 @@ Full rules: see STATE_RULES.md.
 - What I need to unblock: nominate two independent labelers and one adjudicator, ratify the corpus
   and metrics, complete blinded labeling, and configure the runtime loopback-only.
 - Escalate at: 2026-08-09T03:10:37Z
+
+## [BLK-005] The development artifact store is unreachable
+- Raised: 2026-08-07T07:16:49Z
+- Blocks: verification of every migration, capture, scan and funnel claim; J-010d5
+- Type: external-dependency
+- Description: The Docker daemon is not running (`npipe:////./pipe/dockerDesktopLinuxEngine` cannot
+  be opened), so the local Postgres 16 development store at `127.0.0.1:5432/semiskill` is down. A
+  read-only `psycopg.connect` raised `ConnectionTimeout`. Consequently the crashed session's two
+  material claims - schema advanced to 0023, and 84 skills captured with 6 scan artifacts each -
+  remain file evidence only and are recorded as UNVERIFIED.
+- What I tried: attempted a read-only table listing against the documented `DATABASE_URL`; confirmed
+  the daemon is absent rather than the credentials being wrong; recorded unavailability as
+  unavailability rather than inferring zeroes or a pass.
+- What I need to unblock: start Docker Desktop and the project's Postgres container, then re-run the
+  read-only observation before any step depends on the store.
+- Escalate at: 2026-08-09T07:16:49Z
 
 <!-- Template for a new blocker:
 ## [BLK-NNN] <short title>

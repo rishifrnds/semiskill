@@ -1,0 +1,239 @@
+{
+  "allow_ungated": false,
+  "counts": {
+    "approvals-created": 0,
+    "awaiting-review": 10,
+    "ok": 10,
+    "published": 0,
+    "total": 10
+  },
+  "finished_at": "2026-08-07T05:52:41Z",
+  "items": [
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "8c119d30-d683-4990-af54-c7071927e572",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.505,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-connectivity-table-checks",
+      "payload_sha256": "c43822251a731000081deafc956639836c528a9666d3e2f6d352422fd57dc4ff",
+      "scan_artifact_ids": [
+        "c95df7c2-873f-40b3-a054-5f6f5f2139b2",
+        "7e434c9e-bb1b-4d57-8705-302ae91138f8",
+        "1fddd1ac-de89-4e6e-8239-3959b5e2eede",
+        "f7c26294-e26b-42c3-89ab-4dbc7038f13e",
+        "c7bc0885-3d4e-471c-ab61-84d8e4463ae1"
+      ],
+      "skill_version_id": "f1da5e09-3707-434b-bda6-971a5bb536c0",
+      "slug": "dv-connectivity-table-checks",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "ab6fa2ef-1569-422b-b35a-5bd905f9d18a",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.456,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-coverage-hole-closure",
+      "payload_sha256": "81e87eb85695313462d987c4c36d2f933d613833302fb0d9310a628a9045bf60",
+      "scan_artifact_ids": [
+        "e56f06e5-ceb2-4ae6-aa67-7d0653968a5e",
+        "be6c2826-1756-42c5-902e-fd12f6c0af42",
+        "a9a927a4-5978-401f-bd6c-c74d07bf2706",
+        "94d08ba9-827c-49c4-aa0d-ba9ac121f921",
+        "f25a054b-3130-4e33-93bd-ffb3bf200aab"
+      ],
+      "skill_version_id": "1a9d0d8b-0227-41d8-86f1-0e9dd1befca3",
+      "slug": "dv-coverage-hole-closure",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "45e08823-a4d4-4018-b4be-6967e5925590",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.446,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-coverage-hole-disposition",
+      "payload_sha256": "716b51688a3eca717f8f361040e05a5022c287d8e5e62b74812de4fc04a23aad",
+      "scan_artifact_ids": [
+        "26719f24-0823-4c49-a358-7e79ab5fc356",
+        "432171cb-82eb-407d-9652-22631d0f9e1c",
+        "965b0781-ba44-4c44-bfaa-9e603e28d0bb",
+        "f8db2e00-0e81-4227-9f5a-aef0921ee2e5",
+        "2f367797-4850-4f17-9a3f-4b75a27842ef"
+      ],
+      "skill_version_id": "91329e1d-ba87-4edb-9ccb-452b9fdc6f45",
+      "slug": "dv-coverage-hole-disposition",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "28288f5c-5075-4f87-85ab-51ca05a358bf",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.407,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-coverage-merge-report",
+      "payload_sha256": "f1c927721adfedb131ec8938e5754e9a3a380333dc19888cb04cefd1e0302099",
+      "scan_artifact_ids": [
+        "c1d98e60-9a59-4679-a6ce-91b7b66f2a3b",
+        "94e7bc86-6890-488d-ace2-d58dce850b42",
+        "9f941c5f-3c90-4088-bb74-ddfd93f8b020",
+        "4dbbf192-9ee1-4d61-892c-7e2026a37539",
+        "58860085-1858-4571-93c8-de31df314336"
+      ],
+      "skill_version_id": "b2627f8c-b27b-46db-be3c-fc6aa26a76d9",
+      "slug": "dv-coverage-merge-report",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "6d41c2aa-5276-471c-b92d-5ac2815fde94",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.427,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-cross-tool-mismatch-adjudication",
+      "payload_sha256": "1cb594d71bc6c5eb4aaccaa97953fd1ea89ebebc53ffa29678d81189c266d219",
+      "scan_artifact_ids": [
+        "a72bce27-5a63-4f2e-aac1-2f48b456dafb",
+        "1333f176-63d5-4fdd-a25b-550f2b11c8ce",
+        "48a6ba99-eb28-4104-84fb-88cf8d9b6d36",
+        "498128cc-af16-4562-9925-9e5a8c28ca0e",
+        "0a7ad7c1-340b-4190-aa9b-2fa255855de7"
+      ],
+      "skill_version_id": "53406fd9-2ad7-4a08-b0dd-775d4c4ca63d",
+      "slug": "dv-cross-tool-mismatch-adjudication",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "f1ea3a70-ff16-472e-add2-908f583813b0",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.446,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-crypto-kat-coverage-audit",
+      "payload_sha256": "1c6adf081447dd0804075e9576fa7c1a7334adcac4455c9521b06def7c820ecd",
+      "scan_artifact_ids": [
+        "faf56c56-c32e-49d6-8de6-e1275b3b5fb6",
+        "6fa1d02b-24d7-4b59-ac4b-dc62311894b9",
+        "07ac5005-58bb-457c-ba92-b6d0db95d2af",
+        "4adbeb21-1643-4cb4-88d3-e6414354afa2",
+        "2b1f5c41-c98a-49bc-bb20-4e9fb11dac2c"
+      ],
+      "skill_version_id": "227adfa0-aca8-47f2-8a4a-abcb581c8979",
+      "slug": "dv-crypto-kat-coverage-audit",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "66ae8b27-9118-49f1-9ef6-9eca982a5578",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.449,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-csr-warl-access-audit",
+      "payload_sha256": "1b3324afc4a6ef7cf3b04a46327065039cef94e60df3a817310852f716ad42a2",
+      "scan_artifact_ids": [
+        "6c3f3a48-97e5-4ac3-8194-f25677db6fab",
+        "c8c73a46-726c-4ef9-b3d4-7f5709eebbb8",
+        "19e5c99b-537a-4385-b810-cdfdac4505bb",
+        "831ae4db-d3b6-443e-8c31-cf1726090f91",
+        "171f691d-8a00-4760-b097-225a64be1bce"
+      ],
+      "skill_version_id": "0d6726fa-49fa-445e-b411-90b51232941f",
+      "slug": "dv-csr-warl-access-audit",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "87f74c5b-e4ca-4702-979b-291eba80dc45",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.455,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-custom-instruction-verification-plan",
+      "payload_sha256": "9eb55b248519a2c8b62784297556f04f8dfa5ccef51ef48258a80710f9b9a6c7",
+      "scan_artifact_ids": [
+        "2ee078d0-7129-4f54-8e84-723809640033",
+        "60031259-91ec-4597-b61e-95430e51b798",
+        "da1788aa-81ff-4ff1-ad1f-13dd4a23f799",
+        "e7efbfdd-266a-48bc-80e6-735ac28cb86b",
+        "328c2953-237a-4bb6-bc47-53ead5ee852c"
+      ],
+      "skill_version_id": "dcdae76b-2edc-4cbf-a21d-92808232f616",
+      "slug": "dv-custom-instruction-verification-plan",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "024d7e6e-a265-4545-afd7-d71ac27a67c1",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.477,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-customer-defect-handoff",
+      "payload_sha256": "3fb6067fc6eb1897d81f2f20da09e2f4b3546e5adf594c1d8e141c9c604e6e5a",
+      "scan_artifact_ids": [
+        "90282ec2-a3b6-4aee-a428-40f4999c28ce",
+        "a67e42d3-c6a0-4e54-ad71-9bdcea1c0341",
+        "bbb86a34-59f4-45db-9901-9392761a4203",
+        "ab770d6a-9f9d-4a26-b75d-a6867017a3a2",
+        "2aa5365f-74c4-469a-a73a-87db78f241a4"
+      ],
+      "skill_version_id": "510bda53-dacd-4d4b-942f-01ebf789e415",
+      "slug": "dv-customer-defect-handoff",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "26b6e681-cc09-4cf2-8cd8-fae2860baa93",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.488,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-customer-escalation-isolation",
+      "payload_sha256": "f15886af30c4a8b4d3ce03ec7ddd2afb3d897771c14a686e909e13812ec5fc60",
+      "scan_artifact_ids": [
+        "3724c574-9658-410a-984d-dda43dcffd53",
+        "2d2adbfb-b5e4-4750-805e-3720e8fdf41e",
+        "14cfa354-8486-4cc2-8472-c238c82f79fe",
+        "11b94e28-a928-435f-aebc-1f0045d36d16",
+        "5e25d3ae-9404-46fb-af3f-9561ec88d2af"
+      ],
+      "skill_version_id": "6a035405-63e6-47b4-9a62-2b2ba1ab64a1",
+      "slug": "dv-customer-escalation-isolation",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    }
+  ],
+  "ok": true,
+  "on_duplicate": "supersede",
+  "permissions_label": "public",
+  "started_at": "2026-08-07T05:52:36Z",
+  "ungated_published": [],
+  "wave_id": "wave-5ecf881a"
+}

@@ -1,0 +1,239 @@
+{
+  "allow_ungated": false,
+  "counts": {
+    "approvals-created": 0,
+    "awaiting-review": 10,
+    "ok": 10,
+    "published": 0,
+    "total": 10
+  },
+  "finished_at": "2026-08-07T05:52:52Z",
+  "items": [
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "16ce4a55-4bef-40cc-8539-732f60aef923",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.408,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-customer-flow-deployment",
+      "payload_sha256": "4d20e23844ba602ad17a4b057e69392cebfb925cd98f7c514969aa76454c63ce",
+      "scan_artifact_ids": [
+        "9e65fda8-e75a-490a-9115-02cc011748ab",
+        "48b67d81-4cc8-4e62-8da4-ff718589df45",
+        "13d5291d-d948-4b5e-b9a0-844562ad8679",
+        "9da17a10-9e07-4199-825a-3b793335fcc6",
+        "7d463ab0-aef2-46e1-a64e-9ff667d98a2b"
+      ],
+      "skill_version_id": "7600aa20-0def-4102-9037-d5efe46f1a0d",
+      "slug": "dv-customer-flow-deployment",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "3de07e52-104a-4fc6-bec0-bbb7478ccc6c",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.392,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-dfi-boundary-blame",
+      "payload_sha256": "a766bc3eb4a7ce6c0db00d9cb84b7111ec3310925fc84ab94b58571f65c8b584",
+      "scan_artifact_ids": [
+        "fc2e4a93-037a-4fec-9ca7-478c73f1e037",
+        "49cfd902-f447-48c5-8118-2793d86a1e2c",
+        "c846956d-30bf-4610-b11f-a546e2ae1578",
+        "f0848cae-70b2-4e9b-adaf-8c436e1cb4e5",
+        "f19c70b5-0471-476e-abe4-463b08038388"
+      ],
+      "skill_version_id": "a82038a4-fb49-49d3-a7a1-1703e10c9bbd",
+      "slug": "dv-dfi-boundary-blame",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "513daa87-690c-4fa4-a528-5d1c4291aea2",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.392,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-emulation-bringup",
+      "payload_sha256": "1fd57a455bbbc0937609782b47fd7694734ecf2dc57d46aa41ae04b33c1327e4",
+      "scan_artifact_ids": [
+        "785a2286-ab7c-4bbd-8b7f-92a5f545ac43",
+        "003d3286-f5d7-4c31-bdda-e41e23d1e60b",
+        "bf9022a9-fe1c-408b-adf7-af98bfe3a1b4",
+        "ada0bd60-8b24-4bd2-9cc6-7215e42c8c57",
+        "9ea384ee-5ff3-47f0-8f7f-70b5297929b2"
+      ],
+      "skill_version_id": "256d2774-dc5d-4d22-b136-ef833042f346",
+      "slug": "dv-emulation-bringup",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "c4142024-7c25-4401-85a9-0c9c0d20031d",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.437,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-emulation-dump-strategy",
+      "payload_sha256": "8cc85c349eda58117f6215ac51232b35e7853b68b4b5223c5583545667322093",
+      "scan_artifact_ids": [
+        "12474b44-b49d-4523-a480-d29722aef6e7",
+        "a959518a-d991-4e07-a7c6-9f20cf1f44d2",
+        "5a6f8534-ca52-4db2-9b47-b4865393da09",
+        "dd6744e2-d73a-45a3-8fc2-51b0f7789bce",
+        "2cc4d174-0662-4b37-80a8-b447d97c9bbc"
+      ],
+      "skill_version_id": "4c8903cb-f384-4a5b-99f8-e892b3309a24",
+      "slug": "dv-emulation-dump-strategy",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "c1d544aa-b817-4509-81f6-c0a2d736f58b",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.406,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-emulation-sim-mismatch-triage",
+      "payload_sha256": "1bae2958ea947dbc998b117267f8909e228fa8ec0b071acaa2f18e9e9adc77b3",
+      "scan_artifact_ids": [
+        "8a3d291a-191f-485f-afd1-8530ef5c9f65",
+        "87003d23-b5f1-4b59-b5eb-b65772104f66",
+        "ded3670f-149c-4454-bd6b-174b101016e9",
+        "3fde9075-6520-4fbd-8c90-0c93ea5bd1cf",
+        "050aeea1-a28d-40d2-9c03-3f06ba0697ae"
+      ],
+      "skill_version_id": "4bf6d8be-bc0f-4c6a-bb0e-110d0931e5f6",
+      "slug": "dv-emulation-sim-mismatch-triage",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "e6a0771e-4fc9-4c4b-a67f-3b4aa229c835",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.411,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-emulation-test-porting-audit",
+      "payload_sha256": "5ee81cb1ba0b261dd1b29f4c5d6cfaaa240db7ba2fbdd1962c378f89f407dd34",
+      "scan_artifact_ids": [
+        "be9fd036-d428-4c81-825d-ee6dbec66127",
+        "e7f2a013-5bac-4f60-9a53-6f8783ab629b",
+        "fcefcbc7-ab8f-402d-85ee-2717398992f0",
+        "f9389b51-a06e-43f6-90b5-9a2098953216",
+        "55697246-1dc1-4d7c-a7f3-ed5fa591a5a0"
+      ],
+      "skill_version_id": "3f90bc7f-7b6a-448f-8d14-334f27eb4bc2",
+      "slug": "dv-emulation-test-porting-audit",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "06e7ed11-f8c9-4c32-bae3-a91c82575566",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.365,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-emulation-throughput-triage",
+      "payload_sha256": "d40a0612a1be5ae0f2e1783e864d6e7e1fe4c505136e71ef82587484243faec6",
+      "scan_artifact_ids": [
+        "fe5970c4-cce5-491f-b47e-9fd7c8c9a5af",
+        "99b3fdca-de32-4b90-86cb-75b45ba1f43a",
+        "12c78370-60a9-4c62-bcb2-a1a9cd91d6c5",
+        "413dcbdb-9c8f-4760-9f8c-a09cdace5d9f",
+        "ec76b455-b44c-47ca-a243-8e38125f4828"
+      ],
+      "skill_version_id": "f416e0b7-06e6-4662-84f8-f961f12a3d1d",
+      "slug": "dv-emulation-throughput-triage",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "9930486c-d662-46ae-a945-8f7f0b800716",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.44,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-error-injection-ras",
+      "payload_sha256": "61e15801b5568826744974e6de041d5be1436071bf9901611be80a4821f7058d",
+      "scan_artifact_ids": [
+        "f746f504-dcad-47d3-af92-3b1118892bf4",
+        "c7104e0f-2566-417e-877d-fd04c0b6754d",
+        "f955f9c1-d62d-4f45-b3ba-6718d59206a0",
+        "34a5ed27-9e7c-45e5-aca8-1390b40a3160",
+        "4ad7c325-130a-4a67-b1d2-ce6372043feb"
+      ],
+      "skill_version_id": "5b8b2b70-1195-438c-aa7c-5d14481a1e5e",
+      "slug": "dv-error-injection-ras",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "ebd45057-9313-47ed-b0e1-86f919c5f666",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.523,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-escalation-ownership",
+      "payload_sha256": "dc2f0357012c959d45567d27445a5c9e53c57283e12eba6fe13ec20260ee288d",
+      "scan_artifact_ids": [
+        "121d05fd-eee6-4ac8-9e6d-6a483b63a218",
+        "0a391c72-c736-40d2-a0f9-87556841e09f",
+        "4bf9c211-9174-4994-9826-f3ba166c622e",
+        "27d21a52-8337-4514-a49e-a0995a6b2640",
+        "ef892e27-b3a6-421e-80d0-1b23a917488b"
+      ],
+      "skill_version_id": "9b5f743f-8b8f-41ca-9111-82617fdfb724",
+      "slug": "dv-escalation-ownership",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    },
+    {
+      "aggregate_safety": 1.0,
+      "automated_review_id": "8bb06200-f4b1-45a7-90c2-3507ad922d60",
+      "blocked_at": null,
+      "content_review_id": null,
+      "elapsed_s": 0.498,
+      "error": "captured and scanned; independent content recheck is still required",
+      "gate": "unreviewed",
+      "path": "skills\\dv-escape-analysis",
+      "payload_sha256": "bfb43735b4b9bda953b3dcb5dfde24d86cba6ce009972e8e640c4b585889518c",
+      "scan_artifact_ids": [
+        "8d95d540-6764-4304-bcb9-886817883b51",
+        "b8942ca3-d050-439c-9bee-d36f6ba7db12",
+        "14d5e7ab-ea27-4916-a2f1-a2f77938aab3",
+        "7c124419-e264-4c69-a4f9-80681fe02de3",
+        "bd22425a-09b7-4eb2-8811-487a78337f84"
+      ],
+      "skill_version_id": "cd41bbab-832b-4dea-9fc9-1a8103396426",
+      "slug": "dv-escape-analysis",
+      "status": "awaiting-review",
+      "verdict": "approve"
+    }
+  ],
+  "ok": true,
+  "on_duplicate": "supersede",
+  "permissions_label": "public",
+  "started_at": "2026-08-07T05:52:48Z",
+  "ungated_published": [],
+  "wave_id": "wave-e892b31e"
+}

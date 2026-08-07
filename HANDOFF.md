@@ -34,7 +34,7 @@ state, gate, review, and release tasks through this file and `STATE_RULES.md`.
 | Recheck-ready | 0 | 84 | deterministic zero-open-blocker gate |
 | Authenticated human-approved | 0 | 84 | exact-evidence approval projection |
 | Projection-backed published | 0 | 84 | catalog projection |
-| Development DB schema | last migration observation: 0015 | 0023 before review issuance | migration authority currently unavailable |
+| Development DB schema | 0023 **claimed, unverified** | 0023 before review issuance | store unreachable; see BLK-002/BLK-005 |
 | Test DB schema | 0023 | current | isolated test observation |
 | Canonical scoreboard | unavailable/expired | fresh and reconciled | fail-closed snapshot |
 | Market launch | NO-GO | all release invariants true | canonical release gate only |
@@ -49,6 +49,29 @@ provenance and earn no current readiness credit.
 
 The current canonical anomaly set is unavailable because scoreboard v3 has not been regenerated.
 Never infer zero anomalies from the stale v2 snapshot.
+
+## Unrecorded session of 2026-08-07 (preserved under J-010d3, credited nothing)
+
+A session ran roughly `05:48Z-06:12Z` and died without checkpointing. Its work was preserved, not
+trusted. It committed `c8f5fa3` with no STEP-ID and no MEMORY entry.
+
+- It claims to have executed the `0015 -> 0023` forward migration against development. No recorded
+  human approval of that exact plan digest exists. **BLK-002** now tracks that audit rather than the
+  original "generate a new plan" ask.
+- It claims the wave captured and scanned all 84 skills, each producing a `skill_version` plus six
+  scan artifacts and landing `awaiting-review` (nine `reports/wave-*.json|md`, `05:52-05:54Z`).
+- Neither claim is re-verifiable right now: the Docker daemon is down and the development store
+  times out (**BLK-005**). Both are recorded as UNVERIFIED file evidence.
+- It left `tools/issue_batch.py` + tests (the SPEC B review-issuance producer) and
+  `docs/UNBLOCK_SPECS.md`. That code is **inherited and unreviewed**; it mints review leases, so it
+  must be tested against `collect_wave.py::_validate` before it touches real work.
+- Undocumented `migrate-forward` prerequisites it recorded, because they cost real time:
+  `SEMISKILL_MIGRATOR_ROLE` must equal both the session user and the database owner;
+  `SEMISKILL_DEVELOPMENT_DATABASE_NAME` and `SEMISKILL_PRODUCTION_DATABASE_NAME` must both be set
+  and different; the tree must be clean; and the plan's `source_commit` must equal HEAD - so the
+  plan must be written **outside** the repository, because committing it invalidates it.
+
+Its one genuinely valuable finding is the SPEC A contradiction in gap 9 below.
 
 ## Exact platform proof already completed
 
@@ -272,6 +295,18 @@ approval or publication.
    shortcut.
 8. **Dashboard market data is planning only:** social, distribution, analytics, marketing, sales,
    pricing, assets and funnels are typed hypotheses or unavailable observations—not measured traction.
+9. **SPEC A — the judge policy is self-contradictory and blocks the entire scan gate.**
+   `semiskill/spine/pipeline.py::run_pipeline` writes a stage-5 artifact with status `not_sampled`
+   when `judge_risk_scanner is None`, which is correct: a skipped judge must never render as a pass.
+   But `semiskill/authoring/snapshot.py` (~line 642) appends `REQUIRED_JUDGE_NOT_PASSED` whenever
+   `judge_required` and the judge is not `passed`. The wave supplies no judge scanner, so all 84
+   skills are `SECURITY_BLOCKED` even though every stage that ran scored 1.000 and the aggregate
+   verdict is `approve`. **No skill can reach `security_pass` in this environment until one of the
+   two rules is rescoped.** This is the failure class named in `docs/LEARNINGS.md`: when two rules
+   can only be satisfied by violating each other, one of them is scoped wrong. Resolve it with a
+   failing test first, and do not widen the judge policy merely to make the counts move —
+   `judge_required=true` exists because the initial corpus is exactly what a calibrated judge is
+   for. Full analysis and the proposed resolution: `docs/UNBLOCK_SPECS.md`.
 
 `BLOCKERS.md` is the active external-dependency register. Implementation defects remain visible here
 and in the ordered backlog rather than being mislabeled as external blockers.
