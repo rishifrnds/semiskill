@@ -29,12 +29,31 @@ repo, or committing it invalidates it.
 
 ---
 
-# SPEC A — Resolve the judge policy (the structural publish blocker)
+# SPEC A — Resolve the judge policy (ONE of the two structural publish blockers)
+
+> **Corrected 2026-08-07 (J-010e2).** This spec originally claimed the judge contradiction was the
+> single reason nothing can reach `security_pass`, and that fixing it yields `security_pass: 84`.
+> That is false, and acting on it would waste the work. Computing the gate directly for
+> `dv-minimal-reproducer` returns **two** blocking codes:
+>
+> ```
+> STATUS : blocked
+> ERRORS : ['REQUIRED_JUDGE_NOT_PASSED', 'REQUIRED_STAGE_BLOCKED']
+> ```
+>
+> Stage statuses across all 84 captures are: stage 1 `passed`, **stage 2 `not_run`**, stage 3
+> `passed`, stage 4 `passed`, stage 5 `not_sampled`. `snapshot.py` requires stages 1, 2, 3 and 4 to
+> **all** be `passed`, so **stage 2 blocks every skill independently of the judge**. Resolving the
+> judge policy alone leaves all 84 blocked, and this spec's acceptance criterion
+> (`security_pass: 84`, `blocked.scan: 0`) is unreachable without a Stage-2 that actually passes -
+> which requires the ADR-024 internally governed scanner and its AppSec/legal approval (BLK-003).
+>
+> Treat SPEC A as necessary but not sufficient.
 
 ## The defect
 
-All 84 skills are `security_blocked` with a single blocker code `SECURITY_BLOCKED`. Every stage that
-ran scored 1.000 and the aggregate verdict is `approve`. The block comes from one contradiction:
+All 84 skills are `security_blocked`. Every stage that ran scored 1.000 and the aggregate verdict is
+`approve`. One of the two contradictions is the judge policy:
 
 - `semiskill/spine/pipeline.py::run_pipeline` takes `judge_required: bool = True`, and when
   `judge_risk_scanner is None` it writes a stage-5 artifact with status `not_sampled`
@@ -42,14 +61,18 @@ ran scored 1.000 and the aggregate verdict is `approve`. The block comes from on
 - `semiskill/authoring/snapshot.py` line ~642: `elif judge_required and (judge is None or
   judge["status"] != "passed"): errors.append("REQUIRED_JUDGE_NOT_PASSED")`.
 
-The wave passes no judge scanner. Policy demands a passed judge. **No skill can ever reach
-`security_pass` in this environment.** This is the exact failure class in `docs/LEARNINGS.md`:
-*"when two rules can both be satisfied only by violating the other, one of them is scoped wrong."*
+The wave passes no judge scanner. Policy demands a passed judge. This is the exact failure class in
+`docs/LEARNINGS.md`: *"when two rules can both be satisfied only by violating the other, one of them
+is scoped wrong."*
 
-Note the code already anticipates the resolution — the very next branch accepts `not_sampled` when
+**Partially addressed by ADR-026 (J-010d4/J-010d5):** the wave now refuses up front when stage 5 is
+required and no judge scanner is configured, instead of writing six artifacts per skill that the
+gate was always going to reject. That makes the contradiction loud; it does not resolve the policy.
+The policy decision below is still open, and was deliberately NOT taken - relaxing the rule would
+move the counts without earning the evidence.
+
+Note the code already anticipates a resolution — the very next branch accepts `not_sampled` when
 the judge is not required:
-`elif not judge_required and judge is not None and judge["status"] not in {"passed","not_sampled"}`.
-
 ## What to build
 
 Make `judge_required` an explicit, per-skill, recorded **policy decision** rather than a hard-coded
@@ -187,3 +210,9 @@ accepts all 10 without a `BatchRejected`. Full suite green.
 SPEC A first — until `security_pass > 0` nothing downstream can complete, and SPEC B's selection
 predicate depends on cells not being blocked. They can be *built* in parallel; they must be
 *verified* in order.
+
+**But neither is sufficient alone.** `security_pass > 0` additionally requires Stage 2 to stop being
+`not_run`, which means building the ADR-024 scanner and obtaining its supply-chain approval
+(BLK-003). The honest ordering to a first published skill is: Stage 2 passing, AND the stage-5
+policy resolved (calibrated judge per BLK-004, or an argued risk-scoped exemption), THEN review
+issuance, THEN independent content review, THEN authenticated human approval.

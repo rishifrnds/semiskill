@@ -299,7 +299,15 @@ approval or publication.
    shortcut.
 8. **Dashboard market data is planning only:** social, distribution, analytics, marketing, sales,
    pricing, assets and funnels are typed hypotheses or unavailable observations—not measured traction.
-9. **SPEC A — the judge policy is self-contradictory and blocks the entire scan gate.**
+9. **TWO independent blockers hold every skill at the scan gate, not one.** Computing the gate for
+   `dv-minimal-reproducer` returns `['REQUIRED_JUDGE_NOT_PASSED', 'REQUIRED_STAGE_BLOCKED']`.
+   Observed stage statuses across all 84 captures: stage 1 `passed`, **stage 2 `not_run`**, stage 3
+   `passed`, stage 4 `passed`, stage 5 `not_sampled`. `snapshot.py` requires stages 1-4 to all be
+   `passed`, so **Stage 2 blocks every skill on its own** and needs the ADR-024 scanner plus its
+   supply-chain approval (gap 2 / BLK-003). `docs/UNBLOCK_SPECS.md` originally claimed the judge was
+   "the single reason"; that claim is corrected in place. Resolving the judge alone yields zero
+   published skills. The second blocker is:
+   **SPEC A — the judge policy is self-contradictory.**
    `semiskill/spine/pipeline.py::run_pipeline` writes a stage-5 artifact with status `not_sampled`
    when `judge_risk_scanner is None`, which is correct: a skipped judge must never render as a pass.
    But `semiskill/authoring/snapshot.py` (~line 642) appends `REQUIRED_JUDGE_NOT_PASSED` whenever

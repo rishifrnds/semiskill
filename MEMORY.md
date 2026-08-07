@@ -1174,9 +1174,24 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     and any release checkpoint. It does NOT move any skill through the security gate.
   next: J-010e2 correct the false single-blocker claim in docs/UNBLOCK_SPECS.md
 
+- [J-010e2] 2026-08-07T09:55:06Z  status: done
+  what: corrected the false "single blocker" claim in docs/UNBLOCK_SPECS.md and HANDOFF.md gap 9
+  artifacts: this J-010e2 checkpoint, docs/UNBLOCK_SPECS.md, HANDOFF.md
+  evidence: `_security_projection` for `dv-minimal-reproducer` returns status `blocked` with errors
+    `['REQUIRED_JUDGE_NOT_PASSED', 'REQUIRED_STAGE_BLOCKED']`. Stage statuses across all 84
+    captures, read from the store: stage 1 `passed` 84, stage 2 `not_run` 84, stage 3 `passed` 84,
+    stage 4 `passed` 84, stage 5 `not_sampled` 84. `snapshot.py` requires stages 1-4 to all be
+    `passed`, so stage 2 blocks every skill independently of the judge.
+  why-it-matters: SPEC A's stated acceptance criterion (`security_pass: 84`, `blocked.scan: 0`) is
+    unreachable by resolving the judge policy alone. Anyone implementing SPEC A as written would
+    finish the work and find all 84 still blocked. Stage 2 must also pass, which needs the ADR-024
+    scanner and its AppSec/legal approval (BLK-003).
+  credit: none toward security_pass, review, approval or publication.
+  next: J-010e3 build and test the ADR-024 Stage-2 adapter, whose only remaining gate is approval
+
 ## In-Flight Step
 
-- none. J-010e2 is selected but not started.
+- none. J-010e3 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before

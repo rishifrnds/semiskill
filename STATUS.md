@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T09:54:08Z_
+_Last updated: 2026-08-07T09:55:06Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010e2 (correct the false single-blocker claim in UNBLOCK_SPECS) is selected.
+- none in flight. J-010e3 (build and test the ADR-024 Stage-2 adapter) is selected.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -63,14 +63,19 @@ material claims were re-checked against the live store under J-010d6:
   local-only. Re-verify local/remote equality before treating any of them as shared.
 - Canonical anomaly set: still unavailable; scoreboard v3 does not exist.
 
-## The structural blocker found by the crashed session (SPEC A)
-`semiskill/spine/pipeline.py::run_pipeline` correctly writes a stage-5 artifact with status
-`not_sampled` when `judge_risk_scanner is None` - a skipped judge is never rendered as a pass. But
-`semiskill/authoring/snapshot.py` (~line 642) raises `REQUIRED_JUDGE_NOT_PASSED` whenever
-`judge_required` and the judge is not `passed`. The wave supplies no judge scanner, so all 84 skills
-sit at `SECURITY_BLOCKED` even though every stage that ran scored 1.000 and the aggregate verdict is
-`approve`. **No skill can reach `security_pass` in this environment until one of those two rules is
-rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
+## TWO blockers hold every skill at the scan gate, not one
+Measured, not inferred. `_security_projection` for `dv-minimal-reproducer` returns status `blocked`
+with errors `['REQUIRED_JUDGE_NOT_PASSED', 'REQUIRED_STAGE_BLOCKED']`. Stage statuses across all 84
+captures: stage 1 `passed`, **stage 2 `not_run`**, stage 3 `passed`, stage 4 `passed`, stage 5
+`not_sampled`.
+
+- `snapshot.py` requires stages 1-4 to ALL be `passed`, so **Stage 2 blocks every skill on its own**,
+  independently of the judge. It needs the ADR-024 scanner plus AppSec/legal approval (BLK-003).
+- The stage-5 judge contradiction is the second blocker. ADR-026 made it fail loudly; the policy
+  decision itself is still open and was deliberately not taken.
+- `docs/UNBLOCK_SPECS.md` originally claimed the judge was "the single reason" and that fixing it
+  yields `security_pass: 84`. That is false and is now corrected in place. Implementing SPEC A alone
+  would leave all 84 blocked.
 
 ## Immediate order
 1. Re-run the immutable full suite on this clean source for a current PASS record, then regenerate
