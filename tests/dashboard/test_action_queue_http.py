@@ -173,6 +173,68 @@ def test_prepared_action_is_server_derived_durable_and_idempotent(tmp_path):
         assert _TOKEN not in json.dumps(row) + json.dumps(receipt)
 
 
+def test_rejection_delivers_its_response_even_with_an_unread_body(tmp_path):
+    """A rejection that never reads the request body must still deliver its response.
+
+    The server answers 415/421/403 before consuming the body, then closes. On Windows a socket
+    closed with unread data in the receive buffer is reset, which discards the response the client
+    has not read yet — so the correct status code never arrives. Repeated because the underlying
+    defect is a race: a single pass proves nothing.
+    """
+    with _running_server(tmp_path) as (httpd, inbox):
+        for _ in range(25):
+            response = _request(
+                httpd, "POST", "/api/action",
+                body=b"x" * 8192, content_type="text/plain",
+            )
+            assert response["status"] == 415
+        assert not inbox.exists() or inbox.read_bytes() == b""
+
+
+def test_draining_an_undelivered_body_does_not_hang_the_response(tmp_path):
+    """The drain must be time-bounded, not merely bounded in size.
+
+    This request declares a body larger than the cap and then sends nothing at all. A drain that
+    waits for the declared bytes would hang the worker — which is the denial-of-service this
+    fail-closed server exists to avoid.
+    """
+    import time
+
+    with _running_server(tmp_path) as (httpd, inbox):
+        started = time.monotonic()
+        response = _request(
+            httpd, "POST", "/api/action",
+            body=b"", content_length=server._MAX_ACTION_BODY_BYTES + 1, send_body=False,
+        )
+        elapsed = time.monotonic() - started
+        assert response["status"] == 413
+        assert elapsed < 3.0, f"drain blocked for {elapsed:.2f}s"
+        assert not inbox.exists() or inbox.read_bytes() == b""
+
+
+def test_drain_never_reads_more_than_the_body_cap(tmp_path):
+    """An unbounded drain would let a client stream forever into a rejected request."""
+    drained = []
+    original = server.Handler._drain_unread_body
+
+    def spy(self):
+        before = getattr(self, "_drained_bytes", 0)
+        original(self)
+        drained.append(getattr(self, "_drained_bytes", 0) - before)
+
+    with _running_server(tmp_path) as (httpd, inbox):
+        server.Handler._drain_unread_body = spy
+        try:
+            _request(
+                httpd, "POST", "/api/action",
+                body=b"x" * 8192, content_type="text/plain",
+            )
+        finally:
+            server.Handler._drain_unread_body = original
+    assert drained, "the rejection path must attempt a drain"
+    assert all(count <= server._MAX_ACTION_BODY_BYTES for count in drained)
+
+
 @pytest.mark.parametrize(
     ("overrides", "expected"),
     [

@@ -122,6 +122,7 @@ _CURRENT_SCHEMA_ATTESTATION_KEYS = (
 _FORWARD_EVIDENCE_SCHEMA = "migration-forward-execution/v1"
 _FORWARD_AUDIT_NAMESPACE = uuid.UUID("e79d5d73-8b2a-5a8a-8c9d-6b25c86cb77b")
 _MAX_ACTION_BODY_BYTES = 16_384
+_MAX_DRAIN_SECONDS = 0.25       # best-effort drain budget; see Handler._drain_unread_body
 _JSON_CONTENT_TYPE = re.compile(
     r'^application/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$',
     re.IGNORECASE,
@@ -2312,7 +2313,51 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
 
+    def _drain_unread_body(self) -> None:
+        """Discard a bounded amount of unread request body before responding and closing.
+
+        A rejection answers before consuming the body. Closing a socket that still holds unread
+        data makes Windows send RST, which discards the response just written — so a correct
+        415/421/403 never reaches the client and the failure looks like a flaky test rather than a
+        delivery bug.
+
+        Bounded in BOTH size and time deliberately. An unbounded drain would let a client stream
+        forever into an already-rejected request, and a drain that waited for a declared-but-never-
+        sent body would pin the worker. Both are denial-of-service shapes this fail-closed server
+        exists to refuse, so the drain is best-effort: if it cannot finish within the budget it
+        gives up and lets the close happen.
+        """
+        if getattr(self, "_body_consumed", False) or self.command != "POST":
+            return
+        self._body_consumed = True
+        lengths = self.headers.get_all("Content-Length", [])
+        if len(lengths) != 1 or not re.fullmatch(r"\d+", lengths[0] or ""):
+            return
+        try:
+            remaining = min(int(lengths[0]), _MAX_ACTION_BODY_BYTES)
+        except (ValueError, OverflowError):
+            return
+        if remaining <= 0:
+            return
+        previous_timeout = self.connection.gettimeout()
+        try:
+            self.connection.settimeout(_MAX_DRAIN_SECONDS)
+            while remaining > 0:
+                chunk = self.rfile.read1(min(4096, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                self._drained_bytes = getattr(self, "_drained_bytes", 0) + len(chunk)
+        except (TimeoutError, socket.timeout, OSError, ValueError):
+            pass                            # best-effort only; never fail a rejection on the drain
+        finally:
+            try:
+                self.connection.settimeout(previous_timeout)
+            except OSError:
+                pass
+
     def _json(self, code: int, body, *, headers=None):
+        self._drain_unread_body()
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -2379,6 +2424,7 @@ class Handler(BaseHTTPRequestHandler):
         previous_timeout = self.connection.gettimeout()
         try:
             self.connection.settimeout(5)
+            self._body_consumed = True      # attempted; a later drain must not re-read or re-wait
             raw = self.rfile.read(length)
         except (TimeoutError, socket.timeout, OSError):
             self.close_connection = True
@@ -2462,6 +2508,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(404, {"error": "unknown route"})
 
     def do_POST(self):
+        self._body_consumed = False
         if not self._require_host():
             return None
         parsed = urlparse(self.path)

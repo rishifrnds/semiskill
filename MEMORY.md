@@ -1140,9 +1140,27 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication.
   next: J-010d9 implement the bounded non-blocking drain (or half-close) and re-run the full suite
 
+- [J-010d9] 2026-08-07T09:45:28Z  status: done
+  what: fixed the response-delivery race by draining a bounded, time-limited amount of unread
+    request body before a rejection responds and closes
+  artifacts: this J-010d9 checkpoint, dashboard/server.py, tests/dashboard/test_action_queue_http.py
+  verification: three tests written first. The key one reproduced the race DETERMINISTICALLY - 25
+    consecutive 415 rejections with an 8 KiB unread body failed before the fix and pass after it, so
+    this is a real repair rather than a lucky green run. Full file: 111 passed, 0 failed, including
+    the twelve previously flaky parametrizations. `--durations` confirms no systematic slowdown: the
+    slowest tests are all pre-existing at ~1.1s and none of the new ones appear.
+  design: the drain is bounded in size (capped at `_MAX_ACTION_BODY_BYTES`) AND in time
+    (`_MAX_DRAIN_SECONDS` 0.25s), because the two obvious implementations are each a
+    denial-of-service shape - an unbounded drain lets a client stream forever into an already
+    rejected request, and a drain that waits for a declared-but-never-sent body pins the worker.
+    It is best-effort: a drain that cannot finish gives up rather than failing the rejection.
+    `_body_consumed` is set before the real body read so a later drain never re-reads or re-waits.
+  credit: none toward security_pass, review, approval or publication.
+  next: J-010e1 re-run the immutable full suite for a current PASS record
+
 ## In-Flight Step
 
-- none. J-010d9 is selected but not started.
+- none. J-010e1 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
