@@ -124,6 +124,11 @@ def append_ready_review(store, skill_version, *, findings=()):
 
 
 def run(store, dsn, root, **kwargs):
+    # These tests are about capture/scan/reconcile behaviour, not stage-5 policy, so they supply a
+    # judge and exercise what they name. The judge-policy refusal itself is covered separately by
+    # the `judge` tests above; a caller that omits the scanner is refused before the store is
+    # touched (ADR-026).
+    kwargs.setdefault("judge_risk_scanner", _CleanJudge())
     return run_wave(
         store=store,
         dsn=dsn,
@@ -296,7 +301,9 @@ def test_explicitly_not_judge_required_wave_is_allowed_without_a_judge(tmp_path)
 @pytest.mark.integration
 def test_clean_wave_captures_and_scans_but_does_not_publish(pg_store, pg_dsn, tmp_path):
     write_skill(tmp_path, "dv-wave-one")
-    report = run(pg_store, pg_dsn, tmp_path)
+    # Explicitly the exempt path: no judge required, no judge supplied. Stage 5 must still be
+    # represented, and represented honestly as `not_sampled` — never as a pass.
+    report = run(pg_store, pg_dsn, tmp_path, judge_required=False, judge_risk_scanner=None)
 
     item = report.items[0]
     assert item.status == AWAITING_REVIEW and item.skill_version_id
@@ -453,6 +460,7 @@ def test_report_and_journal_expose_exact_approval_inputs(pg_store, pg_dsn, tmp_p
         dsn=pg_dsn,
         items=load_wave(tmp_path),
         security_audit_runner=clean_security,
+        judge_risk_scanner=_CleanJudge(),
         journal_path=journal,
     )
     data = json.loads(render_report(report, style="json"))

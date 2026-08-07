@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T07:39:00Z_
+_Last updated: 2026-08-07T08:30:50Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010d6 is selected, not started, and is blocked on BLK-005.
+- none in flight. J-010d7 (immutable full suite on this clean source) is selected, not started.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -30,17 +30,21 @@ Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared
 previously writing six artifacts per skill that the security gate was always going to reject.
 `security_pass` remains 0 by design. Neither step earns any catalog credit.
 
-## What the crashed session actually did (recorded, not credited)
-An unrecorded session ran ~2026-08-07T05:48Z-06:12Z and died without checkpointing. Its output is
-now preserved under J-010d3. It committed `c8f5fa3` with no STEP-ID and no MEMORY entry.
+## What the crashed session did - now independently VERIFIED
+An unrecorded session ran ~2026-08-07T05:48Z-06:12Z and died without checkpointing. It committed
+`c8f5fa3` with no STEP-ID and no MEMORY entry. Its work was preserved under J-010d3 and both of its
+material claims were re-checked against the live store under J-010d6:
 
-- Claimed and UNVERIFIED: the 0015->0023 forward migration was planned, reviewed and executed
-  against the development database (`reports/migration-plan.json`, `docs/UNBLOCK_SPECS.md`).
-- Claimed and UNVERIFIED: the wave ran across all 84 skills, each producing a `skill_version` plus
-  6 scan artifacts and landing `awaiting-review` (9 `reports/wave-*.json|md`, 05:52-05:54Z).
-- Neither claim could be re-verified in this session: the Docker daemon is down and a read-only
-  `psycopg.connect` to the development store raised `ConnectionTimeout`. Unavailable is unavailable
-  - not zero, not pass, not confirmed.
+- CONFIRMED: the `0015 -> 0023` forward migration executed. `schema_migrations` holds 23 rows,
+  last `0023_review_unbound_parameter_binding.sql`; 0016-0023 are all present. The human has since
+  confirmed they approved that plan digest, so BLK-002 is resolved.
+- CONFIRMED: all 84 registry-active slugs have a `skill_version` artifact. Counts reconcile exactly
+  against the earlier 39-artifact baseline: scan_run 338 (2 + 336), review 119 (35 + 84),
+  skill_version 85 (1 + 84), injection_test 84, gate_decision 2.
+- FINDING: the 85th `skill_version` slug is `dv/cve`, a TEST FIXTURE from
+  `tests/spine/test_pipeline.py`, captured into the DEVELOPMENT store at 2026-08-06T06:57:44. The
+  store is append-only, so it cannot be removed - it is known non-crediting pollution and must never
+  be counted. Any funnel or scoreboard reader must exclude unregistered slugs explicitly.
 
 ## Measured baseline
 - Registry/filesystem: 84 active + 20 declined, 16 roles, every role >=5, 84 skill directories.
@@ -51,9 +55,10 @@ now preserved under J-010d3. It committed `c8f5fa3` with no STEP-ID and no MEMOR
   Scoreboard v2 is diagnostic and known-defective; it authorizes nothing.
 - Release gate in that snapshot: REGISTRY_ACTIVE/DECLINED/ROLES, ALL_AUTHORED and ALL_STRICT_LINT
   pass; ALL_REVIEWED, ALL_RECHECK_READY, ALL_APPROVED and ALL_PUBLISHED all read 0 of 84.
-- Development DB identity has been observed as three different values as schema advanced:
-  `sha256:9b98194d...` (dashboard, 03:17Z), `sha256:85a8cb63...` (migration plan, ~05:48Z),
-  `sha256:d29b329d...` (scoreboard, 05:54Z). None of the three is currently re-observable.
+- Development DB reachable again: `semiskill-db-1`, PostgreSQL 16.14, 127.0.0.1:5432, schema 0023.
+  Identity was observed as three different values as schema advanced (`9b98194d` dashboard 03:17Z,
+  `85a8cb63` migration plan ~05:48Z, `d29b329d` scoreboard 05:54Z); re-pin it before binding
+  evidence to it.
 - Git: `c8f5fa3` and `3ce5694` are pushed; `1494750`, `47c4aaf` and this J-010d5 checkpoint are
   local-only. Re-verify local/remote equality before treating any of them as shared.
 - Canonical anomaly set: still unavailable; scoreboard v3 does not exist.
@@ -68,20 +73,15 @@ sit at `SECURITY_BLOCKED` even though every stage that ran scored 1.000 and the 
 rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 
 ## Immediate order
-1. Restore the development store, re-verify schema 0023 and the 84 captures, then run the
-   integration suites deferred by BLK-005 serially. Integration coverage of the wave/pipeline
-   changes has NOT run yet.
+1. Run the immutable full suite on this clean source (it refuses a dirty tree), then regenerate a
+   scoreboard from clean source rather than the current `dirty: true` snapshot.
 2. Review and test the inherited `tools/issue_batch.py` before it leases any real work.
 3. Scoreboard v3/progress v2, then Stage 2 and calibrated Stage 5, then prove 1 -> 5 -> 84.
 
 ## Active blockers
 - BLK-001: production Entra/OIDC, SharePoint and least-privilege identities are absent.
-- BLK-002: the 0015->0023 migration was reportedly executed by the crashed session without a
-  recorded human digest approval; the execution and its authority chain need audit.
 - BLK-003: the internal Stage-2 image/rule pack needs AppSec/legal/supply-chain approval.
 - BLK-004: Stage-5 needs loopback-only runtime plus independent labels/adjudication/calibration.
-- BLK-005: the development database is unreachable (Docker daemon down), so no canonical artifact,
-  migration or funnel claim can be verified.
 
 ## Standing hazards
 - Never run database tests concurrently; use only the explicit isolated `_test` database.
@@ -91,10 +91,13 @@ rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 - Scoreboard v2 nested evidence/progress validation has a reproduced P0 gap and is stale/dirty-source.
 - An unavailable observation, migration authority or scoreboard remains unavailable - not zero.
 - `tools/issue_batch.py` is inherited, unreviewed code that mints review leases. Treat it as
-  untrusted until J-010d6 tests it against `collect_wave.py::_validate`.
+  untrusted until it is tested against `collect_wave.py::_validate`.
+- The development store contains a test-fixture `skill_version` (`dv/cve`). Append-only means it
+  stays; every count must exclude unregistered slugs explicitly rather than assuming 1:1.
 
 ## Last checkpoint
-- J-010d5 is the containing checkpoint (`artifacts: this J-010d5 checkpoint`).
-- Earlier this session: J-010d3 repaired state after the crash, J-010d4 added the wave-level judge
-  refusal, and J-010d5-correction-of-J-010d4 fixed a forward-dated timestamp.
+- J-010d6 is the containing checkpoint (`artifacts: this J-010d6 checkpoint`).
+- This session: J-010d3 repaired state after the crash; J-010d4/J-010d5 made the unsatisfiable judge
+  policy refuse loudly and consistently (ADR-026); J-010d6 verified the store and repaired the wave
+  integration tests. Two correction entries fixed forward-dated timestamps.
 - No step this session earns any review, approval, publication or launch-readiness credit.

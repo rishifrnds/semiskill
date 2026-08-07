@@ -34,7 +34,7 @@ state, gate, review, and release tasks through this file and `STATE_RULES.md`.
 | Recheck-ready | 0 | 84 | deterministic zero-open-blocker gate |
 | Authenticated human-approved | 0 | 84 | exact-evidence approval projection |
 | Projection-backed published | 0 | 84 | catalog projection |
-| Development DB schema | 0023 **claimed, unverified** | 0023 before review issuance | store unreachable; see BLK-002/BLK-005 |
+| Development DB schema | **0023, verified** | 0023 before review issuance | `schema_migrations`, 23 rows, J-010d6 |
 | Test DB schema | 0023 | current | isolated test observation |
 | Canonical scoreboard | unavailable/expired | fresh and reconciled | fail-closed snapshot |
 | Market launch | NO-GO | all release invariants true | canonical release gate only |
@@ -55,13 +55,17 @@ Never infer zero anomalies from the stale v2 snapshot.
 A session ran roughly `05:48Z-06:12Z` and died without checkpointing. Its work was preserved, not
 trusted. It committed `c8f5fa3` with no STEP-ID and no MEMORY entry.
 
-- It claims to have executed the `0015 -> 0023` forward migration against development. No recorded
-  human approval of that exact plan digest exists. **BLK-002** now tracks that audit rather than the
-  original "generate a new plan" ask.
-- It claims the wave captured and scanned all 84 skills, each producing a `skill_version` plus six
-  scan artifacts and landing `awaiting-review` (nine `reports/wave-*.json|md`, `05:52-05:54Z`).
-- Neither claim is re-verifiable right now: the Docker daemon is down and the development store
-  times out (**BLK-005**). Both are recorded as UNVERIFIED file evidence.
+- **VERIFIED (J-010d6):** the `0015 -> 0023` forward migration executed. `schema_migrations` holds
+  23 rows, last `0023_review_unbound_parameter_binding.sql`, with 0016-0023 all present. The human
+  has confirmed they approved that exact plan digest, so BLK-002 is closed.
+- **VERIFIED (J-010d6):** all 84 registry-active slugs have a `skill_version` artifact. Counts
+  reconcile exactly against the earlier 39-artifact baseline: scan_run 338, review 119,
+  skill_version 85, injection_test 84, gate_decision 2.
+- **FINDING:** the 85th `skill_version` slug is `dv/cve`, a TEST FIXTURE from
+  `tests/spine/test_pipeline.py`, captured into the DEVELOPMENT store at 2026-08-06T06:57:44. The
+  artifact store is append-only, so it stays. It is non-crediting pollution: every funnel, scoreboard
+  and reconciliation reader must exclude unregistered slugs explicitly rather than assume 1:1 with
+  the registry.
 - It left `tools/issue_batch.py` + tests (the SPEC B review-issuance producer) and
   `docs/UNBLOCK_SPECS.md`. That code is **inherited and unreviewed**; it mints review leases, so it
   must be tested against `collect_wave.py::_validate` before it touches real work.

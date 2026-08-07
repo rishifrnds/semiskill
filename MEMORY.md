@@ -1066,9 +1066,35 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     timestamp was estimated rather than read. Practice change adopted: read `date -u` immediately
     before writing any timestamp into MEMORY.md or STATUS.md, never estimate it from elapsed work.
 
+- [J-010d6] 2026-08-07T08:30:50Z  status: done
+  what: restored the development store, independently verified the crashed session's two claims,
+    and repaired the wave integration tests that the ADR-026 refusal correctly broke
+  artifacts: this J-010d6 checkpoint, tests/wave/test_wave.py, BLOCKERS.md, STATUS.md
+  verification: started the stopped `semiskill-db-1` container (Postgres 16.14, 127.0.0.1:5432).
+    CONFIRMED claim 1 - `schema_migrations` holds 23 rows, last `0023_review_unbound_parameter_
+    binding.sql`, with 0016-0023 all present. CONFIRMED claim 2 - every one of the 84 registry-active
+    slugs has a `skill_version` artifact; artifacts by type are scan_run 338, review 119,
+    skill_version 85, injection_test 84, gate_decision 2, which reconciles exactly with the
+    pre-existing 39-artifact baseline (35 legacy reviews + 2 scan_run + 1 skill_version +
+    1 gate_decision) plus 84 new captures. `tests/wave` + `tests/spine` + `tests/cli` including
+    integration: 82 passed, 0 failed.
+  finding: the 85th `skill_version` slug is `dv/cve`, a TEST FIXTURE from
+    `tests/spine/test_pipeline.py`, captured into the DEVELOPMENT store at 2026-08-06T06:57:44.
+    The artifact store is append-only so it cannot be removed; it is recorded as known
+    non-crediting pollution and must never be counted. Logged as a gap, not silently ignored.
+  test-repair: 10 wave integration tests failed because their shared `run()` helper supplied no
+    judge scanner. Nine now supply one, so they exercise capture/scan/reconcile as they name; the
+    tenth (`test_clean_wave_captures_and_scans_but_does_not_publish`) now states the exempt path
+    explicitly with `judge_required=False`, preserving its real assertion that stage 5 is recorded
+    honestly as `not_sampled` rather than as a pass.
+  resolved: BLK-002 (human approved the migration digest; execution to 0023 independently verified)
+    and BLK-005 (development store reachable).
+  credit: none toward security_pass, review, approval or publication.
+  next: J-010d7 run the immutable full suite on this clean source
+
 ## In-Flight Step
 
-- none. J-010d6 is selected but not started; it is blocked on BLK-005.
+- none. J-010d7 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
