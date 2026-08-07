@@ -1081,6 +1081,8 @@ function vSecurity() {
   const migration = S.migration || { status: 'unavailable', reason: 'not_observed' };
   const tracker = migration.tracker;
   const adoption = migration.adoption;
+  const forward = migration.forward;
+  const authorityChain = migration.authority_chain;
   const migrationRows = migration.status !== 'verified'
     ? `<div class="empty">Migration evidence unavailable (${esc(migration.reason || 'unavailable')}). No migration claim is credited.</div>`
     : `<div class="row"><div class="g"><div class="h">Repository ↔ database tracker</div>
@@ -1098,6 +1100,17 @@ function vSecurity() {
            <div class="sub">${adoption.adopted_count} adopted · ${adoption.applied_count} applied · ${adoption.attestations_passed}/${adoption.attestations_total} post-attestations · removed test fixtures: ${esc((adoption.removed_test_fixtures || []).join(', ') || 'none')}</div>
            <div class="p">${esc(adoption.historical_limit)}</div></div></div>`
       : `<div class="empty">No legacy adoption artifact was observed; whether one was required is unknown and receives no credit.</div>`;
+  const forwardRows = migration.status !== 'verified'
+    ? `<div class="empty">Forward authority is hidden until the complete migration chain is verified.</div>`
+    : forward && authorityChain
+      ? `<div class="row"><div class="g"><div class="h">Immutable forward artifact</div>
+           <div class="sub mono">${esc(forward.artifact_id)} · ${esc(forward.timestamp)}</div></div>${badge('verified', 'done')}</div>
+         <div class="row"><div class="g"><div class="h">Checkpoint transition</div>
+           <div class="sub mono">${esc(forward.from_migration)} → ${esc(forward.to_migration)} · ${forward.applied_count} applied</div></div></div>
+         <div class="row"><div class="g"><div class="h">Bound plan and prior authority</div>
+           <div class="sub mono">${esc(forward.plan_sha256)} · prior ${esc(forward.prior_artifact_id)}</div>
+           <div class="p">${forward.attestations_passed}/${forward.attestations_total} post-attestations · chain ${esc(authorityChain.sha256)}</div></div></div>`
+      : `<div class="empty">The 0015 → 0023 forward authority chain is incomplete and receives no credit.</div>`;
 
   $('#view-security').innerHTML = `
     <div class="grid g4">
@@ -1115,10 +1128,11 @@ function vSecurity() {
           <div class="g"><div class="h">${badge(s, s === 'source-ref' ? 'info' : 'partial')} ${esc(n)}</div><div class="p mono">${esc(e)}</div></div></div>`).join('')}</div>`, { tight: true })}
     </div>
 
-    <div class="section-head"><h2>Migration adoption witness</h2><p class="muted">Live, redacted evidence only; operator identity, authentication context, reasons, and raw manifests never enter this API.</p></div>
+    <div class="section-head"><h2>Migration authority chain</h2><p class="muted">Live, redacted evidence only; operator identity, authentication context, reasons, and raw manifests never enter this API.</p></div>
     <div class="grid g2">
       ${card('Migration tracker', migration.status === 'verified' ? `${esc(migration.database.environment)} · ${esc(migration.database.database_name)}` : 'fail-closed', migrationRows, { tight: true })}
       ${card('Legacy checksum adoption', adoption ? `${adoption.adopted_count} adopted · ${adoption.applied_count} applied` : 'no credited adoption', adoptionRows, { tight: true })}
+      ${card('Forward schema authority', forward ? `${esc(forward.from_migration)} → ${esc(forward.to_migration)}` : 'no credited forward migration', forwardRows, { tight: true })}
     </div>
 
     <div class="section-head"><h2>Red-team corpus inputs</h2><p class="muted">Input inventory only — ${esc(redteam.reason)}; outcomes are not executed</p></div>

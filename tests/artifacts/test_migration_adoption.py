@@ -725,9 +725,14 @@ def test_collected_source_contracts_must_equal_recorded_commit(tmp_path, monkeyp
     migrations.mkdir(parents=True)
     module = artifacts / "migrate.py"
     manifest = artifacts / "legacy_migration_manifest.json"
+    cli = root / "semiskill" / "cli.py"
+    identity = root / "semiskill" / "governance" / "identity.py"
+    identity.parent.mkdir(parents=True)
     migration = migrations / "0001_probe.sql"
     second_migration = migrations / "0002_probe.sql"
     module.write_text("# fixture\n", encoding="utf-8")
+    cli.write_text("# fixture\n", encoding="utf-8")
+    identity.write_text("# fixture\n", encoding="utf-8")
     manifest_doc = {"schema_version": "fixture/v1", "value": "trusted"}
     manifest.write_text(json.dumps(manifest_doc), encoding="utf-8")
     raw = b"SELECT 1;\n"

@@ -198,6 +198,81 @@ def cmd_migrate_adopt_legacy(args, store, out) -> int:
     return 0
 
 
+def cmd_migrate_forward(args, store, out) -> int:
+    """Plan or execute one explicitly reviewed non-test forward migration checkpoint."""
+    from semiskill.artifacts.migrate import (
+        MigrationAdoptionRefused,
+        execute_forward_migrations,
+        load_forward_migration_plan,
+        plan_forward_migrations,
+        write_forward_migration_plan,
+    )
+    from semiskill.governance.identity import IdentityRefused, local_os_identity
+
+    if args.environment == "production":
+        print("forward migration refused: production requires the configured Entra/OIDC adapter",
+              file=out)
+        return 2
+    dsn = args.dsn or os.environ.get("SEMISKILL_MIGRATION_DATABASE_URL")
+    if not dsn:
+        print(
+            "forward migration refused: an explicit migration DSN is required via --dsn "
+            "or SEMISKILL_MIGRATION_DATABASE_URL",
+            file=out,
+        )
+        return 2
+    try:
+        identity = local_os_identity()
+        if not args.yes:
+            if not args.plan_out or args.plan_file or args.expected_plan_sha256:
+                raise MigrationAdoptionRefused(
+                    "read-only planning requires --plan-out and forbids execution arguments"
+                )
+            plan = plan_forward_migrations(
+                dsn,
+                args.repo_root,
+                expected_database=args.expected_database,
+                environment=args.environment,
+                identity=identity,
+                reason=args.reason,
+            )
+            target = write_forward_migration_plan(args.plan_out, plan)
+            print(json.dumps(plan, indent=2, sort_keys=True), file=out)
+            print(
+                f"\nread-only plan: {target}\n"
+                "no database state changed. Review the exact bytes, then re-run with --yes, "
+                "--plan-file and --expected-plan-sha256.",
+                file=out,
+            )
+            return 0
+        if args.plan_out or not args.plan_file or not args.expected_plan_sha256:
+            raise MigrationAdoptionRefused(
+                "--yes requires --plan-file and --expected-plan-sha256 and forbids --plan-out"
+            )
+        plan = load_forward_migration_plan(args.plan_file)
+        result = execute_forward_migrations(
+            dsn,
+            args.repo_root,
+            plan=plan,
+            expected_plan_sha256=args.expected_plan_sha256,
+            expected_database=args.expected_database,
+            environment=args.environment,
+            identity=identity,
+            reason=args.reason,
+        )
+    except MigrationAdoptionRefused as exc:
+        print(f"forward migration refused: {exc}", file=out)
+        return 2
+    except IdentityRefused:
+        print("forward migration refused: operator identity could not be established", file=out)
+        return 2
+    except Exception:  # database/filesystem diagnostics can contain DSNs or absolute paths
+        print("forward migration refused: internal preflight or database operation failed", file=out)
+        return 2
+    print(json.dumps(result, indent=2, sort_keys=True), file=out)
+    return 0
+
+
 def cmd_lint(args, store, out) -> int:
     """Pre-flight lint. Deliberately needs no database: authoring feedback must be instant, and a
     wave must be provably clean before the first artifact is ever written."""
@@ -517,6 +592,25 @@ def build_parser() -> argparse.ArgumentParser:
     adoption.add_argument("--reason", default=None)
     adoption.add_argument("--yes", action="store_true")
     adoption.set_defaults(func=cmd_migrate_adopt_legacy, needs_store=False)
+
+    forward = sub.add_parser(
+        "migrate-forward",
+        help="plan or execute one explicit reviewed forward migration checkpoint",
+    )
+    forward.add_argument(
+        "--dsn", default=None,
+        help="migration-owner DSN (or SEMISKILL_MIGRATION_DATABASE_URL; never DATABASE_URL)",
+    )
+    forward.add_argument("--expected-database", required=True)
+    forward.add_argument("--environment", choices=["development", "test", "production"],
+                         default="development")
+    forward.add_argument("--repo-root", default=".")
+    forward.add_argument("--reason", required=True)
+    forward.add_argument("--plan-out", default=None)
+    forward.add_argument("--plan-file", default=None)
+    forward.add_argument("--expected-plan-sha256", default=None)
+    forward.add_argument("--yes", action="store_true")
+    forward.set_defaults(func=cmd_migrate_forward, needs_store=False)
 
     lt = sub.add_parser("lint", help="pre-flight lint a skill or a wave directory (no database)")
     lt.add_argument("path", help="a SKILL.md, a skill directory, or a tree of them")

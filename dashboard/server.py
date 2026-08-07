@@ -91,7 +91,7 @@ _CANONICAL_SCOPE = {
     "expected_roles": 16,
     "target_per_role": 5,
 }
-_POST_MIGRATION_ATTESTATION_KEYS = frozenset({
+_ADOPTION_0015_ATTESTATION_KEYS = frozenset({
     "required_relations_present",
     "required_functions_present",
     "critical_projection_index_exact",
@@ -104,9 +104,23 @@ _POST_MIGRATION_ATTESTATION_KEYS = frozenset({
     "projection_and_policy_start_empty",
     "public_schema_create_revoked",
 })
+_CHECKPOINT_0015_ATTESTATION_KEYS = _ADOPTION_0015_ATTESTATION_KEYS | {
+    "held_out_seed_exact",
+    "judge_gold_set_empty",
+    "registry_rows_exact",
+    "schema_inventory_exact",
+}
+_POST_MIGRATION_ATTESTATION_KEYS = _ADOPTION_0015_ATTESTATION_KEYS | {
+    "held_out_baseline_intact",
+    "review_root_index_exact",
+    "registry_rows_exact",
+    "schema_inventory_exact",
+}
 _CURRENT_SCHEMA_ATTESTATION_KEYS = (
     _POST_MIGRATION_ATTESTATION_KEYS - {"projection_and_policy_start_empty"}
 )
+_FORWARD_EVIDENCE_SCHEMA = "migration-forward-execution/v1"
+_FORWARD_AUDIT_NAMESPACE = uuid.UUID("e79d5d73-8b2a-5a8a-8c9d-6b25c86cb77b")
 _MAX_ACTION_BODY_BYTES = 16_384
 _JSON_CONTENT_TYPE = re.compile(
     r'^application/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$',
@@ -749,14 +763,32 @@ def _live_snapshot_validation(snapshot: dict, *, migration: dict | None = None) 
     if migration.get("status") != "verified":
         raise DashboardSnapshotRejected("schema_witness_mismatch")
     migration_database = migration.get("database")
+    migration_tracker = migration.get("tracker")
     if (
         not isinstance(migration_database, dict)
+        or not isinstance(migration_tracker, dict)
         or migration_database.get("environment") != sources["database"]["environment"]
         or migration_database.get("database_name") != sources["database"]["database_name"]
-        or migration.get("tracker", {}).get("exact") is not True
+        or migration_tracker.get("exact") is not True
+        or re.fullmatch(
+            r"sha256:[0-9a-f]{64}", str(migration_tracker.get("sha256"))
+        ) is None
         or migration.get("schema", {}).get("status") != "verified"
     ):
         raise DashboardSnapshotRejected("schema_witness_mismatch")
+    adoption = migration.get("adoption")
+    forward = migration.get("forward")
+    authority_chain = migration.get("authority_chain")
+    if (
+        not isinstance(adoption, dict)
+        or not isinstance(forward, dict)
+        or not isinstance(authority_chain, dict)
+        or forward.get("prior_artifact_id") != adoption.get("artifact_id")
+        or authority_chain != _migration_authority_chain_projection(
+            adoption, forward, migration_tracker["sha256"],
+        )
+    ):
+        raise DashboardSnapshotRejected("migration_authority_chain_invalid")
     final_commit, final_dirty = _repository_identity()
     if final_commit != current_commit or final_dirty or final_dirty != current_dirty:
         raise DashboardSnapshotRejected("source_changed_during_validation")
@@ -765,7 +797,10 @@ def _live_snapshot_validation(snapshot: dict, *, migration: dict | None = None) 
         "snapshot_id": live["snapshot_id"],
         "source_commit": current_commit,
         "database_identity_sha256": live["sources"]["database"]["identity_sha256"],
-        "migration_tracker_sha256": migration["tracker"]["sha256"],
+        "migration_tracker_sha256": migration_tracker["sha256"],
+        "migration_adoption_artifact_id": adoption["artifact_id"],
+        "migration_forward_artifact_id": forward["artifact_id"],
+        "migration_authority_chain_sha256": authority_chain["sha256"],
     }
 
 
@@ -1370,11 +1405,14 @@ def _read_migration_database_state(dsn: str, *, connect=None) -> dict:
             ).fetchall()
         ]
         audits = conn.execute(
-            "SELECT artifact_id,timestamp_start,source_system,actor_kind,permissions_label,"
-            "objective_tag,ground_truth_ref,payload FROM public.artifacts "
+            "SELECT artifact_id,timestamp_start,source_system::text,actor_kind::text,"
+            "permissions_label,objective_tag,ground_truth_ref,payload,input_refs,actor,"
+            "timestamp_end,output_refs,eval_score,rollback_ref,cost_usd,corrects_ref "
+            "FROM public.artifacts "
             "WHERE artifact_type='gate_decision' "
-            "AND payload->>'schema_version'='migration-checksum-adoption/v1' "
-            "ORDER BY timestamp_start,artifact_id LIMIT 2"
+            "AND payload->>'schema_version' IN "
+            "('migration-checksum-adoption/v1','migration-forward-execution/v1') "
+            "ORDER BY timestamp_start,artifact_id LIMIT 5"
         ).fetchall()
         projection_rows = conn.execute(
             "SELECT count(*) FROM public.verified_publication_events"
@@ -1405,6 +1443,119 @@ def _canonical_filename_list(value: object, *, repository: set[str], removed: bo
     return value
 
 
+def _audit_time_order_valid(timestamp_start: object, timestamp_end: object) -> bool:
+    try:
+        return (
+            isinstance(timestamp_start, datetime)
+            and isinstance(timestamp_end, datetime)
+            and timestamp_end >= timestamp_start
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _adoption_payload_contract_valid(
+    payload: dict,
+    *,
+    repository_rows: list[dict[str, str]],
+) -> bool:
+    expected_keys = {
+        "adopted_filenames", "adoption_id", "applied_filenames", "database",
+        "decision", "environment", "final_tracker", "historical_limit",
+        "operator_authentication", "plan_sha256", "post_migration_attestations",
+        "reason", "removed_orphaned_relations", "removed_orphaned_test_fixtures",
+        "repository_manifest", "schema_attestations", "schema_version",
+        "source_commit", "tracked_manifest", "trusted_manifest_sha256",
+    }
+    if set(payload) != expected_keys:
+        return False
+    try:
+        from semiskill.artifacts.migrate import (  # noqa: PLC0415
+            MigrationAdoptionRefused,
+            _ADOPTION_SCHEMA_ATTESTATION_KEYS,
+            _trusted_legacy_manifest,
+        )
+        manifest = _project_manifest_with_bytes(
+            payload.get("repository_manifest"), reason="adoption_witness_invalid",
+        )
+        trusted, trusted_sha256 = _trusted_legacy_manifest(manifest)
+    except (DashboardSnapshotRejected, MigrationAdoptionRefused, TypeError, ValueError):
+        return False
+    projected_manifest = [
+        {"filename": row["filename"], "sha256": row["sha256"]}
+        for row in manifest
+    ]
+    tracked = payload.get("tracked_manifest")
+    adopted = payload.get("adopted_filenames")
+    applied = payload.get("applied_filenames")
+    removed = payload.get("removed_orphaned_test_fixtures")
+    removed_relations = payload.get("removed_orphaned_relations")
+    schema = payload.get("schema_attestations")
+    trusted_names = [row["filename"] for row in trusted["migrations"]]
+    if (
+        projected_manifest != repository_rows
+        or not isinstance(tracked, list)
+        or not isinstance(adopted, list)
+        or not isinstance(applied, list)
+        or not isinstance(removed, list)
+        or not isinstance(removed_relations, list)
+        or not isinstance(schema, dict)
+        or set(schema) != _ADOPTION_SCHEMA_ATTESTATION_KEYS
+        or any(value is not True for value in schema.values())
+        or payload.get("trusted_manifest_sha256") != trusted_sha256
+        or payload.get("historical_limit") != trusted.get("historical_limit")
+        or adopted + applied != [row["filename"] for row in repository_rows]
+        or (removed, removed_relations) not in (
+            ([], []),
+            (["9001_probe.sql"], ["public.mig_probe"]),
+        )
+    ):
+        return False
+    tracked_names = []
+    for row in tracked:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"filename", "sha256", "applied_at"}
+            or not isinstance(row.get("filename"), str)
+            or _MIGRATION_NAME.fullmatch(row["filename"]) is None
+            or (
+                row.get("sha256") is not None
+                and re.fullmatch(r"[0-9a-f]{64}", str(row["sha256"])) is None
+            )
+            or not isinstance(row.get("applied_at"), str)
+            or not row["applied_at"].strip()
+        ):
+            return False
+        tracked_names.append(row["filename"])
+    if (
+        tracked_names != sorted(trusted_names + removed)
+        or len(tracked_names) != len(set(tracked_names))
+        or adopted != [
+            row["filename"] for row in tracked
+            if row["filename"] in trusted_names and row["sha256"] is None
+        ]
+    ):
+        return False
+    reconstructed_plan = {
+        "schema_version": "migration-checksum-adoption-plan/v1",
+        "database": payload.get("database"),
+        "environment": payload.get("environment"),
+        "source_commit": payload.get("source_commit"),
+        "tracked_prefix": trusted_names,
+        "tracked_manifest": tracked,
+        "repository_manifest": manifest,
+        "trusted_manifest_sha256": trusted_sha256,
+        "orphaned_test_fixtures_to_remove": removed,
+        "orphaned_relations_to_drop": removed_relations,
+        "legacy_null_filenames": adopted,
+        "legacy_null_count": len(adopted),
+        "pending_filenames": applied,
+        "schema_attestations": schema,
+        "historical_limit": trusted["historical_limit"],
+    }
+    return payload.get("plan_sha256") == _canonical_sha256(reconstructed_plan)
+
+
 def _project_adoption_witness(
     audits: list,
     *,
@@ -1416,9 +1567,12 @@ def _project_adoption_witness(
         raise DashboardSnapshotRejected("adoption_witness_ambiguous")
     if not audits:
         return None
+    if len(audits[0]) != 16:
+        raise DashboardSnapshotRejected("adoption_witness_invalid")
     (
         artifact_id, timestamp_start, source_system, actor_kind, permissions_label,
-        objective_tag, ground_truth_ref, payload,
+        objective_tag, ground_truth_ref, payload, input_refs, actor, timestamp_end,
+        output_refs, eval_score, rollback_ref, cost_usd, corrects_ref,
     ) = audits[0]
     if not isinstance(payload, dict):
         raise DashboardSnapshotRejected("adoption_witness_invalid")
@@ -1426,24 +1580,51 @@ def _project_adoption_witness(
     source_commit = payload.get("source_commit")
     database = payload.get("database")
     post = payload.get("post_migration_attestations")
+    operator = payload.get("operator_authentication")
+    reason = payload.get("reason")
     if (
         source_system != "cli"
+        or not isinstance(actor, str)
+        or not actor.strip()
         or actor_kind != "human"
+        or not _audit_time_order_valid(timestamp_start, timestamp_end)
+        or list(input_refs or []) != []
+        or list(output_refs or []) != []
         or permissions_label != "need-to-know"
         or objective_tag != "compliance"
         or ground_truth_ref != plan_sha256
+        or eval_score is not None
+        or cost_usd is not None
+        or corrects_ref is not None
+        or rollback_ref != {
+            "supported": False,
+            "reason": "historical checksum adoption is an irreversible attestation",
+        }
         or payload.get("schema_version") != "migration-checksum-adoption/v1"
         or payload.get("decision") != "adopt_and_apply"
         or payload.get("adoption_id") != str(artifact_id)
         or payload.get("environment") != environment
+        or not isinstance(reason, str)
+        or not 20 <= len(reason) <= 1000
+        or reason != reason.strip()
+        or any(ord(char) < 32 or ord(char) == 127 for char in reason)
         or not isinstance(database, dict)
         or database.get("database_name") != database_name
+        or not isinstance(operator, dict)
+        or set(operator) != {"provider", "subject_sha256"}
+        or operator.get("provider") not in {"local_os", "entra_oidc"}
+        or re.fullmatch(
+            r"sha256:[0-9a-f]{64}", str(operator.get("subject_sha256"))
+        ) is None
         or payload.get("final_tracker") != repository_rows
         or not isinstance(post, dict)
-        or set(post) != _POST_MIGRATION_ATTESTATION_KEYS
+        or set(post) != _ADOPTION_0015_ATTESTATION_KEYS
         or any(value is not True for value in post.values())
         or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(plan_sha256))
         or not re.fullmatch(r"[0-9a-f]{40}", str(source_commit))
+        or not _adoption_payload_contract_valid(
+            payload, repository_rows=repository_rows,
+        )
     ):
         raise DashboardSnapshotRejected("adoption_witness_invalid")
     try:
@@ -1471,6 +1652,8 @@ def _project_adoption_witness(
         "environment": environment,
         "source_commit": source_commit,
         "plan_sha256": plan_sha256,
+        "payload_sha256": _canonical_sha256(payload),
+        "final_tracker_sha256": _migration_tracker_sha256(repository_rows),
         "adopted_count": len(adopted),
         "applied_count": len(applied),
         "attestations_passed": len(post),
@@ -1483,12 +1666,272 @@ def _project_adoption_witness(
     }
 
 
+def _project_manifest_with_bytes(
+    value: object, *, reason: str = "forward_witness_invalid",
+) -> list[dict[str, str | int]]:
+    if not isinstance(value, list) or not value:
+        raise DashboardSnapshotRejected(reason)
+    projected = []
+    names = []
+    for row in value:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"filename", "sha256", "bytes"}
+            or not isinstance(row.get("filename"), str)
+            or _MIGRATION_NAME.fullmatch(row["filename"]) is None
+            or re.fullmatch(r"[0-9a-f]{64}", str(row.get("sha256"))) is None
+            or type(row.get("bytes")) is not int
+            or not 0 < row["bytes"] <= 2_000_000
+        ):
+            raise DashboardSnapshotRejected(reason)
+        path = ROOT / "semiskill" / "artifacts" / "migrations" / row["filename"]
+        try:
+            raw = path.read_bytes()
+        except OSError as exc:
+            raise DashboardSnapshotRejected(reason) from exc
+        if len(raw) != row["bytes"] or hashlib.sha256(raw).hexdigest() != row["sha256"]:
+            raise DashboardSnapshotRejected(reason)
+        names.append(row["filename"])
+        projected.append(dict(row))
+    if names != sorted(names) or len(names) != len(set(names)):
+        raise DashboardSnapshotRejected(reason)
+    return projected
+
+
+def _project_tracker(value: object, *, reason: str = "forward_witness_invalid") -> list[dict[str, str]]:
+    if not isinstance(value, list) or not value:
+        raise DashboardSnapshotRejected(reason)
+    rows = []
+    names = []
+    for row in value:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"filename", "sha256"}
+            or not isinstance(row.get("filename"), str)
+            or _MIGRATION_NAME.fullmatch(row["filename"]) is None
+            or re.fullmatch(r"[0-9a-f]{64}", str(row.get("sha256"))) is None
+        ):
+            raise DashboardSnapshotRejected(reason)
+        names.append(row["filename"])
+        rows.append(dict(row))
+    if names != sorted(names) or len(names) != len(set(names)):
+        raise DashboardSnapshotRejected(reason)
+    return rows
+
+
+def _project_tracked_manifest(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, list) or not value:
+        raise DashboardSnapshotRejected("forward_witness_invalid")
+    projected = []
+    names = []
+    for row in value:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"filename", "sha256", "applied_at"}
+            or not isinstance(row.get("filename"), str)
+            or _MIGRATION_NAME.fullmatch(row["filename"]) is None
+            or re.fullmatch(r"[0-9a-f]{64}", str(row.get("sha256"))) is None
+            or not isinstance(row.get("applied_at"), str)
+            or not row["applied_at"].strip()
+            or len(row["applied_at"]) > 128
+        ):
+            raise DashboardSnapshotRejected("forward_witness_invalid")
+        names.append(row["filename"])
+        projected.append({"filename": row["filename"], "sha256": row["sha256"]})
+    if names != sorted(names) or len(names) != len(set(names)):
+        raise DashboardSnapshotRejected("forward_witness_invalid")
+    return projected
+
+
+def _project_forward_witness(
+    audits: list,
+    *,
+    adoption_audit: tuple,
+    adoption: dict,
+    repository_rows: list[dict[str, str]],
+    environment: str,
+    database_name: str,
+) -> dict:
+    if len(audits) != 1 or len(audits[0]) != 16:
+        raise DashboardSnapshotRejected("forward_witness_ambiguous")
+    (
+        artifact_id, timestamp_start, source_system, actor_kind, permissions_label,
+        objective_tag, ground_truth_ref, payload, input_refs, actor, timestamp_end,
+        output_refs, eval_score, rollback_ref, cost_usd, corrects_ref,
+    ) = audits[0]
+    if not isinstance(payload, dict):
+        raise DashboardSnapshotRejected("forward_witness_invalid")
+    expected_keys = {
+        "schema_version", "migration_id", "decision", "policy_id", "environment",
+        "reason", "source_commit", "plan_sha256", "database",
+        "operator_authentication", "prior_audit", "tracker_before",
+        "repository_manifest", "pending_manifest", "pre_migration_attestation",
+        "post_migration_attestations", "applied_filenames", "final_tracker",
+    }
+    database = payload.get("database")
+    operator = payload.get("operator_authentication")
+    prior = payload.get("prior_audit")
+    pre = payload.get("pre_migration_attestation")
+    post = payload.get("post_migration_attestations")
+    plan_sha256 = payload.get("plan_sha256")
+    source_commit = payload.get("source_commit")
+    try:
+        adoption_id = uuid.UUID(adoption["artifact_id"])
+        expected_id = uuid.uuid5(
+            _FORWARD_AUDIT_NAMESPACE,
+            f"{database['identity_sha256']}|{plan_sha256}",
+        )
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise DashboardSnapshotRejected("forward_witness_invalid") from exc
+    if (
+        set(payload) != expected_keys
+        or source_system != "cli"
+        or not isinstance(actor, str)
+        or not actor.strip()
+        or actor_kind != "human"
+        or not _audit_time_order_valid(timestamp_start, timestamp_end)
+        or not _audit_time_order_valid(adoption_audit[1], adoption_audit[10])
+        or not _audit_time_order_valid(adoption_audit[10], timestamp_start)
+        or list(input_refs or []) != [adoption_id]
+        or list(output_refs or []) != []
+        or permissions_label != "need-to-know"
+        or objective_tag != "compliance"
+        or ground_truth_ref != plan_sha256
+        or eval_score is not None
+        or cost_usd is not None
+        or corrects_ref is not None
+        or rollback_ref != {
+            "supported": False,
+            "reason": "forward schema migrations are irreversible attestations",
+        }
+        or artifact_id != expected_id
+        or payload.get("schema_version") != _FORWARD_EVIDENCE_SCHEMA
+        or payload.get("migration_id") != str(artifact_id)
+        or payload.get("decision") != "apply_reviewed_forward_migration"
+        or payload.get("policy_id") != "migration/0015-to-0023@1"
+        or payload.get("environment") != environment
+        or not isinstance(payload.get("reason"), str)
+        or not payload["reason"].strip()
+        or re.fullmatch(r"[0-9a-f]{40}", str(source_commit)) is None
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(plan_sha256)) is None
+        or not isinstance(database, dict)
+        or database.get("database_name") != database_name
+        or adoption_audit[7].get("database") != database
+        or re.fullmatch(
+            r"sha256:[0-9a-f]{64}", str(database.get("identity_sha256"))
+        ) is None
+        or not isinstance(operator, dict)
+        or operator.get("actor") != actor
+        or not isinstance(prior, dict)
+        or prior != {
+            "artifact_id": adoption["artifact_id"],
+            "schema_version": "migration-checksum-adoption/v1",
+            "plan_sha256": adoption["plan_sha256"],
+            "payload_sha256": adoption["payload_sha256"],
+        }
+        or not isinstance(pre, dict)
+        or pre.get("policy_id") != "schema/0015@1"
+        or not isinstance(pre.get("results"), dict)
+        or set(pre["results"]) != _CHECKPOINT_0015_ATTESTATION_KEYS
+        or any(value is not True for value in pre["results"].values())
+        or not isinstance(post, dict)
+        or set(post) != _POST_MIGRATION_ATTESTATION_KEYS
+        or any(value is not True for value in post.values())
+    ):
+        raise DashboardSnapshotRejected("forward_witness_invalid")
+    tracker_before = _project_tracked_manifest(payload.get("tracker_before"))
+    final_tracker = _project_tracker(payload.get("final_tracker"))
+    repository_manifest = _project_manifest_with_bytes(payload.get("repository_manifest"))
+    pending_manifest = _project_manifest_with_bytes(payload.get("pending_manifest"))
+    projected_repository = [
+        {"filename": row["filename"], "sha256": row["sha256"]}
+        for row in repository_manifest
+    ]
+    if (
+        tracker_before != adoption_audit[7].get("final_tracker")
+        or final_tracker != repository_rows
+        or projected_repository != repository_rows
+        or tracker_before != projected_repository[:len(tracker_before)]
+        or pending_manifest != repository_manifest[len(tracker_before):]
+        or payload.get("applied_filenames") != [row["filename"] for row in pending_manifest]
+    ):
+        raise DashboardSnapshotRejected("forward_witness_invalid")
+    reconstructed_plan = {
+        "schema_version": "migration-forward-plan/v1",
+        "action": "apply_reviewed_forward_migration",
+        "policy_id": payload["policy_id"],
+        "source_commit": source_commit,
+        "environment": environment,
+        "database": database,
+        "migrator": {
+            "session_user_sha256": database.get("session_user_sha256"),
+            "explicit_role_bound": True,
+        },
+        "operator_authentication": operator,
+        "reason": payload["reason"],
+        "prior_audit": prior,
+        "tracker_manifest": payload["tracker_before"],
+        "repository_manifest": repository_manifest,
+        "pending_manifest": pending_manifest,
+        "from_filename": tracker_before[-1]["filename"],
+        "to_filename": repository_rows[-1]["filename"],
+        "pre_attestation": pre,
+        "post_attestation_contract": {
+            "policy_id": "schema/0023@1",
+            "required_keys": sorted(_POST_MIGRATION_ATTESTATION_KEYS),
+            "expected_all_true": True,
+        },
+        "plan_sha256": plan_sha256,
+    }
+    try:
+        from semiskill.artifacts.migrate import (  # noqa: PLC0415
+            MigrationAdoptionRefused,
+            _validate_forward_plan_document,
+        )
+        _validate_forward_plan_document(reconstructed_plan, plan_sha256)
+    except (MigrationAdoptionRefused, TypeError, ValueError) as exc:
+        raise DashboardSnapshotRejected("forward_witness_invalid") from exc
+    try:
+        timestamp = timestamp_start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise DashboardSnapshotRejected("forward_witness_invalid") from exc
+    return {
+        "artifact_id": str(artifact_id),
+        "timestamp": timestamp,
+        "environment": environment,
+        "source_commit": source_commit,
+        "plan_sha256": plan_sha256,
+        "from_migration": tracker_before[-1]["filename"],
+        "to_migration": repository_rows[-1]["filename"],
+        "applied_count": len(pending_manifest),
+        "attestations_passed": len(post),
+        "attestations_total": len(post),
+        "prior_artifact_id": adoption["artifact_id"],
+    }
+
+
+def _migration_authority_chain_projection(
+    adoption: dict, forward: dict, tracker_sha256: str,
+) -> dict:
+    body = {
+        "schema_version": "migration-authority-chain/v1",
+        "adoption_artifact_id": adoption.get("artifact_id"),
+        "adoption_payload_sha256": adoption.get("payload_sha256"),
+        "forward_artifact_id": forward.get("artifact_id"),
+        "forward_plan_sha256": forward.get("plan_sha256"),
+        "prior_artifact_id": forward.get("prior_artifact_id"),
+        "tracker_sha256": tracker_sha256,
+    }
+    return {**body, "sha256": _canonical_sha256(body)}
+
+
 def migration_witness_signal() -> dict:
     """Return a sanitized live tracker/adoption projection; never raw auth or audit payloads."""
     observed_at = _now()
     unavailable = {
         "status": "unavailable", "reason": "database_unavailable",
         "observed_at": observed_at, "tracker": None, "schema": None, "adoption": None,
+        "forward": None, "authority_chain": None,
     }
     try:
         from semiskill.config import Config  # noqa: PLC0415
@@ -1510,11 +1953,35 @@ def migration_witness_signal() -> dict:
             not isinstance(schema, dict)
             or set(schema) != _POST_MIGRATION_ATTESTATION_KEYS
             or any(schema.get(key) is not True for key in _CURRENT_SCHEMA_ATTESTATION_KEYS)
+            or type(schema.get("projection_and_policy_start_empty")) is not bool
         ):
             raise DashboardSnapshotRejected("schema_witness_mismatch")
+        adoption_audits = [
+            row for row in database_state["audits"]
+            if len(row) == 16 and isinstance(row[7], dict)
+            and row[7].get("schema_version") == "migration-checksum-adoption/v1"
+        ]
+        forward_audits = [
+            row for row in database_state["audits"]
+            if len(row) == 16 and isinstance(row[7], dict)
+            and row[7].get("schema_version") == _FORWARD_EVIDENCE_SCHEMA
+        ]
+        if len(adoption_audits) != 1 or len(forward_audits) != 1:
+            raise DashboardSnapshotRejected("migration_witness_chain_incomplete")
+        checkpoint_rows = _project_tracked_manifest(
+            forward_audits[0][7].get("tracker_before"),
+        )
         adoption = _project_adoption_witness(
-            database_state["audits"], repository_rows=repository_rows,
+            adoption_audits, repository_rows=checkpoint_rows,
             environment=environment, database_name=database_name,
+        )
+        forward = _project_forward_witness(
+            forward_audits,
+            adoption_audit=adoption_audits[0],
+            adoption=adoption,
+            repository_rows=repository_rows,
+            environment=environment,
+            database_name=database_name,
         )
     except DashboardSnapshotRejected as exc:
         unavailable["reason"] = exc.reason
@@ -1527,6 +1994,10 @@ def migration_witness_signal() -> dict:
     except Exception:
         unavailable["reason"] = "migration_witness_invalid"
         return unavailable
+    tracker_sha256 = _migration_tracker_sha256(tracker_rows)
+    authority_chain = _migration_authority_chain_projection(
+        adoption, forward, tracker_sha256,
+    )
     return {
         "status": "verified", "reason": None, "observed_at": observed_at,
         "database": {"environment": environment, "database_name": database_name},
@@ -1534,7 +2005,7 @@ def migration_witness_signal() -> dict:
             "repository_count": len(repository_rows),
             "tracked_count": len(tracker_rows),
             "latest_migration": tracker_rows[-1]["filename"],
-            "sha256": _migration_tracker_sha256(tracker_rows),
+            "sha256": tracker_sha256,
             "exact": True,
         },
         "schema": {
@@ -1544,6 +2015,8 @@ def migration_witness_signal() -> dict:
         },
         "projection_rows": database_state["projection_rows"],
         "adoption": adoption,
+        "forward": forward,
+        "authority_chain": authority_chain,
     }
 
 

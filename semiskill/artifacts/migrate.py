@@ -4,6 +4,7 @@ import os
 import re
 import stat
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -17,6 +18,128 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _PLAN_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _LEGACY_MANIFEST = Path(__file__).with_name("legacy_migration_manifest.json")
+
+_FORWARD_PLAN_SCHEMA = "migration-forward-plan/v1"
+_FORWARD_EVIDENCE_SCHEMA = "migration-forward-execution/v1"
+_FORWARD_AUDIT_NAMESPACE = uuid.UUID("e79d5d73-8b2a-5a8a-8c9d-6b25c86cb77b")
+_MIGRATION_AUTHORITY_SCHEMAS = frozenset({
+    "migration-checksum-adoption/v1",
+    _FORWARD_EVIDENCE_SCHEMA,
+})
+_ADOPTION_SCHEMA_ATTESTATION_KEYS = frozenset({
+    "approval_index_exact",
+    "artifact_enum_security_exact",
+    "artifact_enums_exact",
+    "artifact_triggers_exact",
+    "artifacts_columns_exact",
+    "artifacts_constraints_exact",
+    "artifacts_owned_by_migrator",
+    "authority_column_acls_absent",
+    "authority_index_inventories_exact",
+    "authority_relations_have_no_inheritance",
+    "foundation_role_separation",
+    "foundation_roles_hardened",
+    "function_definitions_exact",
+    "function_security_exact",
+    "governed_functions_pinned",
+    "held_out_seed_exact",
+    "held_out_tables_exact",
+    "migration_tracker_has_no_triggers",
+    "pending_0011_boundary_clean",
+    "public_function_inventory_exact",
+    "public_schema_shadow_surface_absent",
+    "relation_security_exact",
+    "schema_and_default_acl_exact",
+    "tracker_contract_exact",
+})
+_STORED_ADOPTION_0015_ATTESTATION_KEYS = frozenset({
+    "authority_triggers_exact",
+    "capability_memberships_exact",
+    "capability_roles_hardened",
+    "critical_projection_index_exact",
+    "direct_table_boundary_exact",
+    "function_boundary_exact",
+    "projection_and_policy_start_empty",
+    "public_schema_create_revoked",
+    "required_functions_present",
+    "required_relations_present",
+    "security_definer_paths_hardened",
+})
+_CHECKPOINT_0015_ATTESTATION_KEYS = _STORED_ADOPTION_0015_ATTESTATION_KEYS | {
+    "held_out_seed_exact",
+    "judge_gold_set_empty",
+    "registry_rows_exact",
+    "schema_inventory_exact",
+}
+_CHECKPOINT_0015_SCHEMA_SHA256 = (
+    "7220c78682898c6f0edad2859576eb59a217593fec086b6ac3dfd09c752b3d8a"
+)
+_CHECKPOINT_0015_CORPUS_SHA256 = (
+    "a14f815966f9610fa9efe5122cdde8340c1f47701d7ec48cc98baff8aed328bf"
+)
+_CHECKPOINT_0023_SCHEMA_SHA256 = (
+    "45ca37a423b6a77db9a281cc37dce8141935e8524178ffefe7573cd431aeba58"
+)
+_CHECKPOINT_REGISTRY_SHA256 = (
+    "982793b0616bdd86ff6c47f8f5afecde352b2216490c35731593bf4d1b5128b3"
+)
+_BASELINE_INJECTION_ROWS = frozenset({
+    ("exfiltration", "exfiltrat", "restricted"),
+    (
+        "exfiltration",
+        r"send\s+.{0,60}(secret|token|password|credential|api[_-]?key).{0,60}(to|https?://)",
+        "restricted",
+    ),
+    ("injection", r"disregard\s+(the\s+)?(above|previous|system)", "restricted"),
+    (
+        "injection",
+        r"ignore\s+(all\s+)?(previous|prior|above)\s+instructions",
+        "restricted",
+    ),
+    ("injection", r"you\s+are\s+now\s+(a|an|the)\s", "restricted"),
+    ("scope-violation", "echoleak", "restricted"),
+    (
+        "scope-violation",
+        r"(read|access|leak)\s+.{0,60}(other\s+users|another\s+context|cross[- ]context)",
+        "restricted",
+    ),
+    ("tool-abuse", r"execute\s+arbitrary\s+(code|commands)", "restricted"),
+    (
+        "tool-abuse",
+        r"run\s+the\s+following\s+(shell|command|bash|script)",
+        "restricted",
+    ),
+})
+_POST_MIGRATION_ATTESTATION_KEYS = frozenset({
+    "authority_triggers_exact",
+    "capability_memberships_exact",
+    "capability_roles_hardened",
+    "critical_projection_index_exact",
+    "direct_table_boundary_exact",
+    "function_boundary_exact",
+    "held_out_baseline_intact",
+    "projection_and_policy_start_empty",
+    "public_schema_create_revoked",
+    "review_root_index_exact",
+    "registry_rows_exact",
+    "required_functions_present",
+    "required_relations_present",
+    "security_definer_paths_hardened",
+    "schema_inventory_exact",
+})
+_POST_MIGRATION_STABLE_ATTESTATION_KEYS = (
+    _POST_MIGRATION_ATTESTATION_KEYS - {"projection_and_policy_start_empty"}
+)
+_FORWARD_POLICIES = {
+    (
+        "0015_projection_truncate_hardening.sql",
+        "0023_review_unbound_parameter_binding.sql",
+    ): {
+        "policy_id": "migration/0015-to-0023@1",
+        "pre_attestation_policy_id": "schema/0015@1",
+        "post_attestation_policy_id": "schema/0023@1",
+    },
+}
 
 _TRACKER = """
 CREATE TABLE IF NOT EXISTS public.schema_migrations (
@@ -88,6 +211,8 @@ def _resolve_migration_source(repo_root: str | Path) -> tuple[Path, str]:
         bound_paths = [
             "semiskill/artifacts/migrate.py",
             "semiskill/artifacts/legacy_migration_manifest.json",
+            "semiskill/cli.py",
+            "semiskill/governance/identity.py",
             *tracked_migrations,
         ]
         for relative in bound_paths:
@@ -724,6 +849,274 @@ def _schema_attestations(conn, *, trusted: dict) -> dict[str, bool]:
     }
 
 
+def _attest_checkpoint_0015(conn) -> dict[str, bool]:
+    """Verify the frozen schema/0015@1 trust boundary before the reviewed forward step."""
+    capability_roles = [
+        "semiskill_acl_reader", "semiskill_app", "semiskill_approval_actuator",
+        "semiskill_export_label_need_to_know", "semiskill_export_label_public",
+        "semiskill_export_label_regulated", "semiskill_export_label_team",
+        "semiskill_export_reader", "semiskill_pipeline", "semiskill_submitter",
+    ]
+    role_rows = [tuple(row) for row in conn.execute(
+        "SELECT rolname,rolinherit,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,"
+        "rolreplication,rolbypassrls FROM pg_roles WHERE rolname=ANY(%s) ORDER BY rolname",
+        (capability_roles,),
+    )]
+    expected_role_rows = [
+        (name, False, False, False, False, False, False, False)
+        for name in capability_roles
+    ]
+    session_user = conn.execute("SELECT session_user").fetchone()[0]
+    memberships = [tuple(row) for row in conn.execute(
+        "SELECT granted.rolname,member.rolname,m.admin_option FROM pg_auth_members m "
+        "JOIN pg_roles granted ON granted.oid=m.roleid "
+        "JOIN pg_roles member ON member.oid=m.member "
+        "WHERE granted.rolname=ANY(%s) OR member.rolname=ANY(%s) "
+        "ORDER BY granted.rolname,member.rolname",
+        (capability_roles, capability_roles),
+    )]
+    expected_memberships = [
+        (name, session_user, False)
+        for name in ("semiskill_app", "semiskill_pipeline", "semiskill_submitter")
+    ]
+    triggers = [list(row) for row in conn.execute(
+        "SELECT c.relname,t.tgname,t.tgtype,t.tgenabled,pg_get_triggerdef(t.oid,true),"
+        "n.nspname,p.proname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid "
+        "JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace n ON n.oid=p.pronamespace "
+        "WHERE NOT t.tgisinternal AND c.relname IN "
+        "('artifacts','verified_publication_events') ORDER BY c.relname,t.tgname"
+    )]
+    index_row = conn.execute(
+        "SELECT x.indexdef,i.indisunique,i.indisvalid,i.indisready,i.indislive,"
+        "t.oid='public.verified_publication_events'::regclass FROM pg_indexes x "
+        "JOIN pg_class c ON c.relname=x.indexname JOIN pg_namespace n ON n.oid=c.relnamespace "
+        "JOIN pg_index i ON i.indexrelid=c.oid JOIN pg_class t ON t.oid=i.indrelid "
+        "WHERE x.schemaname='public' AND n.nspname='public' "
+        "AND x.indexname='one_verified_correction_per_head'"
+    ).fetchone()
+    required_relations = conn.execute(
+        "SELECT count(*)=3 FROM unnest(ARRAY['publication_trust_policy',"
+        "'publication_skill_registry','verified_publication_events']) name "
+        "WHERE to_regclass('public.'||name) IS NOT NULL"
+    ).fetchone() == (True,)
+    required_functions = all(conn.execute(
+        "SELECT to_regprocedure(%s) IS NOT NULL", (f"public.{signature}",)
+    ).fetchone() == (True,) for signature in (
+        "activate_verified_publication(uuid)",
+        "verified_active_publication_heads_v1()",
+        "publication_registry_entry_v1(text)",
+        "content_review_ready_v1(uuid,uuid)",
+        "approval_v1_projection_valid(uuid)",
+        "export_scoped_publication_bundle_v1(text)",
+    ))
+    direct_table_boundary = conn.execute(
+        "SELECT "
+        "NOT EXISTS (SELECT 1 FROM unnest(ARRAY['semiskill_app','semiskill_pipeline',"
+        "'semiskill_approval_actuator','semiskill_acl_reader','semiskill_export_reader']) r "
+        "CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE',"
+        "'REFERENCES','TRIGGER']) p WHERE has_table_privilege(r,'public.artifacts',p)),"
+        "has_table_privilege('semiskill_submitter','public.artifacts','INSERT'),"
+        "NOT EXISTS (SELECT 1 FROM unnest(ARRAY['SELECT','UPDATE','DELETE','TRUNCATE',"
+        "'REFERENCES','TRIGGER']) p WHERE has_table_privilege("
+        "'semiskill_submitter','public.artifacts',p)),"
+        "NOT EXISTS (SELECT 1 FROM unnest(%s::text[]) r CROSS JOIN "
+        "unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p "
+        "WHERE has_table_privilege(r,'public.verified_publication_events',p))",
+        (capability_roles,),
+    ).fetchone() == (True, True, True, True)
+    function_boundary = conn.execute(
+        "SELECT "
+        "has_function_privilege('semiskill_approval_actuator',"
+        "'public.activate_verified_publication(uuid)','EXECUTE'),"
+        "NOT has_function_privilege('semiskill_app',"
+        "'public.activate_verified_publication(uuid)','EXECUTE'),"
+        "has_function_privilege('semiskill_export_reader',"
+        "'public.export_scoped_publication_bundle_v1(text)','EXECUTE'),"
+        "NOT has_function_privilege('semiskill_app',"
+        "'public.export_scoped_publication_bundle_v1(text)','EXECUTE')"
+    ).fetchone() == (True, True, True, True)
+    return {
+        "required_relations_present": required_relations,
+        "required_functions_present": required_functions,
+        "critical_projection_index_exact": bool(index_row) and hashlib.sha256(
+            index_row[0].encode("utf-8")
+        ).hexdigest() == "a3aa3ebb5bb1d27e10cd055bb918f49820067330b63bbd6c26f229f567d9e4b3"
+        and index_row[1:] == (True, True, True, True, True),
+        "authority_triggers_exact": hashlib.sha256(
+            _canonical_bytes(triggers)
+        ).hexdigest() == "c02a3ec826208f6f45e9e9f66b07234573bcefdacfdba5b38f067174c0ff960c",
+        "capability_roles_hardened": role_rows == expected_role_rows,
+        "capability_memberships_exact": memberships == expected_memberships,
+        "security_definer_paths_hardened": conn.execute(
+            "SELECT count(*)>0 AND bool_and(coalesce("
+            "'search_path=pg_catalog, public, pg_temp'=ANY(proconfig),false)) "
+            "FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace "
+            "WHERE n.nspname='public' AND p.prosecdef"
+        ).fetchone() == (True,),
+        "direct_table_boundary_exact": direct_table_boundary,
+        "function_boundary_exact": function_boundary,
+        "projection_and_policy_start_empty": conn.execute(
+            "SELECT (SELECT count(*) FROM public.verified_publication_events)=0 "
+            "AND (SELECT count(*) FROM public.publication_trust_policy)=0"
+        ).fetchone() == (True,),
+        "public_schema_create_revoked": conn.execute(
+            "SELECT NOT has_schema_privilege('public','public','CREATE')"
+        ).fetchone() == (True,),
+    }
+
+
+def _canonical_rows(rows) -> list[list]:
+    values = [list(row) for row in rows]
+    return sorted(values, key=_canonical_bytes)
+
+
+def _governed_schema_inventory_sha256(conn) -> str:
+    """Hash the complete governed public-schema structure and authority metadata."""
+    inventory = {
+        "relations": _canonical_rows(conn.execute(
+            "SELECT c.relname,c.relkind,c.relpersistence,"
+            "pg_get_userbyid(c.relowner),"
+            "coalesce(array_to_string(c.relacl,','),''),c.relrowsecurity,c.relforcerowsecurity,"
+            "c.relispartition,c.relhasrules,c.relreplident,"
+            "coalesce(array_to_string(c.reloptions,','),'') "
+            "FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "WHERE n.nspname='public' ORDER BY c.relname,c.relkind"
+        )),
+        "columns": _canonical_rows(conn.execute(
+            "SELECT c.relname,row_number() OVER (PARTITION BY c.oid ORDER BY a.attnum),"
+            "a.attname,format_type(a.atttypid,a.atttypmod),"
+            "a.attnotnull,coalesce(pg_get_expr(d.adbin,d.adrelid),''),a.attidentity,"
+            "a.attgenerated,coalesce(array_to_string(a.attacl,','),''),"
+            "CASE WHEN a.attcollation=0 THEN '' ELSE a.attcollation::regcollation::text END,"
+            "a.attstorage,a.attcompression FROM pg_attribute a "
+            "JOIN pg_class c ON c.oid=a.attrelid "
+            "JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum "
+            "WHERE n.nspname='public' AND a.attnum>0 AND NOT a.attisdropped "
+            "AND c.relkind IN ('r','p','v','m','f') ORDER BY c.relname,a.attnum"
+        )),
+        "constraints": _canonical_rows(conn.execute(
+            "SELECT c.relname,k.conname,k.contype,k.condeferrable,k.condeferred,k.convalidated,"
+            "pg_get_constraintdef(k.oid,true) FROM pg_constraint k "
+            "JOIN pg_class c ON c.oid=k.conrelid "
+            "JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "WHERE n.nspname='public' ORDER BY c.relname,k.conname"
+        )),
+        "indexes": _canonical_rows(conn.execute(
+            "SELECT t.relname,i.relname,pg_get_indexdef(x.indexrelid),x.indisunique,"
+            "x.indisprimary,x.indisexclusion,x.indimmediate,x.indisvalid,x.indisready,"
+            "x.indislive,x.indkey::text FROM pg_index x "
+            "JOIN pg_class i ON i.oid=x.indexrelid JOIN pg_class t ON t.oid=x.indrelid "
+            "JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname='public' "
+            "ORDER BY t.relname,i.relname"
+        )),
+        "triggers": _canonical_rows(conn.execute(
+            "SELECT c.relname,t.tgname,t.tgtype,t.tgenabled,pg_get_triggerdef(t.oid,true),"
+            "p.oid::regprocedure::text FROM pg_trigger t "
+            "JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "JOIN pg_proc p ON p.oid=t.tgfoid WHERE n.nspname='public' "
+            "AND NOT t.tgisinternal ORDER BY c.relname,t.tgname"
+        )),
+        "rules": _canonical_rows(conn.execute(
+            "SELECT c.relname,r.rulename,r.ev_type,r.ev_enabled,r.is_instead,"
+            "pg_get_ruledef(r.oid,true) FROM pg_rewrite r "
+            "JOIN pg_class c ON c.oid=r.ev_class "
+            "JOIN pg_namespace n ON n.oid=c.relnamespace "
+            "WHERE n.nspname='public' ORDER BY c.relname,r.rulename"
+        )),
+        "functions": _canonical_rows(conn.execute(
+            "SELECT p.oid::regprocedure::text,pg_get_functiondef(p.oid),"
+            "pg_get_userbyid(p.proowner),l.lanname,p.prokind,p.provolatile,"
+            "p.proisstrict,p.prosecdef,p.proleakproof,p.proparallel,"
+            "coalesce(array_to_string(p.proconfig,','),''),"
+            "coalesce(array_to_string(p.proacl,','),'') FROM pg_proc p "
+            "JOIN pg_namespace n ON n.oid=p.pronamespace "
+            "JOIN pg_language l ON l.oid=p.prolang WHERE n.nspname='public' "
+            "ORDER BY p.oid::regprocedure::text"
+        )),
+        "types": _canonical_rows(conn.execute(
+            "SELECT t.typname,t.typtype,t.typcategory,pg_get_userbyid(t.typowner),"
+            "coalesce(array_to_string(t.typacl,','),''),t.typnotnull,"
+            "coalesce(t.typbasetype::regtype::text,''),coalesce(t.typdefault,'') "
+            "FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace "
+            "WHERE n.nspname='public' ORDER BY t.typname"
+        )),
+        "enums": _canonical_rows(conn.execute(
+            "SELECT t.typname,e.enumsortorder,e.enumlabel FROM pg_enum e "
+            "JOIN pg_type t ON t.oid=e.enumtypid JOIN pg_namespace n ON n.oid=t.typnamespace "
+            "WHERE n.nspname='public' ORDER BY t.typname,e.enumsortorder"
+        )),
+        "schema_acl": _canonical_rows(conn.execute(
+            "SELECT n.nspname,pg_get_userbyid(n.nspowner),"
+            "coalesce(array_to_string(n.nspacl,','),'') FROM pg_namespace n "
+            "WHERE n.nspname='public'"
+        )),
+        "default_acl": _canonical_rows(conn.execute(
+            "SELECT d.defaclobjtype,coalesce(n.nspname,''),"
+            "pg_get_userbyid(d.defaclrole),"
+            "coalesce(array_to_string(d.defaclacl,','),'') FROM pg_default_acl d "
+            "LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace "
+            "ORDER BY pg_get_userbyid(d.defaclrole),d.defaclobjtype,coalesce(n.nspname,'')"
+        )),
+        "policies": _canonical_rows(conn.execute(
+            "SELECT schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check "
+            "FROM pg_policies WHERE schemaname='public' ORDER BY tablename,policyname"
+        )),
+        "operators": _canonical_rows(conn.execute(
+            "SELECT o.oid::regoperator::text,pg_get_userbyid(o.oprowner) "
+            "FROM pg_operator o JOIN pg_namespace n ON n.oid=o.oprnamespace "
+            "WHERE n.nspname='public' ORDER BY o.oid::regoperator::text"
+        )),
+    }
+    return hashlib.sha256(_canonical_bytes(inventory)).hexdigest()
+
+
+def _registry_rows_sha256(conn) -> str:
+    rows = _canonical_rows(conn.execute(
+        "SELECT slug,role,level,permissions_label,active,judge_required,registry_sha256 "
+        "FROM public.publication_skill_registry ORDER BY slug"
+    ))
+    return hashlib.sha256(_canonical_bytes(rows)).hexdigest()
+
+
+def _held_out_seed_sha256(conn) -> tuple[int, str]:
+    rows = _canonical_rows(conn.execute(
+        "SELECT probe_class,pattern,permissions_label FROM public.injection_corpus "
+        "ORDER BY probe_class,pattern,permissions_label"
+    ))
+    return len(rows), hashlib.sha256(_canonical_bytes(rows)).hexdigest()
+
+
+def _held_out_baseline_intact(conn) -> bool:
+    rows = {
+        tuple(row) for row in conn.execute(
+            "SELECT probe_class,pattern,permissions_label FROM public.injection_corpus"
+        )
+    }
+    return _BASELINE_INJECTION_ROWS <= rows
+
+
+def _attest_checkpoint_0015_exact(conn) -> dict[str, bool]:
+    results = _attest_checkpoint_0015(conn)
+    corpus_count, corpus_sha256 = _held_out_seed_sha256(conn)
+    return {
+        **results,
+        "schema_inventory_exact": (
+            _governed_schema_inventory_sha256(conn)
+            == _CHECKPOINT_0015_SCHEMA_SHA256
+        ),
+        "held_out_seed_exact": (
+            corpus_count == 9 and corpus_sha256 == _CHECKPOINT_0015_CORPUS_SHA256
+        ),
+        "judge_gold_set_empty": conn.execute(
+            "SELECT count(*)=0 FROM public.judge_gold_set"
+        ).fetchone() == (True,),
+        "registry_rows_exact": (
+            _registry_rows_sha256(conn) == _CHECKPOINT_REGISTRY_SHA256
+        ),
+    }
+
+
 def _post_migration_attestations(conn) -> dict[str, bool]:
     """Verify the exact trust boundary created by the reviewed pending suffix."""
     capability_roles = [
@@ -859,6 +1252,9 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
             review_root_index[0].encode("utf-8")
         ).hexdigest() == "ab4b6a5560b1f5a2ed942e91420146b404d3f22b45231069ab3f32940ebf691b"
         and review_root_index[1:] == (True, True, True, True, True),
+        "registry_rows_exact": (
+            _registry_rows_sha256(conn) == _CHECKPOINT_REGISTRY_SHA256
+        ),
         "capability_roles_hardened": role_rows == expected_role_rows,
         "capability_memberships_exact": memberships == expected_memberships,
         "security_definer_paths_hardened": conn.execute(
@@ -869,12 +1265,17 @@ def _post_migration_attestations(conn) -> dict[str, bool]:
         ).fetchone() == (True,),
         "direct_table_boundary_exact": direct_table_boundary,
         "function_boundary_exact": function_boundary,
+        "held_out_baseline_intact": _held_out_baseline_intact(conn),
         "projection_and_policy_start_empty": conn.execute(
             "SELECT (SELECT count(*) FROM public.verified_publication_events)=0 "
             "AND (SELECT count(*) FROM public.publication_trust_policy)=0 "
             "AND (SELECT count(*) FROM public.verified_review_contracts)=0 "
             "AND (SELECT count(*) FROM public.verified_review_contract_cells)=0"
         ).fetchone() == (True,),
+        "schema_inventory_exact": (
+            _governed_schema_inventory_sha256(conn)
+            == _CHECKPOINT_0023_SCHEMA_SHA256
+        ),
         "public_schema_create_revoked": conn.execute(
             "SELECT NOT has_schema_privilege('public','public','CREATE')"
         ).fetchone() == (True,),
@@ -1269,6 +1670,970 @@ def adopt_legacy_migration_checksums(
         "removed_orphaned_test_fixtures": list(plan["orphaned_test_fixtures_to_remove"]),
         "removed_orphaned_relations": list(plan["orphaned_relations_to_drop"]),
         "applied_filenames": list(plan["pending_filenames"]),
+    }
+
+
+def _migration_operator_claim(identity, *, environment: str, reason: str) -> dict[str, str]:
+    """Return the non-secret human claim that is bound into a forward plan digest."""
+    from semiskill.governance.identity import AuthenticatedHuman, validate_identity_policy
+
+    if not isinstance(identity, AuthenticatedHuman):
+        raise MigrationAdoptionRefused("authenticated operator identity is required")
+    try:
+        validate_identity_policy(identity, environment=environment)
+    except Exception as exc:
+        raise MigrationAdoptionRefused(
+            "operator identity is not allowed for this environment"
+        ) from exc
+    if (
+        not isinstance(reason, str)
+        or len(reason.strip()) < 20
+        or len(reason) > 1000
+        or any(ord(char) < 32 or ord(char) == 127 for char in reason)
+    ):
+        raise MigrationAdoptionRefused(
+            "a substantive, printable forward-migration reason is required"
+        )
+    if any(
+        not isinstance(value, str)
+        or not value.strip()
+        or len(value) > 512
+        or any(ord(char) < 32 or ord(char) == 127 for char in value)
+        for value in (identity.actor, identity.subject)
+    ):
+        raise MigrationAdoptionRefused("operator identity fields are malformed")
+    return {
+        "actor": identity.actor,
+        "provider": identity.provider,
+        "subject_sha256": "sha256:" + hashlib.sha256(
+            identity.subject.encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def _tracked_migration_manifest(conn) -> list[dict[str, str]]:
+    if conn.execute("SELECT to_regclass('public.schema_migrations')").fetchone()[0] is None:
+        raise MigrationAdoptionRefused("migration tracker does not exist")
+    columns = set(row[0] for row in conn.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema='public' AND table_name='schema_migrations'"
+    ))
+    if columns != {"filename", "applied_at", "sha256"}:
+        raise MigrationAdoptionRefused("migration tracker does not have the adopted schema")
+    rows = [
+        {"filename": filename, "sha256": checksum, "applied_at": applied_at.isoformat()}
+        for filename, checksum, applied_at in conn.execute(
+            "SELECT filename,sha256,applied_at FROM public.schema_migrations ORDER BY filename"
+        )
+    ]
+    if not rows:
+        raise MigrationAdoptionRefused("migration tracker is empty")
+    for row in rows:
+        if (
+            not _MIGRATION_NAME.fullmatch(str(row["filename"]))
+            or not isinstance(row["sha256"], str)
+            or not _SHA256.fullmatch(row["sha256"])
+            or not isinstance(row["applied_at"], str)
+            or not row["applied_at"]
+        ):
+            raise MigrationAdoptionRefused(
+                "migration tracker contains an untrusted checksummed row"
+            )
+    return rows
+
+
+def _final_tracker(manifest: list[dict]) -> list[dict[str, str]]:
+    return [
+        {"filename": str(row["filename"]), "sha256": str(row["sha256"])}
+        for row in manifest
+    ]
+
+
+def _validate_exact_tracker_prefix(
+    tracked: list[dict[str, str]], repository: list[dict],
+) -> tuple[dict[str, str], list[dict]]:
+    tracked_final = _final_tracker(tracked)
+    repository_final = _final_tracker(repository)
+    if len(tracked_final) >= len(repository_final):
+        raise MigrationAdoptionRefused(
+            "forward migration requires one reviewed pending repository suffix"
+        )
+    if tracked_final != repository_final[:len(tracked_final)]:
+        raise MigrationAdoptionRefused(
+            "migration tracker is not an exact checksummed repository prefix"
+        )
+    endpoint = (tracked_final[-1]["filename"], repository_final[-1]["filename"])
+    policy = _FORWARD_POLICIES.get(endpoint)
+    if policy is None:
+        raise MigrationAdoptionRefused(
+            "migration tracker and repository do not match a reviewed forward policy"
+        )
+    pending = repository[len(tracked):]
+    if not pending:
+        raise MigrationAdoptionRefused("reviewed forward migration has no pending files")
+    return dict(policy), pending
+
+
+def _manifest_matches_final(value: object, expected: list[dict[str, str]]) -> bool:
+    if not isinstance(value, list) or len(value) != len(expected):
+        return False
+    projected = []
+    for row in value:
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"filename", "sha256", "bytes"}
+            or type(row.get("bytes")) is not int
+            or row["bytes"] < 0
+        ):
+            return False
+        projected.append({"filename": row.get("filename"), "sha256": row.get("sha256")})
+    return projected == expected
+
+
+def _resolve_prior_migration_audit(
+    conn,
+    *,
+    tracker_final: list[dict[str, str]],
+    database: dict[str, str],
+    environment: str,
+    trusted_legacy: dict,
+    trusted_legacy_sha256: str,
+) -> dict[str, str]:
+    rows = conn.execute(
+        "SELECT artifact_id,source_system::text,actor,actor_kind::text,timestamp_start,"
+        "timestamp_end,input_refs,output_refs,permissions_label,objective_tag,ground_truth_ref,"
+        "eval_score,rollback_ref,cost_usd,corrects_ref,payload "
+        "FROM public.artifacts WHERE artifact_type='gate_decision' "
+        "AND payload->>'schema_version'='migration-checksum-adoption/v1' "
+        "ORDER BY timestamp_start,artifact_id"
+    ).fetchall()
+    candidates = [
+        row for row in rows
+        if isinstance(row[15], dict) and row[15].get("final_tracker") == tracker_final
+    ]
+    if len(candidates) != 1:
+        raise MigrationAdoptionRefused(
+            "current migration checkpoint requires one exact prior authority artifact"
+        )
+    (
+        artifact_id, source_system, actor, actor_kind, timestamp_start, timestamp_end,
+        input_refs, output_refs, permissions_label, objective_tag, ground_truth_ref,
+        eval_score, rollback_ref, cost_usd, corrects_ref, payload,
+    ) = candidates[0]
+    plan_sha256 = payload.get("plan_sha256")
+    post = payload.get("post_migration_attestations")
+    operator = payload.get("operator_authentication")
+    repository_names = [row["filename"] for row in tracker_final]
+    schema_attestations = payload.get("schema_attestations")
+    repository_manifest = payload.get("repository_manifest")
+    tracked_manifest = payload.get("tracked_manifest")
+    adopted_filenames = payload.get("adopted_filenames")
+    applied_filenames = payload.get("applied_filenames")
+    removed_fixtures = payload.get("removed_orphaned_test_fixtures")
+    removed_relations = payload.get("removed_orphaned_relations")
+    trusted_rows = trusted_legacy.get("migrations")
+    trusted_names = [row.get("filename") for row in trusted_rows] if isinstance(
+        trusted_rows, list
+    ) else []
+    tracked_valid = isinstance(tracked_manifest, list) and bool(tracked_manifest)
+    if tracked_valid:
+        tracked_names = []
+        for row in tracked_manifest:
+            if (
+                not isinstance(row, dict)
+                or set(row) != {"filename", "sha256", "applied_at"}
+                or not isinstance(row.get("filename"), str)
+                or _MIGRATION_NAME.fullmatch(row["filename"]) is None
+                or (
+                    row.get("sha256") is not None
+                    and (
+                        not isinstance(row["sha256"], str)
+                        or _SHA256.fullmatch(row["sha256"]) is None
+                    )
+                )
+                or not isinstance(row.get("applied_at"), str)
+                or not row["applied_at"].strip()
+            ):
+                tracked_valid = False
+                break
+            tracked_names.append(row["filename"])
+        tracked_valid = (
+            tracked_valid
+            and tracked_names == sorted(tracked_names)
+            and len(tracked_names) == len(set(tracked_names))
+            and isinstance(removed_fixtures, list)
+            and tracked_names == sorted(trusted_names + removed_fixtures)
+            and adopted_filenames == [
+                row["filename"] for row in tracked_manifest
+                if row["filename"] in trusted_names and row["sha256"] is None
+            ]
+        )
+    adoption_plan_valid = False
+    if (
+        tracked_valid
+        and isinstance(repository_manifest, list)
+        and isinstance(adopted_filenames, list)
+        and isinstance(applied_filenames, list)
+        and isinstance(schema_attestations, dict)
+        and isinstance(removed_relations, list)
+    ):
+        reconstructed_plan = {
+            "schema_version": "migration-checksum-adoption-plan/v1",
+            "database": payload.get("database"),
+            "environment": payload.get("environment"),
+            "source_commit": payload.get("source_commit"),
+            "tracked_prefix": trusted_names,
+            "tracked_manifest": tracked_manifest,
+            "repository_manifest": repository_manifest,
+            "trusted_manifest_sha256": payload.get("trusted_manifest_sha256"),
+            "orphaned_test_fixtures_to_remove": removed_fixtures,
+            "orphaned_relations_to_drop": removed_relations,
+            "legacy_null_filenames": adopted_filenames,
+            "legacy_null_count": len(adopted_filenames),
+            "pending_filenames": applied_filenames,
+            "schema_attestations": schema_attestations,
+            "historical_limit": payload.get("historical_limit"),
+        }
+        adoption_plan_valid = plan_sha256 == "sha256:" + hashlib.sha256(
+            _canonical_bytes(reconstructed_plan)
+        ).hexdigest()
+    valid = (
+        source_system == "cli"
+        and isinstance(actor, str) and bool(actor.strip())
+        and actor_kind == "human"
+        and timestamp_end is not None and timestamp_end >= timestamp_start
+        and list(input_refs or []) == []
+        and list(output_refs or []) == []
+        and permissions_label == "need-to-know"
+        and objective_tag == "compliance"
+        and isinstance(plan_sha256, str) and _PLAN_SHA256.fullmatch(plan_sha256) is not None
+        and ground_truth_ref == plan_sha256
+        and eval_score is None
+        and cost_usd is None
+        and corrects_ref is None
+        and isinstance(rollback_ref, dict)
+        and set(rollback_ref) == {"supported", "reason"}
+        and rollback_ref.get("supported") is False
+        and isinstance(rollback_ref.get("reason"), str)
+        and bool(rollback_ref["reason"].strip())
+        and payload.get("database") == database
+        and payload.get("environment") == environment
+        and isinstance(payload.get("source_commit"), str)
+        and _COMMIT.fullmatch(payload["source_commit"]) is not None
+        and isinstance(payload.get("reason"), str)
+        and bool(payload["reason"].strip())
+        and isinstance(post, dict)
+        and set(post) == _STORED_ADOPTION_0015_ATTESTATION_KEYS
+        and all(value is True for value in post.values())
+        and isinstance(schema_attestations, dict)
+        and set(schema_attestations) == _ADOPTION_SCHEMA_ATTESTATION_KEYS
+        and all(value is True for value in schema_attestations.values())
+        and isinstance(operator, dict)
+        and set(operator) == {"provider", "subject_sha256"}
+        and operator.get("provider") in {"local_os", "entra_oidc"}
+        and isinstance(operator.get("subject_sha256"), str)
+        and _PLAN_SHA256.fullmatch(operator["subject_sha256"]) is not None
+        and _manifest_matches_final(repository_manifest, tracker_final)
+        and set(payload) == {
+            "adopted_filenames", "adoption_id", "applied_filenames", "database",
+            "decision", "environment", "final_tracker", "historical_limit",
+            "operator_authentication", "plan_sha256", "post_migration_attestations",
+            "reason", "removed_orphaned_relations", "removed_orphaned_test_fixtures",
+            "repository_manifest", "schema_attestations", "schema_version",
+            "source_commit", "tracked_manifest", "trusted_manifest_sha256",
+        }
+        and payload.get("schema_version") == "migration-checksum-adoption/v1"
+        and payload.get("decision") == "adopt_and_apply"
+        and payload.get("adoption_id") == str(artifact_id)
+        and payload.get("historical_limit") == trusted_legacy.get("historical_limit")
+        and payload.get("trusted_manifest_sha256") == trusted_legacy_sha256
+        and tracked_valid
+        and isinstance(adopted_filenames, list)
+        and isinstance(applied_filenames, list)
+        and adopted_filenames + applied_filenames == repository_names
+        and (
+            (
+                payload.get("removed_orphaned_relations") == []
+                and payload.get("removed_orphaned_test_fixtures") == []
+            )
+            or (
+                payload.get("removed_orphaned_relations") == ["public.mig_probe"]
+                and payload.get("removed_orphaned_test_fixtures") == ["9001_probe.sql"]
+            )
+        )
+        and adoption_plan_valid
+    )
+    if not valid:
+        raise MigrationAdoptionRefused("prior migration authority artifact is malformed or detached")
+    return {
+        "artifact_id": str(artifact_id),
+        "schema_version": "migration-checksum-adoption/v1",
+        "plan_sha256": plan_sha256,
+        "payload_sha256": "sha256:" + hashlib.sha256(_canonical_bytes(payload)).hexdigest(),
+    }
+
+
+def _build_forward_plan_with_connection(
+    conn,
+    directory: Path,
+    *,
+    expected_database: str,
+    environment: str,
+    source_commit: str,
+    operator_claim: dict[str, str],
+    reason: str,
+) -> dict:
+    if not isinstance(expected_database, str) or not expected_database.strip():
+        raise MigrationAdoptionRefused("expected database identity is required")
+    if not isinstance(source_commit, str) or _COMMIT.fullmatch(source_commit) is None:
+        raise MigrationAdoptionRefused("a clean exact source commit is required")
+    database = _database_identity(conn)
+    _validate_database_environment(database, environment)
+    if database["database_name"] != expected_database:
+        raise MigrationAdoptionRefused("actual database identity does not match expectation")
+    tracked = _tracked_migration_manifest(conn)
+    repository = _repository_manifest(directory)
+    _assert_repository_matches_commit(directory, source_commit, repository)
+    trusted_legacy, trusted_legacy_sha256 = _trusted_legacy_manifest(repository)
+    _assert_trusted_manifest_matches_commit(
+        directory, source_commit, trusted_legacy_sha256,
+    )
+    policy, pending = _validate_exact_tracker_prefix(tracked, repository)
+    tracker_final = _final_tracker(tracked)
+    prior = _resolve_prior_migration_audit(
+        conn,
+        tracker_final=tracker_final,
+        database=database,
+        environment=environment,
+        trusted_legacy=trusted_legacy,
+        trusted_legacy_sha256=trusted_legacy_sha256,
+    )
+    pre_results = _attest_checkpoint_0015_exact(conn)
+    if set(pre_results) != _CHECKPOINT_0015_ATTESTATION_KEYS or not all(
+        value is True for value in pre_results.values()
+    ):
+        failed = sorted(name for name, passed in pre_results.items() if passed is not True)
+        raise MigrationAdoptionRefused(
+            "schema/0015@1 pre-migration attestation failed: " + ", ".join(failed)
+        )
+    document = {
+        "schema_version": _FORWARD_PLAN_SCHEMA,
+        "action": "apply_reviewed_forward_migration",
+        "policy_id": policy["policy_id"],
+        "source_commit": source_commit,
+        "environment": environment,
+        "database": database,
+        "migrator": {
+            "session_user_sha256": database["session_user_sha256"],
+            "explicit_role_bound": True,
+        },
+        "operator_authentication": operator_claim,
+        "reason": reason.strip(),
+        "prior_audit": prior,
+        "tracker_manifest": tracked,
+        "repository_manifest": repository,
+        "pending_manifest": pending,
+        "from_filename": tracked[-1]["filename"],
+        "to_filename": repository[-1]["filename"],
+        "pre_attestation": {
+            "policy_id": policy["pre_attestation_policy_id"],
+            "results": pre_results,
+        },
+        "post_attestation_contract": {
+            "policy_id": policy["post_attestation_policy_id"],
+            "required_keys": sorted(_POST_MIGRATION_ATTESTATION_KEYS),
+            "expected_all_true": True,
+        },
+    }
+    document["plan_sha256"] = "sha256:" + hashlib.sha256(
+        _canonical_bytes(document)
+    ).hexdigest()
+    return document
+
+
+def plan_forward_migrations(
+    dsn: str,
+    repo_root: str | Path,
+    *,
+    expected_database: str,
+    environment: str,
+    identity,
+    reason: str,
+) -> dict:
+    """Build a reason- and operator-bound read-only plan for one reviewed checkpoint."""
+    operator_claim = _migration_operator_claim(
+        identity, environment=environment, reason=reason,
+    )
+    directory, source_commit = _resolve_migration_source(repo_root)
+    with psycopg.connect(dsn) as conn:
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        conn.execute("SET LOCAL statement_timeout='15s'")
+        conn.execute("SET LOCAL lock_timeout='3s'")
+        conn.execute("SET LOCAL search_path = pg_catalog, public")
+        return _build_forward_plan_with_connection(
+            conn,
+            Path(directory),
+            expected_database=expected_database,
+            environment=environment,
+            source_commit=source_commit,
+            operator_claim=operator_claim,
+            reason=reason,
+        )
+
+
+def _validate_forward_plan_document(plan: object, expected_plan_sha256: str) -> dict:
+    expected_keys = {
+        "schema_version", "action", "policy_id", "source_commit", "environment",
+        "database", "migrator", "operator_authentication", "reason", "prior_audit",
+        "tracker_manifest", "repository_manifest", "pending_manifest", "from_filename",
+        "to_filename", "pre_attestation", "post_attestation_contract", "plan_sha256",
+    }
+    if not isinstance(plan, dict) or set(plan) != expected_keys:
+        raise MigrationAdoptionRefused("forward migration plan has an unknown schema")
+    database = plan.get("database")
+    migrator = plan.get("migrator")
+    operator = plan.get("operator_authentication")
+    prior = plan.get("prior_audit")
+    tracker = plan.get("tracker_manifest")
+    repository = plan.get("repository_manifest")
+    pending = plan.get("pending_manifest")
+    pre = plan.get("pre_attestation")
+    post = plan.get("post_attestation_contract")
+    from_filename = plan.get("from_filename")
+    to_filename = plan.get("to_filename")
+    endpoint = (from_filename, to_filename)
+    policy = _FORWARD_POLICIES.get(endpoint) if all(
+        isinstance(value, str) for value in endpoint
+    ) else None
+
+    def _printable(value: object, *, minimum: int = 1, maximum: int = 1000) -> bool:
+        return (
+            isinstance(value, str)
+            and minimum <= len(value) <= maximum
+            and value == value.strip()
+            and all(ord(char) >= 32 and ord(char) != 127 for char in value)
+        )
+
+    def _canonical_uuid(value: object) -> bool:
+        if not isinstance(value, str):
+            return False
+        try:
+            return str(uuid.UUID(value)) == value
+        except ValueError:
+            return False
+
+    def _repository_manifest_valid(value: object) -> bool:
+        if not isinstance(value, list) or not value:
+            return False
+        names = []
+        for row in value:
+            if (
+                not isinstance(row, dict)
+                or set(row) != {"filename", "sha256", "bytes"}
+                or not isinstance(row.get("filename"), str)
+                or _MIGRATION_NAME.fullmatch(row["filename"]) is None
+                or not isinstance(row.get("sha256"), str)
+                or _SHA256.fullmatch(row["sha256"]) is None
+                or type(row.get("bytes")) is not int
+                or not 0 < row["bytes"] <= 2_000_000
+            ):
+                return False
+            names.append(row["filename"])
+        return names == sorted(names) and len(names) == len(set(names))
+
+    def _tracker_manifest_valid(value: object) -> bool:
+        if not isinstance(value, list) or not value:
+            return False
+        names = []
+        for row in value:
+            if (
+                not isinstance(row, dict)
+                or set(row) != {"filename", "sha256", "applied_at"}
+                or not isinstance(row.get("filename"), str)
+                or _MIGRATION_NAME.fullmatch(row["filename"]) is None
+                or not isinstance(row.get("sha256"), str)
+                or _SHA256.fullmatch(row["sha256"]) is None
+                or not _printable(row.get("applied_at"), maximum=128)
+            ):
+                return False
+            names.append(row["filename"])
+        return names == sorted(names) and len(names) == len(set(names))
+
+    nested_valid = (
+        policy is not None
+        and plan.get("policy_id") == policy["policy_id"]
+        and isinstance(plan.get("source_commit"), str)
+        and _COMMIT.fullmatch(plan["source_commit"]) is not None
+        and plan.get("environment") in {"development", "test", "production"}
+        and isinstance(database, dict)
+        and set(database) == {
+            "engine", "database_name", "server_version_num", "session_user_sha256",
+            "identity_sha256",
+        }
+        and database.get("engine") == "postgresql"
+        and _printable(database.get("database_name"), maximum=128)
+        and isinstance(database.get("server_version_num"), str)
+        and database["server_version_num"].isdigit()
+        and isinstance(database.get("session_user_sha256"), str)
+        and _PLAN_SHA256.fullmatch(database["session_user_sha256"]) is not None
+        and isinstance(database.get("identity_sha256"), str)
+        and _PLAN_SHA256.fullmatch(database["identity_sha256"]) is not None
+        and isinstance(migrator, dict)
+        and set(migrator) == {"session_user_sha256", "explicit_role_bound"}
+        and migrator.get("session_user_sha256") == database.get("session_user_sha256")
+        and migrator.get("explicit_role_bound") is True
+        and isinstance(operator, dict)
+        and set(operator) == {"actor", "provider", "subject_sha256"}
+        and _printable(operator.get("actor"), maximum=512)
+        and operator.get("provider") in {"local_os", "entra_oidc"}
+        and isinstance(operator.get("subject_sha256"), str)
+        and _PLAN_SHA256.fullmatch(operator["subject_sha256"]) is not None
+        and _printable(plan.get("reason"), minimum=20, maximum=1000)
+        and isinstance(prior, dict)
+        and set(prior) == {"artifact_id", "schema_version", "plan_sha256", "payload_sha256"}
+        and _canonical_uuid(prior.get("artifact_id"))
+        and prior.get("schema_version") == "migration-checksum-adoption/v1"
+        and isinstance(prior.get("plan_sha256"), str)
+        and _PLAN_SHA256.fullmatch(prior["plan_sha256"]) is not None
+        and isinstance(prior.get("payload_sha256"), str)
+        and _PLAN_SHA256.fullmatch(prior["payload_sha256"]) is not None
+        and _repository_manifest_valid(repository)
+        and _repository_manifest_valid(pending)
+        and _tracker_manifest_valid(tracker)
+        and len(tracker) < len(repository)
+        and _final_tracker(tracker) == _final_tracker(repository)[:len(tracker)]
+        and pending == repository[len(tracker):]
+        and tracker[-1]["filename"] == endpoint[0]
+        and repository[-1]["filename"] == endpoint[1]
+        and isinstance(pre, dict)
+        and set(pre) == {"policy_id", "results"}
+        and pre.get("policy_id") == policy["pre_attestation_policy_id"]
+        and isinstance(pre.get("results"), dict)
+        and set(pre["results"]) == _CHECKPOINT_0015_ATTESTATION_KEYS
+        and all(value is True for value in pre["results"].values())
+        and isinstance(post, dict)
+        and set(post) == {"policy_id", "required_keys", "expected_all_true"}
+        and post.get("policy_id") == policy["post_attestation_policy_id"]
+        and post.get("required_keys") == sorted(_POST_MIGRATION_ATTESTATION_KEYS)
+        and post.get("expected_all_true") is True
+    )
+    if (
+        plan.get("schema_version") != _FORWARD_PLAN_SCHEMA
+        or plan.get("action") != "apply_reviewed_forward_migration"
+        or not nested_valid
+        or not isinstance(expected_plan_sha256, str)
+        or _PLAN_SHA256.fullmatch(expected_plan_sha256) is None
+        or plan.get("plan_sha256") != expected_plan_sha256
+    ):
+        raise MigrationAdoptionRefused("reviewed forward migration plan identity is invalid")
+    unsigned = {key: value for key, value in plan.items() if key != "plan_sha256"}
+    digest = "sha256:" + hashlib.sha256(_canonical_bytes(unsigned)).hexdigest()
+    if digest != expected_plan_sha256:
+        raise MigrationAdoptionRefused("forward migration plan digest does not match its bytes")
+    try:
+        return json.loads(json.dumps(
+            plan, ensure_ascii=False, sort_keys=True, allow_nan=False,
+        ))
+    except (TypeError, ValueError) as exc:
+        raise MigrationAdoptionRefused("forward migration plan is not canonical JSON") from exc
+
+
+def load_forward_migration_plan(path: str | Path) -> dict:
+    """Read one bounded regular plan file; semantic validation occurs at execution."""
+    def _object_without_duplicates(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate object key")
+            value[key] = item
+        return value
+
+    def _reject_non_finite(value):
+        raise ValueError(f"non-finite number {value}")
+
+    try:
+        raw = _safe_read_bytes(Path(path), max_bytes=2_000_000).decode("utf-8")
+        document = json.loads(
+            raw,
+            object_pairs_hook=_object_without_duplicates,
+            parse_constant=_reject_non_finite,
+        )
+    except (OSError, UnicodeDecodeError, ValueError, TypeError) as exc:
+        raise MigrationAdoptionRefused("forward migration plan file is unavailable") from exc
+    if not isinstance(document, dict):
+        raise MigrationAdoptionRefused("forward migration plan file must contain an object")
+    plan_sha256 = document.get("plan_sha256")
+    if not isinstance(plan_sha256, str):
+        raise MigrationAdoptionRefused("forward migration plan file has no digest")
+    return _validate_forward_plan_document(document, plan_sha256)
+
+
+def write_forward_migration_plan(path: str | Path, plan: dict) -> Path:
+    """Publish reviewed plan bytes atomically without replacing a different existing file."""
+    if not isinstance(plan, dict) or not isinstance(plan.get("plan_sha256"), str):
+        raise MigrationAdoptionRefused("forward migration plan is malformed")
+    _validate_forward_plan_document(plan, plan["plan_sha256"])
+    raw = json.dumps(
+        plan, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False,
+    ).encode("utf-8") + b"\n"
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        if _safe_read_bytes(target, max_bytes=2_000_000) == raw:
+            return target
+        raise MigrationAdoptionRefused("forward migration plan output already exists with other bytes")
+    handle = tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=target.parent,
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    temporary = Path(handle.name)
+    try:
+        with handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            if _safe_read_bytes(target, max_bytes=2_000_000) != raw:
+                raise MigrationAdoptionRefused(
+                    "forward migration plan output raced with different bytes"
+                )
+        return target
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _forward_audit_id(database_identity_sha256: str, plan_sha256: str) -> uuid.UUID:
+    return uuid.uuid5(_FORWARD_AUDIT_NAMESPACE, f"{database_identity_sha256}|{plan_sha256}")
+
+
+def _post_attestations_are_stable(results: object) -> bool:
+    return (
+        isinstance(results, dict)
+        and set(results) == _POST_MIGRATION_ATTESTATION_KEYS
+        and all(
+            results.get(name) is True
+            for name in _POST_MIGRATION_STABLE_ATTESTATION_KEYS
+        )
+        and type(results.get("projection_and_policy_start_empty")) is bool
+    )
+
+
+def _assert_forward_audit_slot_empty(conn, plan: dict) -> None:
+    """Reserve one deterministic lineage slot before any reviewed DDL is applied."""
+    migration_id = _forward_audit_id(
+        plan["database"]["identity_sha256"], plan["plan_sha256"],
+    )
+    collisions = conn.execute(
+        "SELECT artifact_id,artifact_type::text,payload->>'schema_version',"
+        "payload->>'plan_sha256' FROM public.artifacts WHERE artifact_id=%s OR "
+        "(artifact_type='gate_decision' AND payload->>'schema_version'=%s "
+        "AND payload->>'plan_sha256'=%s) ORDER BY artifact_id",
+        (migration_id, _FORWARD_EVIDENCE_SCHEMA, plan["plan_sha256"]),
+    ).fetchall()
+    if collisions:
+        raise MigrationAdoptionRefused(
+            "forward migration audit slot is already occupied or ambiguous"
+        )
+
+
+def _forward_evidence_payload(
+    plan: dict,
+    *,
+    migration_id: uuid.UUID,
+    post_attestations: dict[str, bool],
+    final_tracker: list[dict[str, str]],
+) -> dict:
+    return {
+        "schema_version": _FORWARD_EVIDENCE_SCHEMA,
+        "migration_id": str(migration_id),
+        "decision": "apply_reviewed_forward_migration",
+        "policy_id": plan["policy_id"],
+        "environment": plan["environment"],
+        "reason": plan["reason"],
+        "source_commit": plan["source_commit"],
+        "plan_sha256": plan["plan_sha256"],
+        "database": plan["database"],
+        "operator_authentication": plan["operator_authentication"],
+        "prior_audit": plan["prior_audit"],
+        "tracker_before": plan["tracker_manifest"],
+        "repository_manifest": plan["repository_manifest"],
+        "pending_manifest": plan["pending_manifest"],
+        "pre_migration_attestation": plan["pre_attestation"],
+        "post_migration_attestations": post_attestations,
+        "applied_filenames": [row["filename"] for row in plan["pending_manifest"]],
+        "final_tracker": final_tracker,
+    }
+
+
+def _resolve_forward_retry(
+    conn,
+    *,
+    plan: dict,
+    final_tracker: list[dict[str, str]],
+) -> dict | None:
+    migration_id = _forward_audit_id(
+        plan["database"]["identity_sha256"], plan["plan_sha256"],
+    )
+    matching_ids = [row[0] for row in conn.execute(
+        "SELECT artifact_id FROM public.artifacts WHERE artifact_type='gate_decision' "
+        "AND payload->>'schema_version'=%s AND payload->>'plan_sha256'=%s "
+        "ORDER BY artifact_id",
+        (_FORWARD_EVIDENCE_SCHEMA, plan["plan_sha256"]),
+    )]
+    if not matching_ids:
+        return None
+    if matching_ids != [migration_id]:
+        raise MigrationAdoptionRefused("forward migration audit lineage is ambiguous")
+    row = conn.execute(
+        "SELECT source_system::text,actor,actor_kind::text,timestamp_start,timestamp_end,"
+        "input_refs,output_refs,permissions_label,objective_tag,ground_truth_ref,eval_score,"
+        "rollback_ref,cost_usd,corrects_ref,payload FROM public.artifacts WHERE artifact_id=%s",
+        (migration_id,),
+    ).fetchone()
+    stored_post = row[14].get("post_migration_attestations") if row else None
+    expected_payload = _forward_evidence_payload(
+        plan,
+        migration_id=migration_id,
+        post_attestations=stored_post,
+        final_tracker=final_tracker,
+    )
+    expected_prior = uuid.UUID(plan["prior_audit"]["artifact_id"])
+    if (
+        row is None
+        or row[0] != "cli"
+        or row[1] != plan["operator_authentication"]["actor"]
+        or row[2] != "human"
+        or row[4] is None
+        or row[4] < row[3]
+        or list(row[5] or []) != [expected_prior]
+        or list(row[6] or []) != []
+        or row[7] != "need-to-know"
+        or row[8] != "compliance"
+        or row[9] != plan["plan_sha256"]
+        or row[10] is not None
+        or row[11] != {
+            "supported": False,
+            "reason": "forward schema migrations are irreversible attestations",
+        }
+        or row[12] is not None
+        or row[13] is not None
+        or not isinstance(stored_post, dict)
+        or set(stored_post) != _POST_MIGRATION_ATTESTATION_KEYS
+        or not all(value is True for value in stored_post.values())
+        or row[14] != expected_payload
+    ):
+        raise MigrationAdoptionRefused("existing forward migration audit conflicts with the plan")
+    return {
+        "migration_id": str(migration_id),
+        "migrated_at": row[3].isoformat(),
+        "plan_sha256": plan["plan_sha256"],
+        "database_identity_sha256": plan["database"]["identity_sha256"],
+        "applied_filenames": [row["filename"] for row in plan["pending_manifest"]],
+        "semantic_retry": True,
+    }
+
+
+def execute_forward_migrations(
+    dsn: str,
+    repo_root: str | Path,
+    *,
+    plan: dict,
+    expected_plan_sha256: str,
+    expected_database: str,
+    environment: str,
+    identity,
+    reason: str,
+) -> dict:
+    """Apply one reviewed forward policy and its chained audit in a single transaction."""
+    reviewed_plan = _validate_forward_plan_document(plan, expected_plan_sha256)
+    operator_claim = _migration_operator_claim(
+        identity, environment=environment, reason=reason,
+    )
+    if (
+        reviewed_plan["operator_authentication"] != operator_claim
+        or reviewed_plan["reason"] != reason.strip()
+        or reviewed_plan["environment"] != environment
+        or reviewed_plan["database"].get("database_name") != expected_database
+    ):
+        raise MigrationAdoptionRefused(
+            "operator, reason, environment, or database differs from the reviewed plan"
+        )
+    directory, source_commit = _resolve_migration_source(repo_root)
+    if source_commit != reviewed_plan["source_commit"]:
+        raise MigrationAdoptionRefused("source commit differs from the reviewed plan")
+
+    with psycopg.connect(dsn) as conn:
+        conn.execute("SET LOCAL statement_timeout='120s'")
+        conn.execute("SET LOCAL lock_timeout='10s'")
+        conn.execute("SET LOCAL search_path = pg_catalog, public")
+        conn.execute("SELECT pg_advisory_xact_lock(%s)", (_MIGRATION_LOCK,))
+        conn.execute("LOCK TABLE public.schema_migrations IN ACCESS EXCLUSIVE MODE")
+        conn.execute("LOCK TABLE public.artifacts IN SHARE MODE")
+        conn.execute(
+            "LOCK TABLE public.publication_skill_registry,public.injection_corpus "
+            "IN SHARE MODE"
+        )
+
+        database = _database_identity(conn)
+        _validate_database_environment(database, environment)
+        if database != reviewed_plan["database"] or database["database_name"] != expected_database:
+            raise MigrationAdoptionRefused("database identity differs from the reviewed plan")
+        repository = _repository_manifest(Path(directory))
+        _assert_repository_matches_commit(Path(directory), source_commit, repository)
+        trusted_legacy, trusted_legacy_sha256 = _trusted_legacy_manifest(repository)
+        _assert_trusted_manifest_matches_commit(
+            Path(directory), source_commit, trusted_legacy_sha256,
+        )
+        tracked = _tracked_migration_manifest(conn)
+        repository_final = _final_tracker(repository)
+        tracked_final = _final_tracker(tracked)
+
+        if tracked_final == repository_final:
+            retry_prior = _resolve_prior_migration_audit(
+                conn,
+                tracker_final=_final_tracker(reviewed_plan["tracker_manifest"]),
+                database=database,
+                environment=environment,
+                trusted_legacy=trusted_legacy,
+                trusted_legacy_sha256=trusted_legacy_sha256,
+            )
+            if retry_prior != reviewed_plan["prior_audit"]:
+                raise MigrationAdoptionRefused(
+                    "completed forward migration is detached from its prior authority artifact"
+                )
+            post_attestations = _post_migration_attestations(conn)
+            if not _post_attestations_are_stable(post_attestations):
+                raise MigrationAdoptionRefused(
+                    "completed forward migration no longer passes its post-attestation"
+                )
+            retry = _resolve_forward_retry(
+                conn,
+                plan=reviewed_plan,
+                final_tracker=tracked_final,
+            )
+            if retry is None:
+                raise MigrationAdoptionRefused(
+                    "final tracker exists without the exact reviewed forward audit"
+                )
+            conn.commit()
+            return retry
+
+        locked_plan = _build_forward_plan_with_connection(
+            conn,
+            Path(directory),
+            expected_database=expected_database,
+            environment=environment,
+            source_commit=source_commit,
+            operator_claim=operator_claim,
+            reason=reason,
+        )
+        if locked_plan != reviewed_plan:
+            raise MigrationAdoptionRefused("forward migration plan changed after human review")
+        _assert_forward_audit_slot_empty(conn, reviewed_plan)
+
+        transaction_id = conn.execute("SELECT txid_current()").fetchone()[0]
+        for expected in reviewed_plan["pending_manifest"]:
+            filename = expected["filename"]
+            raw = _safe_read_bytes(Path(directory) / filename, max_bytes=2_000_000)
+            if (
+                len(raw) != expected["bytes"]
+                or hashlib.sha256(raw).hexdigest() != expected["sha256"]
+            ):
+                raise MigrationAdoptionRefused(
+                    f"pending migration bytes changed after review: {filename}"
+                )
+            try:
+                statement = raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise MigrationAdoptionRefused(
+                    f"pending migration is not UTF-8: {filename}"
+                ) from exc
+            conn.execute("SET LOCAL search_path = public, pg_temp")
+            conn.execute(statement)
+            conn.execute("SET LOCAL search_path = pg_catalog, public")
+            if conn.execute("SELECT txid_current()").fetchone()[0] != transaction_id:
+                raise MigrationAdoptionRefused(
+                    f"pending migration escaped the reviewed transaction: {filename}"
+                )
+            conn.execute(
+                "INSERT INTO public.schema_migrations(filename,sha256) VALUES(%s,%s)",
+                (filename, expected["sha256"]),
+            )
+
+        final_tracker = _final_tracker(_tracked_migration_manifest(conn))
+        if final_tracker != repository_final:
+            raise MigrationAdoptionRefused(
+                "final migration tracker does not equal the reviewed repository manifest"
+            )
+        post_attestations = _post_migration_attestations(conn)
+        if set(post_attestations) != _POST_MIGRATION_ATTESTATION_KEYS or not all(
+            value is True for value in post_attestations.values()
+        ):
+            failed = sorted(
+                name for name, passed in post_attestations.items() if passed is not True
+            )
+            raise MigrationAdoptionRefused(
+                "schema/0023@1 post-migration attestation failed: " + ", ".join(failed)
+            )
+        rebound_directory, rebound_commit = _resolve_migration_source(repo_root)
+        rebound_repository = _repository_manifest(Path(rebound_directory))
+        _assert_repository_matches_commit(
+            Path(rebound_directory), rebound_commit, rebound_repository,
+        )
+        if (
+            rebound_commit != source_commit
+            or rebound_repository != reviewed_plan["repository_manifest"]
+        ):
+            raise MigrationAdoptionRefused(
+                "migration source changed before the audit artifact was committed"
+            )
+
+        migration_id = _forward_audit_id(
+            database["identity_sha256"], reviewed_plan["plan_sha256"],
+        )
+        evidence = _forward_evidence_payload(
+            reviewed_plan,
+            migration_id=migration_id,
+            post_attestations=post_attestations,
+            final_tracker=final_tracker,
+        )
+        migrated_at = conn.execute(
+            "INSERT INTO public.artifacts ("
+            "artifact_id,artifact_type,source_system,actor,actor_kind,timestamp_start,"
+            "timestamp_end,input_refs,output_refs,permissions_label,objective_tag,"
+            "ground_truth_ref,eval_score,rollback_ref,cost_usd,corrects_ref,payload"
+            ") VALUES ("
+            "%s,'gate_decision','cli',%s,'human',clock_timestamp(),clock_timestamp(),"
+            "%s::uuid[],'{}'::uuid[],'need-to-know','compliance',%s,NULL,%s,NULL,NULL,%s"
+            ") RETURNING timestamp_start",
+            (
+                migration_id,
+                operator_claim["actor"],
+                [uuid.UUID(reviewed_plan["prior_audit"]["artifact_id"])],
+                reviewed_plan["plan_sha256"],
+                Jsonb({
+                    "supported": False,
+                    "reason": "forward schema migrations are irreversible attestations",
+                }),
+                Jsonb(evidence),
+            ),
+        ).fetchone()[0]
+        conn.commit()
+    return {
+        "migration_id": str(migration_id),
+        "migrated_at": migrated_at.isoformat(),
+        "plan_sha256": reviewed_plan["plan_sha256"],
+        "database_identity_sha256": database["identity_sha256"],
+        "applied_filenames": [row["filename"] for row in reviewed_plan["pending_manifest"]],
+        "semantic_retry": False,
     }
 
 

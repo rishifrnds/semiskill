@@ -20,6 +20,10 @@ from semiskill.artifacts.schema import (
     ArtifactType,
     SourceSystem,
 )
+from semiskill.artifacts.migrate import (
+    _ADOPTION_SCHEMA_ATTESTATION_KEYS,
+    _trusted_legacy_manifest,
+)
 from semiskill.authoring.snapshot import finalize_scoreboard, write_json_atomic
 from semiskill.spine import pipeline
 from semiskill.verification import evidence as suite_evidence
@@ -54,25 +58,85 @@ def _accept_live(snapshot, **_kwargs):
 
 
 def _verified_migration():
+    adoption = {
+        "artifact_id": "11111111-1111-4111-8111-111111111111",
+        "payload_sha256": "sha256:" + "6" * 64,
+    }
+    forward = {
+        "artifact_id": "22222222-2222-4222-8222-222222222222",
+        "plan_sha256": "sha256:" + "7" * 64,
+        "prior_artifact_id": adoption["artifact_id"],
+    }
+    tracker_sha256 = "sha256:" + "5" * 64
     return {
         "status": "verified",
         "database": {"environment": "development", "database_name": "semiskill_dev"},
-        "tracker": {"exact": True, "sha256": "sha256:" + "5" * 64},
+        "tracker": {"exact": True, "sha256": tracker_sha256},
         "schema": {"status": "verified"},
+        "adoption": adoption,
+        "forward": forward,
+        "authority_chain": server._migration_authority_chain_projection(
+            adoption, forward, tracker_sha256,
+        ),
     }
 
 
 def _migration_rows():
-    return [
-        {"filename": "0001_initial.sql", "sha256": "a" * 64},
-        {"filename": "0002_next.sql", "sha256": "b" * 64},
-    ]
+    return server._migration_repository_rows()
 
 
 def _valid_adoption_audit(rows=None):
     rows = rows or _migration_rows()
+    checkpoint_rows = rows[:15]
     artifact_id = uuid.uuid4()
-    plan_sha256 = "sha256:" + "c" * 64
+    repository_manifest = [
+        {
+            **row,
+            "bytes": (
+                server.ROOT / "semiskill" / "artifacts" / "migrations" / row["filename"]
+            ).stat().st_size,
+        }
+        for row in checkpoint_rows
+    ]
+    trusted_legacy, trusted_legacy_sha256 = _trusted_legacy_manifest(repository_manifest)
+    tracked_manifest = [
+        {
+            "filename": row["filename"],
+            "sha256": None,
+            "applied_at": "2026-08-06T11:00:00+00:00",
+        }
+        for row in checkpoint_rows[:10]
+    ]
+    schema_attestations = {
+        key: True for key in _ADOPTION_SCHEMA_ATTESTATION_KEYS
+    }
+    adopted_filenames = [row["filename"] for row in checkpoint_rows[:10]]
+    applied_filenames = [row["filename"] for row in checkpoint_rows[10:]]
+    database = {
+        "engine": "postgresql",
+        "database_name": "semiskill_dev",
+        "server_version_num": "160014",
+        "session_user_sha256": "sha256:" + "8" * 64,
+        "identity_sha256": "sha256:" + "e" * 64,
+    }
+    adoption_plan = {
+        "schema_version": "migration-checksum-adoption-plan/v1",
+        "database": database,
+        "environment": "development",
+        "source_commit": "d" * 40,
+        "tracked_prefix": [row["filename"] for row in trusted_legacy["migrations"]],
+        "tracked_manifest": tracked_manifest,
+        "repository_manifest": repository_manifest,
+        "trusted_manifest_sha256": trusted_legacy_sha256,
+        "orphaned_test_fixtures_to_remove": [],
+        "orphaned_relations_to_drop": [],
+        "legacy_null_filenames": adopted_filenames,
+        "legacy_null_count": len(adopted_filenames),
+        "pending_filenames": applied_filenames,
+        "schema_attestations": schema_attestations,
+        "historical_limit": trusted_legacy["historical_limit"],
+    }
+    plan_sha256 = server._canonical_sha256(adoption_plan)
     payload = {
         "schema_version": "migration-checksum-adoption/v1",
         "adoption_id": str(artifact_id),
@@ -80,25 +144,171 @@ def _valid_adoption_audit(rows=None):
         "environment": "development",
         "source_commit": "d" * 40,
         "plan_sha256": plan_sha256,
-        "database": {"database_name": "semiskill_dev"},
+        "database": database,
+        "tracked_manifest": tracked_manifest,
+        "repository_manifest": repository_manifest,
+        "trusted_manifest_sha256": trusted_legacy_sha256,
+        "schema_attestations": schema_attestations,
         "post_migration_attestations": {
-            key: True for key in server._POST_MIGRATION_ATTESTATION_KEYS
+            key: True for key in server._ADOPTION_0015_ATTESTATION_KEYS
         },
-        "adopted_filenames": [rows[0]["filename"]],
-        "applied_filenames": [rows[1]["filename"]],
-        "removed_orphaned_test_fixtures": ["9001_probe.sql"],
-        "removed_orphaned_relations": ["public.mig_probe"],
-        "final_tracker": rows,
+        "adopted_filenames": adopted_filenames,
+        "applied_filenames": applied_filenames,
+        "removed_orphaned_test_fixtures": [],
+        "removed_orphaned_relations": [],
+        "final_tracker": checkpoint_rows,
+        "historical_limit": trusted_legacy["historical_limit"],
+        "operator_authentication": {
+            "provider": "local_os",
+            "subject_sha256": "sha256:" + "4" * 64,
+        },
+        "reason": "Reviewed exact legacy checksum adoption for the dashboard test witness.",
     }
+    timestamp = datetime(2026, 8, 6, tzinfo=timezone.utc)
     return (
         artifact_id,
-        datetime(2026, 8, 6, tzinfo=timezone.utc),
+        timestamp,
         "cli",
         "human",
         "need-to-know",
         "compliance",
         plan_sha256,
         payload,
+        [],
+        "dashboard-test-operator",
+        timestamp,
+        [],
+        None,
+        {
+            "supported": False,
+            "reason": "historical checksum adoption is an irreversible attestation",
+        },
+        None,
+        None,
+    )
+
+
+def _valid_forward_audit(rows=None, adoption=None):
+    rows = rows or _migration_rows()
+    adoption = adoption or _valid_adoption_audit(rows)
+    database = {
+        "engine": "postgresql",
+        "database_name": "semiskill_dev",
+        "server_version_num": "160014",
+        "session_user_sha256": "sha256:" + "8" * 64,
+        "identity_sha256": "sha256:" + "e" * 64,
+    }
+    manifest = [
+        {
+            **row,
+            "bytes": (
+                server.ROOT / "semiskill" / "artifacts" / "migrations" / row["filename"]
+            ).stat().st_size,
+        }
+        for row in rows
+    ]
+    checkpoint = adoption[7]["final_tracker"]
+    tracker_before = [
+        {**row, "applied_at": "2026-08-06T12:00:00+00:00"}
+        for row in checkpoint
+    ]
+    adoption_payload_sha256 = "sha256:" + hashlib.sha256(
+        json.dumps(
+            adoption[7], ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    operator = {
+        "actor": "dashboard-test-operator",
+        "provider": "local_os",
+        "subject_sha256": "sha256:" + "9" * 64,
+    }
+    prior = {
+        "artifact_id": str(adoption[0]),
+        "schema_version": "migration-checksum-adoption/v1",
+        "plan_sha256": adoption[7]["plan_sha256"],
+        "payload_sha256": adoption_payload_sha256,
+    }
+    pre = {
+        "policy_id": "schema/0015@1",
+        "results": {key: True for key in server._CHECKPOINT_0015_ATTESTATION_KEYS},
+    }
+    reason = "Reviewed exact forward migration for the dashboard test witness."
+    plan = {
+        "schema_version": "migration-forward-plan/v1",
+        "action": "apply_reviewed_forward_migration",
+        "policy_id": "migration/0015-to-0023@1",
+        "source_commit": "a" * 40,
+        "environment": "development",
+        "database": database,
+        "migrator": {
+            "session_user_sha256": database["session_user_sha256"],
+            "explicit_role_bound": True,
+        },
+        "operator_authentication": operator,
+        "reason": reason,
+        "prior_audit": prior,
+        "tracker_manifest": tracker_before,
+        "repository_manifest": manifest,
+        "pending_manifest": manifest[len(checkpoint):],
+        "from_filename": checkpoint[-1]["filename"],
+        "to_filename": rows[-1]["filename"],
+        "pre_attestation": pre,
+        "post_attestation_contract": {
+            "policy_id": "schema/0023@1",
+            "required_keys": sorted(server._POST_MIGRATION_ATTESTATION_KEYS),
+            "expected_all_true": True,
+        },
+    }
+    plan_sha256 = server._canonical_sha256(plan)
+    plan["plan_sha256"] = plan_sha256
+    artifact_id = uuid.uuid5(
+        server._FORWARD_AUDIT_NAMESPACE,
+        f"{database['identity_sha256']}|{plan_sha256}",
+    )
+    payload = {
+        "schema_version": "migration-forward-execution/v1",
+        "migration_id": str(artifact_id),
+        "decision": "apply_reviewed_forward_migration",
+        "policy_id": "migration/0015-to-0023@1",
+        "environment": "development",
+        "reason": reason,
+        "source_commit": "a" * 40,
+        "plan_sha256": plan_sha256,
+        "database": database,
+        "operator_authentication": operator,
+        "prior_audit": prior,
+        "tracker_before": tracker_before,
+        "repository_manifest": manifest,
+        "pending_manifest": manifest[len(checkpoint):],
+        "pre_migration_attestation": pre,
+        "post_migration_attestations": {
+            key: True for key in server._POST_MIGRATION_ATTESTATION_KEYS
+        },
+        "applied_filenames": [row["filename"] for row in manifest[len(checkpoint):]],
+        "final_tracker": rows,
+    }
+    timestamp = datetime(2026, 8, 7, tzinfo=timezone.utc)
+    return (
+        artifact_id,
+        timestamp,
+        "cli",
+        "human",
+        "need-to-know",
+        "compliance",
+        plan_sha256,
+        payload,
+        [adoption[0]],
+        "dashboard-test-operator",
+        timestamp,
+        [],
+        None,
+        {
+            "supported": False,
+            "reason": "forward schema migrations are irreversible attestations",
+        },
+        None,
+        None,
     )
 
 
@@ -308,6 +518,16 @@ def test_live_validation_rejects_each_recomputed_boundary(tmp_path, monkeypatch)
         )
     assert exc.value.reason == "schema_witness_mismatch"
 
+    for mutation in ("missing_forward", "bad_chain_digest"):
+        migration = _verified_migration()
+        if mutation == "missing_forward":
+            migration.pop("forward")
+        else:
+            migration["authority_chain"]["sha256"] = "sha256:" + "0" * 64
+        with pytest.raises(server.DashboardSnapshotRejected) as exc:
+            server._live_snapshot_validation(snapshot, migration=migration)
+        assert exc.value.reason == "migration_authority_chain_invalid"
+
     identities = iter([("test-commit", False), ("changed-commit", False)])
     monkeypatch.setattr(server, "_repository_identity", lambda: next(identities))
     monkeypatch.setattr(server, "_rebuild_snapshot", lambda *_args: copy.deepcopy(snapshot))
@@ -359,12 +579,12 @@ def test_adoption_witness_projection_is_strict_and_sanitized():
     audit = _valid_adoption_audit(rows)
 
     projection = server._project_adoption_witness(
-        [audit], repository_rows=rows, environment="development",
+        [audit], repository_rows=rows[:15], environment="development",
         database_name="semiskill_dev",
     )
 
-    assert projection["adopted_count"] == 1
-    assert projection["applied_count"] == 1
+    assert projection["adopted_count"] == 10
+    assert projection["applied_count"] == 5
     encoded = json.dumps(projection, sort_keys=True)
     for secret_field in ("actor", "reason", "operator_authentication", "tracked_manifest"):
         assert secret_field not in encoded
@@ -386,7 +606,7 @@ def test_adoption_witness_rejects_noncanonical_metadata(index, value):
     audit[index] = value
     with pytest.raises(server.DashboardSnapshotRejected, match="adoption_witness_invalid"):
         server._project_adoption_witness(
-            [tuple(audit)], repository_rows=rows, environment="development",
+            [tuple(audit)], repository_rows=rows[:15], environment="development",
             database_name="semiskill_dev",
         )
 
@@ -399,6 +619,8 @@ def test_adoption_witness_rejects_noncanonical_metadata(index, value):
         ("removed_orphaned_test_fixtures", ["not-a-migration"]),
         ("post_migration_attestations", {"anything": True}),
         ("adopted_filenames", ["9999_unknown.sql"]),
+        ("reason", None),
+        ("operator_authentication", {}),
     ],
 )
 def test_adoption_witness_rejects_malformed_payload(field, value):
@@ -407,7 +629,7 @@ def test_adoption_witness_rejects_malformed_payload(field, value):
     audit[7] = {**audit[7], field: value}
     with pytest.raises(server.DashboardSnapshotRejected, match="adoption_witness_invalid"):
         server._project_adoption_witness(
-            [tuple(audit)], repository_rows=rows, environment="development",
+            [tuple(audit)], repository_rows=rows[:15], environment="development",
             database_name="semiskill_dev",
         )
 
@@ -415,6 +637,7 @@ def test_adoption_witness_rejects_malformed_payload(field, value):
 def test_migration_database_reads_one_repeatable_read_snapshot(monkeypatch):
     rows = _migration_rows()
     audit = _valid_adoption_audit(rows)
+    forward = _valid_forward_audit(rows, audit)
 
     class Result:
         def __init__(self, *, one=None, many=None):
@@ -447,7 +670,7 @@ def test_migration_database_reads_one_repeatable_read_snapshot(monkeypatch):
             if "schema_migrations" in sql:
                 return Result(many=[(row["filename"], row["sha256"]) for row in rows])
             if "migration-checksum-adoption" in sql:
-                return Result(many=[audit])
+                return Result(many=[audit, forward])
             if "verified_publication_events" in sql:
                 return Result(one=(0,))
             raise AssertionError(sql)
@@ -479,6 +702,93 @@ def test_migration_signal_gates_current_schema_and_never_leaks_bad_payload(monke
     state = {
         "database_name": "semiskill_dev",
         "tracker_rows": rows,
+        "audits": [],
+        "projection_rows": 0,
+        "schema_attestations": {
+            key: True for key in server._POST_MIGRATION_ATTESTATION_KEYS
+        },
+    }
+    adoption_audit = _valid_adoption_audit(rows)
+    state["audits"] = [adoption_audit, _valid_forward_audit(rows, adoption_audit)]
+    monkeypatch.setenv("SEMISKILL_ENVIRONMENT", "development")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example/semiskill_dev")
+    monkeypatch.setattr(server, "_migration_repository_rows", lambda: rows)
+    monkeypatch.setattr(server, "_read_migration_database_state", lambda _dsn: state)
+
+    verified = server.migration_witness_signal()
+    assert verified["status"] == "verified"
+    assert verified["schema"] == {"status": "verified", "passed": 14, "total": 14}
+    assert verified["forward"]["prior_artifact_id"] == str(adoption_audit[0])
+
+    state["schema_attestations"] = {
+        **state["schema_attestations"], "required_functions_present": False,
+    }
+    unavailable = server.migration_witness_signal()
+    assert unavailable["status"] == "unavailable"
+    assert unavailable["reason"] == "schema_witness_mismatch"
+    assert unavailable["adoption"] is None
+
+    state["schema_attestations"] = {
+        key: True for key in server._POST_MIGRATION_ATTESTATION_KEYS
+    }
+    state["schema_attestations"]["projection_and_policy_start_empty"] = "false"
+    unavailable = server.migration_witness_signal()
+    assert unavailable["status"] == "unavailable"
+    assert unavailable["reason"] == "schema_witness_mismatch"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "reason_without_plan_rehash",
+        "detached_input_ref",
+        "prior_payload_hash",
+        "database_identity",
+        "timestamp_before_adoption",
+        "deterministic_artifact_id",
+        "manifest_bytes",
+        "stored_attestation",
+    ],
+)
+def test_forward_witness_rejects_tampered_or_detached_chain(mutation):
+    rows = _migration_rows()
+    adoption_audit = _valid_adoption_audit(rows)
+    adoption = server._project_adoption_witness(
+        [adoption_audit], repository_rows=rows[:15], environment="development",
+        database_name="semiskill_dev",
+    )
+    forward = list(_valid_forward_audit(rows, adoption_audit))
+    forward[7] = copy.deepcopy(forward[7])
+    if mutation == "reason_without_plan_rehash":
+        forward[7]["reason"] += " tampered"
+    elif mutation == "detached_input_ref":
+        forward[8] = []
+    elif mutation == "prior_payload_hash":
+        forward[7]["prior_audit"]["payload_sha256"] = "sha256:" + "0" * 64
+    elif mutation == "database_identity":
+        forward[7]["database"]["identity_sha256"] = "sha256:" + "0" * 64
+    elif mutation == "timestamp_before_adoption":
+        forward[1] = datetime(2026, 8, 5, tzinfo=timezone.utc)
+        forward[10] = forward[1]
+    elif mutation == "deterministic_artifact_id":
+        forward[0] = uuid.uuid4()
+    elif mutation == "manifest_bytes":
+        forward[7]["repository_manifest"][0]["bytes"] += 1
+    else:
+        forward[7]["post_migration_attestations"]["schema_inventory_exact"] = False
+    with pytest.raises(server.DashboardSnapshotRejected, match="forward_witness_invalid"):
+        server._project_forward_witness(
+            [tuple(forward)], adoption_audit=adoption_audit, adoption=adoption,
+            repository_rows=rows, environment="development",
+            database_name="semiskill_dev",
+        )
+
+
+def test_migration_signal_hides_partial_authority_chain(monkeypatch):
+    rows = _migration_rows()
+    state = {
+        "database_name": "semiskill_dev",
+        "tracker_rows": rows,
         "audits": [_valid_adoption_audit(rows)],
         "projection_rows": 0,
         "schema_attestations": {
@@ -490,17 +800,13 @@ def test_migration_signal_gates_current_schema_and_never_leaks_bad_payload(monke
     monkeypatch.setattr(server, "_migration_repository_rows", lambda: rows)
     monkeypatch.setattr(server, "_read_migration_database_state", lambda _dsn: state)
 
-    verified = server.migration_witness_signal()
-    assert verified["status"] == "verified"
-    assert verified["schema"] == {"status": "verified", "passed": 10, "total": 10}
-
-    state["schema_attestations"] = {
-        **state["schema_attestations"], "required_functions_present": False,
-    }
     unavailable = server.migration_witness_signal()
+
     assert unavailable["status"] == "unavailable"
-    assert unavailable["reason"] == "schema_witness_mismatch"
+    assert unavailable["reason"] == "migration_witness_chain_incomplete"
     assert unavailable["adoption"] is None
+    assert unavailable["forward"] is None
+    assert unavailable["authority_chain"] is None
 
 
 def _stub_build_state_dependencies(monkeypatch):
@@ -580,7 +886,10 @@ def test_dashboard_html_uses_only_canonical_catalog_state():
     assert "sources.database.database_name" in html
     assert "S.scoreboard.validation" in html
     assert "S.migration" in html
-    assert "Migration adoption witness" in html
+    assert "Migration authority chain" in html
+    assert "migration.forward" in html
+    assert "migration.authority_chain" in html
+    assert "Forward schema authority" in html
     assert "server verified" in html
     assert "fail-closed" in html
     for retired in (

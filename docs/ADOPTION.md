@@ -49,6 +49,49 @@ payloads; bundle source, not binaries.
 - You only ever see skills your clearance allows — a `need-to-know` skill is invisible to those
   without it.
 
+## For operators - reviewed development schema checkpoint
+
+Generic migration bootstrap is restricted to isolated `*_test` databases. An already-adopted
+development catalog advances only through an explicitly coded checkpoint policy. The current policy
+is exactly `0015_projection_truncate_hardening.sql` to
+`0023_review_unbound_parameter_binding.sql`; a different start or end fails closed.
+
+The repository must be clean and committed. Configure the four non-secret identity selectors and
+the migration-owner DSN shown in `.env.example`, then create a read-only, operator-and-reason-bound
+plan:
+
+```powershell
+python -m semiskill.cli migrate-forward `
+  --expected-database semiskill `
+  --environment development `
+  --repo-root . `
+  --reason "Reviewed the exact 0015 to 0023 review-authority checkpoint." `
+  --plan-out reports/migrations/0015-to-0023.json
+```
+
+Planning changes no database state and refuses to replace a different plan file. Review the complete
+JSON, including source commit, database identity, operator hash, reason, prior audit, exact pending
+bytes, pre-attestation and post-attestation contract. Only then execute the same plan with the exact
+same reason:
+
+```powershell
+python -m semiskill.cli migrate-forward `
+  --expected-database semiskill `
+  --environment development `
+  --repo-root . `
+  --reason "Reviewed the exact 0015 to 0023 review-authority checkpoint." `
+  --plan-file reports/migrations/0015-to-0023.json `
+  --expected-plan-sha256 sha256:<digest-from-the-reviewed-plan> `
+  --yes
+```
+
+Execution reacquires the OS identity, rebuilds the plan under database locks, applies the exact eight
+migrations and appends one deterministic, chained audit artifact in the same transaction. A changed
+operator, reason, source, tracker, database, migration byte or attestation rolls back everything.
+An ambiguous retry returns the original exact audit only; a final tracker without that audit is
+treated as corruption. Production is intentionally unavailable until the Entra/OIDC migration
+adapter and distinct production migrator are configured.
+
 ## Roles at a glance
 - **Author** → submits; cannot publish.
 - **Approver** → the human signoff that opens the gate; can also unpublish.

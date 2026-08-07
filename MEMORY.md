@@ -839,8 +839,24 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010c2] add coordinator-only operator issuance for independent one-skill review contracts, then
-  expose the authoritative review queue and freshness on scoreboard v3.
+- [J-010c2] 2026-08-07T01:16:58Z  status: done
+  what: added a fail-closed, authenticated and commit-bound 0015->0023 forward-migration plan and
+  execution boundary with exact schema/corpus/registry attestations, semantic retry and a strict
+  dashboard projection of the full legacy-adoption plus forward-migration authority chain
+  delayed: true, reason: adversarial review found schema-equivalence, audit-collision, retry-lineage
+  and partial-dashboard-chain gaps that required exact regression coverage before any live mutation
+  artifacts: this J-010c2 checkpoint, semiskill/artifacts/migrate.py, semiskill/cli.py,
+  dashboard/server.py, dashboard/index.html, docs/ADOPTION.md,
+  tests/artifacts/test_forward_migration.py; 328 affected tests passed serially on exact
+  `semiskill_test`; focused Ruff, Python compilation and diff checks passed; three independent
+  read-only audits found no remaining P0/P1 issue
+  next: J-010c3 generate the exact read-only development migration plan, obtain digest-bound human
+  approval before execution, then add authenticated one-skill review-contract issuance
+
+
+## In-Flight Step
+- [J-010c3] generate the exact read-only 0015->0023 development migration plan, obtain explicit
+  digest-bound human approval before execution, then add authenticated one-skill review contracts.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

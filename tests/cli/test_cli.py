@@ -1,5 +1,7 @@
 import io
 import json
+from pathlib import Path
+
 import pytest
 from types import SimpleNamespace
 from semiskill.artifacts.schema import Artifact, ArtifactType
@@ -230,6 +232,126 @@ def test_migration_adoption_redacts_identity_adapter_details(monkeypatch):
     rendered = out.getvalue()
     assert rc == 2 and "identity could not be established" in rendered
     assert "secret" not in rendered and "private" not in rendered and "\x1b" not in rendered
+
+
+def test_forward_migration_production_fails_closed_before_database_access():
+    out = io.StringIO()
+    rc = main([
+        "migrate-forward", "--expected-database", "semiskill",
+        "--environment", "production", "--reason",
+        "Reviewed the exact production forward migration checkpoint.",
+        "--plan-out", "unused.json",
+    ], store=None, out=out)
+    assert rc == 2 and "Entra/OIDC" in out.getvalue()
+
+
+def test_forward_migration_plan_binds_identity_reason_and_writes_exact_plan(
+    monkeypatch, tmp_path,
+):
+    from semiskill.governance.identity import AuthenticatedHuman
+
+    identity = AuthenticatedHuman(
+        actor="operator", subject="uid:7", provider="local_os",
+        auth_context={"account": "operator", "uid": 7},
+    )
+    digest = "sha256:" + "4" * 64
+    plan = {"schema_version": "migration-forward-plan/v1", "plan_sha256": digest}
+    observed = {}
+    monkeypatch.setattr("semiskill.governance.identity.local_os_identity", lambda: identity)
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.plan_forward_migrations",
+        lambda *args, **kwargs: observed.update(kwargs) or plan,
+    )
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.write_forward_migration_plan",
+        lambda path, document: observed.update(path=path, document=document) or Path(path),
+    )
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.execute_forward_migrations",
+        lambda *args, **kwargs: pytest.fail("read-only plan attempted execution"),
+    )
+    monkeypatch.setenv("SEMISKILL_MIGRATION_DATABASE_URL", "postgresql://migration.invalid/db")
+    target = tmp_path / "forward.json"
+    reason = "Reviewed the exact 0015 to 0023 forward checkpoint and operator claim."
+    out = io.StringIO()
+    rc = main([
+        "migrate-forward", "--expected-database", "semiskill", "--environment", "development",
+        "--reason", reason, "--plan-out", str(target),
+    ], store=None, out=out)
+    assert rc == 0 and "no database state changed" in out.getvalue()
+    assert observed["identity"] is identity and observed["reason"] == reason
+    assert observed["document"] is plan and observed["path"] == str(target)
+
+
+def test_forward_migration_never_falls_back_to_runtime_database_url(monkeypatch):
+    monkeypatch.delenv("SEMISKILL_MIGRATION_DATABASE_URL", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://runtime:secret@private/catalog")
+    out = io.StringIO()
+    rc = main([
+        "migrate-forward", "--expected-database", "semiskill", "--reason",
+        "Reviewed the exact forward migration checkpoint before execution.",
+        "--plan-out", "unused.json",
+    ], store=None, out=out)
+    rendered = out.getvalue()
+    assert rc == 2 and "explicit migration DSN" in rendered
+    assert "runtime" not in rendered and "secret" not in rendered
+
+
+def test_forward_migration_execute_loads_reviewed_plan_and_binds_operator(monkeypatch):
+    from semiskill.governance.identity import AuthenticatedHuman
+
+    identity = AuthenticatedHuman(
+        actor="operator", subject="uid:7", provider="local_os",
+        auth_context={"account": "operator", "uid": 7},
+    )
+    digest = "sha256:" + "5" * 64
+    plan = {"schema_version": "migration-forward-plan/v1", "plan_sha256": digest}
+    observed = {}
+    monkeypatch.setattr("semiskill.governance.identity.local_os_identity", lambda: identity)
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.load_forward_migration_plan",
+        lambda path: observed.update(plan_path=path) or plan,
+    )
+    monkeypatch.setattr(
+        "semiskill.artifacts.migrate.plan_forward_migrations",
+        lambda *args, **kwargs: pytest.fail("execution attempted an unlocked preliminary plan"),
+    )
+
+    def execute(*args, **kwargs):
+        observed.update(kwargs)
+        return {"migration_id": "decision-id", "plan_sha256": digest}
+
+    monkeypatch.setattr("semiskill.artifacts.migrate.execute_forward_migrations", execute)
+    monkeypatch.setenv("SEMISKILL_MIGRATION_DATABASE_URL", "postgresql://migration.invalid/db")
+    reason = "Reviewed the exact forward checkpoint bytes and execution identity."
+    out = io.StringIO()
+    rc = main([
+        "migrate-forward", "--expected-database", "semiskill", "--reason", reason,
+        "--plan-file", "reviewed.json", "--expected-plan-sha256", digest, "--yes",
+    ], store=None, out=out)
+    assert rc == 0 and "decision-id" in out.getvalue()
+    assert observed["plan_path"] == "reviewed.json"
+    assert observed["plan"] is plan and observed["identity"] is identity
+    assert observed["reason"] == reason and observed["expected_plan_sha256"] == digest
+
+
+def test_forward_migration_redacts_unexpected_runtime_details(monkeypatch):
+    monkeypatch.setattr(
+        "semiskill.governance.identity.local_os_identity",
+        lambda: (_ for _ in ()).throw(
+            RuntimeError("password=secret host=private C:\\sensitive\\migration.sql")
+        ),
+    )
+    monkeypatch.setenv("SEMISKILL_MIGRATION_DATABASE_URL", "postgresql://migration.invalid/db")
+    out = io.StringIO()
+    rc = main([
+        "migrate-forward", "--expected-database", "semiskill", "--reason",
+        "Reviewed the exact forward migration checkpoint before execution.",
+        "--plan-out", "unused.json",
+    ], store=None, out=out)
+    rendered = out.getvalue()
+    assert rc == 2 and "internal preflight or database operation failed" in rendered
+    assert "secret" not in rendered and "sensitive" not in rendered
 
 
 @pytest.mark.parametrize("command", ["pack", "catalog", "site"])
