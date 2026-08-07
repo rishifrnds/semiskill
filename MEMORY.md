@@ -1057,6 +1057,15 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication.
   next: J-010d6 restore the store, re-verify the two unverified claims, run the integration suites
 
+- [J-010d6-correction-of-J-010d5] 2026-08-07T07:39:00Z  status: correction
+  what: J-010d5's entry and the STATUS.md stamp read 2026-08-07T07:48:00Z; the checkpoint was
+    actually written and committed at 2026-08-07T07:38:09Z (commit 2b77b42). The correct time is
+    07:38:09Z. Nothing else in that entry changes.
+  corrects: J-010d5
+  reason: second occurrence of the same defect corrected in J-010d5-correction-of-J-010d4 - the
+    timestamp was estimated rather than read. Practice change adopted: read `date -u` immediately
+    before writing any timestamp into MEMORY.md or STATUS.md, never estimate it from elapsed work.
+
 ## In-Flight Step
 
 - none. J-010d6 is selected but not started; it is blocked on BLK-005.
