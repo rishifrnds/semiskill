@@ -627,6 +627,39 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: J-010d1; `STATE_RULES.md`; `.git/hooks/commit-msg`;
   `.agents/skills/semiskill-project/SKILL.md`
 
+## [ADR-026] An unsatisfiable stage-5 judge policy refuses the wave up front
+- Date: 2026-08-07
+- Status: accepted
+- Context: `semiskill/spine/pipeline.py::run_pipeline` records stage 5 as `not_sampled` when no
+  judge scanner is supplied, which is correct — a skipped judge must never be rendered as a pass.
+  `semiskill/authoring/snapshot.py` then appends `REQUIRED_JUDGE_NOT_PASSED` whenever
+  `judge_required` and the judge is not `passed`. `wave.py` supplied no judge scanner and never
+  passed `judge_required`, so it took the `True` default. The two rules are individually right and
+  jointly unsatisfiable: the 2026-08-07 wave captured and scanned all 84 skills, wrote six artifacts
+  each, and every one landed `SECURITY_BLOCKED` with an aggregate verdict of `approve` and every
+  measured stage at 1.000. The cause was invisible one step downstream in the scoreboard.
+- Decision: `run_wave` accepts `judge_risk_scanner` and `judge_required` and refuses the whole wave
+  before touching the store when stage 5 is required and no judge scanner is configured, naming the
+  missing scanner. The judge policy itself is NOT relaxed.
+- Alternatives considered:
+  - Make `judge_required` a risk-based per-skill rule that exempts public read-only DV procedures in
+    development (the resolution proposed in `docs/UNBLOCK_SPECS.md`) — rejected for now because
+    `.agents/skills/semiskill-project/SKILL.md` requires the calibrated stage-5 judge for the
+    initial corpus, and the wave-0 cohort is exactly that corpus. Relaxing the rule would move the
+    counts without earning the evidence. Revisit only as an explicit, argued policy change.
+  - Rewrite a `not_sampled` stage 5 into a pass — rejected outright; it forges evidence.
+  - Guard inside `run_pipeline` instead — rejected as the wrong blast radius: seed, redteam and the
+    stage-level tests legitimately exercise the no-judge path, and the wave is the capture path that
+    actually produces misleading catalog evidence.
+- Consequences: `semiskill wave` now refuses until a calibrated judge scanner is wired (BLK-004),
+  which is the honest state — it was previously producing evidence that could never satisfy the
+  gate. `security_pass` stays 0 by design; this ADR unblocks nothing and is not meant to.
+  Per-skill `judge_required` is still not read from the registry by the wave; the wave-level default
+  remains `True`. The CLI `wave-plan`/`--dry-run` path returns before `run_wave` and therefore still
+  reports an over-optimistic plan — tracked as the next step, not fixed here.
+- Related: J-010d4, BLK-004; `semiskill/wave.py`; `tests/wave/test_wave.py`;
+  `docs/UNBLOCK_SPECS.md` (SPEC A); `HANDOFF.md` gap 9
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

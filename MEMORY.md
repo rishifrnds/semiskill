@@ -1018,25 +1018,40 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     confirmed state. Credit toward review, approval, publication or launch readiness: none.
   next: J-010d4 resolve the SPEC A judge-policy contradiction that blocks all 84 at the scan gate
 
+- [J-010d4] 2026-08-07T07:52:00Z  status: done
+  what: made the unsatisfiable stage-5 judge policy refuse the wave up front instead of writing six
+    artifacts per skill that the security gate was always going to reject
+  artifacts: this J-010d4 checkpoint, semiskill/wave.py, tests/wave/test_wave.py, ADR-026
+  verification: four new DB-free tests written first and observed failing, then passing (wave
+    refuses when judge required and no scanner; refuses in dry run too; a supplied judge scanner
+    satisfies the policy; an explicitly not-judge-required wave is allowed). Full DB-free subset of
+    tests/wave + tests/cli + tests/spine + tests/authoring + tests/governance: 361 passed, 40
+    skipped, 0 failed. Integration tests NOT run - the Docker daemon is still down (BLK-005).
+    Two pre-existing DB-free tests (`test_dry_run_writes_nothing`,
+    `test_write_wave_refuses_more_than_ten_skills_before_touching_store`) needed a judge scanner
+    supplied so they exercise the behaviour they name rather than the judge policy.
+  credit: none toward security_pass, review, approval or publication. `security_pass` stays 0 by
+    design; the judge policy was deliberately NOT relaxed.
+  next: J-010d5 make the CLI wave-plan/--dry-run path honest, then re-verify against the store
+
 ## In-Flight Step
 
-- none. J-010d4 is selected but not started; it requires the development database to be reachable
-  before any claim about the scan gate can be verified.
+- none. J-010d5 is selected but not started.
 
 ## Pending Steps
-1. [J-010d4] resolve the SPEC A judge-policy contradiction: `run_pipeline` writes stage 5
-   `not_sampled` when no judge scanner is supplied, while `snapshot.py` raises
-   `REQUIRED_JUDGE_NOT_PASSED` for `judge_required` skills, so no skill in this environment can
-   reach `security_pass`. Scope exactly one of the two rules; write the failing test first.
-2. [J-010d5] bring the development store back up and independently re-verify the crashed session's
+1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
+   `run_wave`, so it still prints "N skill(s) would be captured/scanned" for a wave that would in
+   fact refuse. Surface the same refusal there, and give `cmd_wave` a clean error path so the
+   ValueError prints as a message rather than a traceback.
+2. [J-010d6] bring the development store back up and independently re-verify the crashed session's
    two unverified claims: schema really at 0023, and 84 `skill_version` + scan artifacts really
-   present. Record whatever is actually observed, including a mismatch.
-3. [J-010d6] review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate`
+   present. Then run the integration suites deferred by BLK-005, serially.
+3. [J-010d7] review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate`
    before it is allowed to lease any real work; it is currently unreviewed inherited code.
-4. [J-010d7] implement scoreboard v3/progress v2 strict nested validation and one shared live
+4. [J-010d8] implement scoreboard v3/progress v2 strict nested validation and one shared live
    observation contract; v2 remains diagnostic and cannot authorize review or release.
-5. [J-010d8] implement and promote the ADR-024 Stage-2 scanner plus calibrated loopback Stage 5
-6. [J-010d9] run a new clean-source immutable serial full suite and push synchronized `main`
+5. [J-010d9] implement and promote the ADR-024 Stage-2 scanner plus calibrated loopback Stage 5
+6. [J-010e1] run a new clean-source immutable serial full suite and push synchronized `main`
 7. [J-011] prove one exact skill and then the five-skill vertical cohort end to end
 8. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready
 9. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls

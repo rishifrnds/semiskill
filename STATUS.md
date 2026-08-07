@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T07:16:49Z_
+_Last updated: 2026-08-07T07:52:00Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,16 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010d4 (resolve the SPEC A judge-policy contradiction) is selected, not started.
+- none in flight. J-010d5 (make the CLI wave-plan path honest) is selected, not started.
+
+## J-010d4 result: the judge contradiction now fails loudly, and unblocks nothing on purpose
+Per explicit user decision, the stage-5 judge policy was NOT relaxed. `run_wave` now accepts
+`judge_risk_scanner`/`judge_required` and refuses the whole wave before touching the store when
+stage 5 is required and no judge scanner is configured (ADR-026). `semiskill wave` therefore refuses
+until BLK-004 is resolved - which is the honest state, because it was previously writing six
+artifacts per skill that the security gate was always going to reject. `security_pass` remains 0.
+Known remaining gap: the CLI `wave-plan`/`--dry-run` path returns before `run_wave` and still prints
+an over-optimistic plan. That is J-010d5, not a claim that it works.
 
 ## What the crashed session actually did (recorded, not credited)
 An unrecorded session ran ~2026-08-07T05:48Z-06:12Z and died without checkpointing. Its output is
@@ -53,8 +62,9 @@ sit at `SECURITY_BLOCKED` even though every stage that ran scored 1.000 and the 
 rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 
 ## Immediate order
-1. Resolve SPEC A with a failing test first; do not widen the judge policy to make counts move.
-2. Restore the development store, then independently re-verify schema 0023 and the 84 captures.
+1. Make the CLI `wave-plan`/`--dry-run` path refuse consistently with `run_wave`.
+2. Restore the development store, re-verify schema 0023 and the 84 captures, then run the
+   integration suites deferred by BLK-005 serially.
 3. Review and test the inherited `tools/issue_batch.py` before it leases any real work.
 4. Scoreboard v3/progress v2, then Stage 2 and calibrated Stage 5, then prove 1 -> 5 -> 84.
 

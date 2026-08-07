@@ -8,6 +8,7 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import ArtifactType
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.context.retrieve import search_catalog
+from semiskill.scanners.base import ScanResult, ScanStage
 from tests.support import append_test_content_review
 from semiskill.wave import (
     AWAITING_APPROVAL,
@@ -86,6 +87,18 @@ def write_shared(root, *, profile="profile-v1\n"):
 
 def clean_security(_submission):
     return {"findings": []}
+
+
+class _CleanJudge:
+    """Minimal calibrated-judge stand-in: satisfies the stage-5 contract, decides nothing.
+
+    Tests that are not about judge policy supply this so they exercise the behaviour they name.
+    """
+
+    stage = ScanStage.JUDGE_RISK
+
+    def scan(self, _submission):
+        return ScanResult(stage=ScanStage.JUDGE_RISK, safety_score=1.0, findings=())
 
 
 def checks():
@@ -200,6 +213,7 @@ def test_dry_run_writes_nothing(tmp_path):
 
     report = run_wave(
         store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path), dry_run=True,
+        judge_risk_scanner=_CleanJudge(),
     )
     assert report.items[0].status == WOULD_CAPTURE and report.ok
 
@@ -215,8 +229,68 @@ def test_write_wave_refuses_more_than_ten_skills_before_touching_store(tmp_path)
     with pytest.raises(ValueError, match="limited to 10 skills"):
         run_wave(
             store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path),
+            security_audit_runner=clean_security, judge_risk_scanner=_CleanJudge(),
+        )
+
+
+def test_wave_refuses_up_front_when_judge_required_and_no_judge_scanner(tmp_path):
+    # The unsatisfiable combination: the pipeline would write stage 5 `not_sampled` (correct), and
+    # the security gate would then refuse it with REQUIRED_JUDGE_NOT_PASSED. Producing six artifacts
+    # per skill that are known in advance to fail the gate is wasted work that hides the cause.
+    write_skill(tmp_path, "dv-a")
+
+    class Exploding:
+        def __getattr__(self, _name):
+            raise AssertionError("an unsatisfiable judge policy must not touch the store")
+
+    with pytest.raises(ValueError, match="judge_risk_scanner"):
+        run_wave(
+            store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path),
             security_audit_runner=clean_security,
         )
+
+
+def test_wave_refuses_unsatisfiable_judge_policy_in_dry_run_too(tmp_path):
+    # `wave-plan` that reports `would-capture` for a wave which cannot possibly succeed is a lie.
+    write_skill(tmp_path, "dv-a")
+
+    class Exploding:
+        def __getattr__(self, _name):
+            raise AssertionError("dry run must not touch the store")
+
+    with pytest.raises(ValueError, match="judge_risk_scanner"):
+        run_wave(
+            store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path),
+            security_audit_runner=clean_security, dry_run=True,
+        )
+
+
+def test_supplying_a_judge_scanner_satisfies_the_policy(tmp_path):
+    write_skill(tmp_path, "dv-a")
+
+    class Exploding:
+        def __getattr__(self, _name):
+            raise AssertionError("dry run must not touch the store")
+
+    report = run_wave(
+        store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path), dry_run=True,
+        security_audit_runner=clean_security, judge_risk_scanner=_CleanJudge(),
+    )
+    assert report.items[0].status == WOULD_CAPTURE and report.ok
+
+
+def test_explicitly_not_judge_required_wave_is_allowed_without_a_judge(tmp_path):
+    write_skill(tmp_path, "dv-a")
+
+    class Exploding:
+        def __getattr__(self, _name):
+            raise AssertionError("dry run must not touch the store")
+
+    report = run_wave(
+        store=Exploding(), dsn="postgresql://unused", items=load_wave(tmp_path), dry_run=True,
+        security_audit_runner=clean_security, judge_required=False,
+    )
+    assert report.items[0].status == WOULD_CAPTURE and report.ok
 
 
 @pytest.mark.integration

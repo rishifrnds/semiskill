@@ -213,14 +213,33 @@ def run_wave(
     progress: Callable[[WaveItemResult], None] | None = None,
     now: Callable[[], float] = time.time,
     security_audit_runner=None,
+    judge_risk_scanner=None,
+    judge_required: bool = True,
 ) -> WaveReport:
     """Capture/scan candidates and stop before approval.
 
     ``allow_ungated`` is accepted only to produce an explicit migration error for stale callers; it
     can never widen the gate.
+
+    ``judge_required`` mirrors the stage-5 policy the security gate will apply. It is never widened
+    here: refusing early cannot make anything publishable that would otherwise be blocked.
     """
     if allow_ungated:
         raise ValueError("allow_ungated was removed: wave cannot publish or bypass content review")
+    if judge_required and judge_risk_scanner is None:
+        # The two rules are individually right and jointly unsatisfiable: run_pipeline records
+        # stage 5 as `not_sampled` when no judge is supplied (a skipped judge must never be
+        # rendered as a pass), and the security gate then refuses the skill with
+        # REQUIRED_JUDGE_NOT_PASSED. Capturing and scanning anyway writes six artifacts per skill
+        # that are known in advance to fail, and buries the cause a step downstream. Refuse here,
+        # before anything is written, and name what is missing.
+        raise ValueError(
+            "stage 5 is required by policy but no judge_risk_scanner is configured: every skill "
+            "in this wave would be captured, scanned, and then refused at the security gate with "
+            "REQUIRED_JUDGE_NOT_PASSED. Supply a calibrated judge scanner (see BLK-004), or pass "
+            "judge_required=False for a wave the policy genuinely exempts. Do not resolve this by "
+            "rewriting a not_sampled stage 5 into a pass."
+        )
     if on_duplicate not in {"supersede", "skip", "fail"}:
         raise ValueError(f"on_duplicate must be supersede|skip|fail, got {on_duplicate!r}")
 
@@ -247,6 +266,8 @@ def run_wave(
                 permissions_label=permissions_label,
                 dry_run=dry_run,
                 security_audit_runner=security_audit_runner,
+                judge_risk_scanner=judge_risk_scanner,
+                judge_required=judge_required,
             )
         except Exception as exc:  # noqa: BLE001 - isolate content errors, abort infrastructure
             if _is_infrastructure_error(exc):
@@ -296,6 +317,8 @@ def _run_one(
     permissions_label: str,
     dry_run: bool,
     security_audit_runner,
+    judge_risk_scanner=None,
+    judge_required: bool = True,
 ) -> WaveItemResult:
     if dry_run:
         return WaveItemResult(
@@ -335,6 +358,8 @@ def _run_one(
             dsn=dsn,
             skill_version_id=skill_version.artifact_id,
             security_audit_runner=security_audit_runner,
+            judge_risk_scanner=judge_risk_scanner,
+            judge_required=judge_required,
         )
     else:
         pipeline = _pipeline_from_review(store, skill_version, automated)
