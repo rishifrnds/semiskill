@@ -1034,6 +1034,14 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     design; the judge policy was deliberately NOT relaxed.
   next: J-010d5 make the CLI wave-plan/--dry-run path honest, then re-verify against the store
 
+- [J-010d5-correction-of-J-010d4] 2026-08-07T07:35:00Z  status: correction
+  what: J-010d4's entry and the STATUS.md stamp read 2026-08-07T07:52:00Z; the checkpoint was
+    actually written and committed at 2026-08-07T07:32:04Z (commit 1494750). The correct time is
+    07:32:04Z. Nothing else in that entry changes.
+  corrects: J-010d4
+  reason: a forward-dated timestamp is the same defect as a backdated one - it makes the durable log
+    disagree with the commit it describes, and the next session's 15-minute freshness gate reads it
+
 ## In-Flight Step
 
 - none. J-010d5 is selected but not started.
