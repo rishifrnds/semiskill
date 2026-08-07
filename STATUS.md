@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T11:56:09Z_
+_Last updated: 2026-08-07T11:58:23Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010e4 (Stage-2 report validation and fail-closed coverage) is selected.
+- none in flight. J-010e5 (Stage-2 identity binding and scanner wiring) is selected.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -83,10 +83,13 @@ Approval-gated, not code-gated. The code can be finished and tested now; only BL
 - DONE (J-010e3): host-side staging projection, `semiskill/scanners/stage2_staging.py`. Untrusted
   paths normalized and refused before any write; payload-supplied scanner config isolated and
   recorded; staged tree compared to the expected coverage set exactly. 32 adversarial tests.
-- NEXT (J-010e4): bounded exact-key report validation - reject unknown fields/severities, duplicate
-  finding IDs, absolute/traversing paths, mismatched counts and container-supplied identity.
-- THEN (J-010e5): identity binding - slug/version/payload hash, image platform-manifest digest,
-  independently computed `rule_pack_sha256`, adapter commit, policy/schema/engine hashes.
+- DONE (J-010e4): bounded exact-key report validator, `semiskill/scanners/stage2_report.py`.
+  Unknown and missing fields both refuse; provenance-shaped keys are refused so the container cannot
+  assert its own identity; coverage must match the staged set exactly; any skip, error, truncation,
+  timeout or resource kill is blocking. 36 tests.
+- NEXT (J-010e5): host-side identity binding - slug/version/payload hash, image platform-manifest
+  digest, independently computed `rule_pack_sha256`, adapter commit, policy/schema/engine hashes -
+  and wiring both halves into an injectable Stage-2 scanner.
 
 ## Immediate order
 1. Re-run the immutable full suite on this clean source for a current PASS record, then regenerate

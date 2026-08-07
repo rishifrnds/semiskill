@@ -1210,9 +1210,30 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     the image, rule pack and supply-chain record (BLK-003).
   next: J-010e4 bounded exact-key report validation and the fail-closed coverage rules
 
+- [J-010e4] 2026-08-07T11:58:23Z  status: done
+  what: built the ADR-024 Stage-2 report validator - the bounded exact-key contract that decides
+    whether an engine report may be trusted to prove exact coverage
+  artifacts: this J-010e4 checkpoint, semiskill/scanners/stage2_report.py,
+    tests/scanners/test_stage2_report.py
+  verification: 36 tests written first and observed failing (module absent), then passing. All of
+    tests/scanners: 95 passed, 0 failed.
+  contract: exact-key in both directions - unknown AND missing report/finding fields are refusals.
+    Provenance-shaped keys (`image_digest`, `rule_pack_sha256`, `payload_sha256`, `slug`,
+    `adapter_commit`, `approved`) are refused as unknown fields, because the container may never
+    assert its own identity; the host binds that separately in J-010e5. Coverage must match the
+    staged set exactly, with duplicates rejected so a repeated entry cannot fake a count. Any skip,
+    error, truncation, timeout or resource kill is blocking. Findings are bounded in count and
+    string size, ids must be unique, severities must be known, and a finding may only name a path
+    the host actually staged - which refuses absolute, traversing and unstaged paths in one rule.
+  design-note: exceeding a bound raises rather than truncates. Truncating would recreate the exact
+    silent-coverage-loss defect that retired the previous runner, one layer higher up.
+  credit: none. No Stage-2 result can earn credit until AppSec approves the image, rule pack and
+    supply-chain record (BLK-003).
+  next: J-010e5 bind host-side identity and wire staging + report into an injectable Stage-2 scanner
+
 ## In-Flight Step
 
-- none. J-010e4 is selected but not started.
+- none. J-010e5 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
