@@ -77,6 +77,7 @@ def test_append_many_rolls_back_every_row_when_one_insert_fails(store):
 
 def test_non_test_approval_actuator_requires_distinct_database_identity(monkeypatch):
     monkeypatch.delenv("SEMISKILL_APPROVAL_DATABASE_URL", raising=False)
+    monkeypatch.delenv("SEMISKILL_REVIEW_COORDINATOR_DATABASE_URL", raising=False)
     monkeypatch.delenv("SEMISKILL_EXPORT_DATABASE_URL", raising=False)
     runtime = "postgresql://runtime:secret@db.internal:5432/semiskill"
     with pytest.raises(ValueError, match="distinct database identity"):

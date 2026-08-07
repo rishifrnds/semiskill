@@ -3,6 +3,7 @@ import uuid
 from dataclasses import replace
 from pathlib import Path
 
+import psycopg
 import pytest
 
 from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
@@ -25,14 +26,17 @@ MIGRATIONS = Path("semiskill/artifacts/migrations")
 
 
 class MemoryStore:
-    def __init__(self, rows=(), database_name="semiskill_dev", projections=()):
+    def __init__(
+        self,
+        rows=(),
+        database_name="semiskill_dev",
+        projections=(),
+        verified_review_contract_ids=(),
+    ):
         self.rows = list(rows)
         self.database_name = database_name
         self.projections = tuple(projections)
-        self.review_contract_ids = {
-            row.artifact_id for row in self.rows
-            if row.artifact_type is ArtifactType.GATE_DECISION
-        }
+        self.review_contract_ids = set(verified_review_contract_ids)
 
     def get(self, artifact_id):
         return next((row for row in self.rows if row.artifact_id == artifact_id), None)
@@ -67,12 +71,20 @@ class MemoryStore:
         )
 
 
-def _rows(store):
-    types = (
-        ArtifactType.SKILL_VERSION, ArtifactType.SCAN_RUN, ArtifactType.INJECTION_TEST,
-        ArtifactType.REVIEW, ArtifactType.APPROVAL,
+def _memory_from_bundle(
+    store,
+    *,
+    database_name="semiskill_test",
+    extra_artifacts=(),
+    projections=None,
+):
+    bundle = store.publication_reconciliation_bundle()
+    return MemoryStore(
+        [*bundle.artifacts, *extra_artifacts],
+        database_name=database_name,
+        projections=bundle.projections if projections is None else projections,
+        verified_review_contract_ids=bundle.verified_review_contract_ids,
     )
-    return [row for artifact_type in types for row in store.by_type(artifact_type)]
 
 
 @pytest.fixture
@@ -301,6 +313,7 @@ def test_later_review_for_another_version_does_not_taint_frozen_badge(store, tmp
     newer = store.append(build_skill_version(
         skill_md=_skill("dv-one").replace("semiskill-version: 1.0.0", "semiskill-version: 2.0.0"),
         actor="author",
+        permissions_label=fixture.skill_version.permissions_label,
     ))
     later = append_test_content_review(
         store, newer, prompt_version="P5-RECHECK-CALIBRATED@2", run_id="new-run",
@@ -333,18 +346,27 @@ def test_later_exact_lineage_collision_blocks_release_without_rewriting_badge(st
     directory.mkdir(parents=True)
     directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
     fixture = publish_wave_sources(store, root)[0]
+    with pytest.raises(psycopg.errors.CheckViolation, match="cannot reset existing lineage"):
+        append_test_content_review(
+            store, fixture.skill_version, prompt_version="P5-RECHECK-CALIBRATED@2",
+            run_id="duplicate-run", batch_id="duplicate-batch",
+            reviewer_identity="duplicate-reviewer", fixer_identity="duplicate-fixer",
+            checks=content_checks(), findings=[],
+        )
+    memory = _memory_from_bundle(store)
     duplicate = append_test_content_review(
-        store, fixture.skill_version, prompt_version="P5-RECHECK-CALIBRATED@2",
-        run_id="duplicate-run", batch_id="duplicate-batch",
-        reviewer_identity="duplicate-reviewer", fixer_identity="duplicate-fixer",
+        memory, fixture.skill_version, prompt_version="P5-RECHECK-CALIBRATED@2",
+        run_id="corrupt-memory-run", batch_id="corrupt-memory-batch",
+        reviewer_identity="corrupt-memory-reviewer", fixer_identity="corrupt-memory-fixer",
         checks=content_checks(), findings=[],
     )
+    assert duplicate.artifact_id in {row.artifact_id for row in memory.rows}
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
     ])
 
     snapshot = build_scoreboard_snapshot(
-        store=store, registry_path=registry, skills_root=root,
+        store=memory, registry_path=registry, skills_root=root,
         generated_at="2026-08-06T00:00:00Z", expected_active=1, expected_declined=0,
         expected_roles=1, target_per_role=1, environment="test",
         source_commit="test", repository_dirty=False,
@@ -417,10 +439,7 @@ def test_snapshot_environment_rejects_approval_from_other_environment(store, tmp
     directory.mkdir(parents=True)
     directory.joinpath("SKILL.md").write_text(_skill("dv-one"), encoding="utf-8")
     fixture = publish_wave_sources(store, root)[0]
-    memory = MemoryStore(
-        _rows(store), database_name="semiskill_dev",
-        projections=store.publication_reconciliation_bundle().projections,
-    )
+    memory = _memory_from_bundle(store, database_name="semiskill_dev")
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
     ])
@@ -457,8 +476,13 @@ def test_detached_rejection_evidence_cannot_block_skill(store, tmp_path):
         payload=payload,
     )
     forged = replace(forged, permissions_label="public")
-    rows = [row for row in _rows(store) if row.artifact_type is not ArtifactType.APPROVAL]
-    memory = MemoryStore([*rows, forged], database_name="semiskill_test")
+    bundle = store.publication_reconciliation_bundle()
+    rows = [row for row in bundle.artifacts if row.artifact_type is not ArtifactType.APPROVAL]
+    memory = MemoryStore(
+        [*rows, forged],
+        database_name="semiskill_test",
+        verified_review_contract_ids=bundle.verified_review_contract_ids,
+    )
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
         {"slug": "dv-two", "role": "dv-engineer", "level": "senior"},
@@ -493,10 +517,7 @@ def test_cross_skill_correction_is_invalid_and_cannot_suppress_publication(store
         corrects_ref=first.approval.artifact_id,
         rollback_ref=second.approval.rollback_ref,
     )
-    memory = MemoryStore(
-        [*_rows(store), forged], database_name="semiskill_test",
-        projections=store.publication_reconciliation_bundle().projections,
-    )
+    memory = _memory_from_bundle(store, extra_artifacts=(forged,))
     registry = _registry(tmp_path / "registry.json", [
         {"slug": slug, "role": "dv-engineer", "level": "senior"}
         for slug in ("dv-one", "dv-two")
@@ -533,10 +554,7 @@ def test_branched_approval_corrections_are_invalid_and_do_not_hide_valid_head(st
             corrects_ref=fixture.approval.artifact_id,
             rollback_ref=fixture.approval.rollback_ref,
         ))
-    memory = MemoryStore(
-        [*_rows(store), *branches], database_name="semiskill_test",
-        projections=store.publication_reconciliation_bundle().projections,
-    )
+    memory = _memory_from_bundle(store, extra_artifacts=branches)
     registry = _registry(tmp_path / "registry.json", [
         {"slug": "dv-one", "role": "dv-engineer", "level": "senior"},
     ])
@@ -580,9 +598,9 @@ def test_duplicate_projected_heads_credit_zero_and_mark_the_registry_cell_invali
         chain_sha256="0" * 64,
     )
     clone_row = replace(clone_row, chain_sha256=_chain_sha256(clone, clone_row))
-    memory = MemoryStore(
-        [*_rows(store), clone],
-        database_name="semiskill_test",
+    memory = _memory_from_bundle(
+        store,
+        extra_artifacts=(clone,),
         projections=(*bundle.projections, clone_row),
     )
     registry = _registry(tmp_path / "registry.json", [

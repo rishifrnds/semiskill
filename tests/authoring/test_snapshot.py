@@ -219,6 +219,7 @@ def test_progress_requires_aware_rfc3339_timestamps(tmp_path):
 
 def test_database_identity_is_sanitized_and_stable(monkeypatch):
     monkeypatch.delenv("SEMISKILL_APPROVAL_DATABASE_URL", raising=False)
+    monkeypatch.delenv("SEMISKILL_REVIEW_COORDINATOR_DATABASE_URL", raising=False)
     monkeypatch.delenv("SEMISKILL_EXPORT_DATABASE_URL", raising=False)
     store = PostgresArtifactStore(
         "postgresql://private-user:super-secret@db.internal:5433/semiskill_dev?sslmode=require"

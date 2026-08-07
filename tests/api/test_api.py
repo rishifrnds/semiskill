@@ -8,7 +8,7 @@ import pytest
 from pathlib import Path
 from semiskill.api import serve
 from semiskill.artifacts.migrate import apply_migrations
-from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, ActorKind
+from semiskill.artifacts.schema import ArtifactType
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.capture.intake import build_skill_version
 from semiskill.authoring.snapshot import SnapshotUnavailable, finalize_scoreboard
@@ -29,7 +29,8 @@ def _test_principal_resolver(headers) -> ResolvedPrincipal:
 
 def _publish(store, slug, label="team"):
     sv = store.append(build_skill_version(
-        skill_md=f"---\nname: {slug}\nslug: {slug}\nfunction: dv\n---\nbody", actor="a",
+        skill_md=(f"---\nname: {slug}\nslug: {slug}\nfunction: dv\n"
+                  "role: dv-engineer\nlevel: senior\n---\nbody"), actor="a",
         permissions_label=label))
     publish_test_skill(store, sv, aggregate_safety=0.95)
     return sv

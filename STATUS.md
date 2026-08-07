@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T01:40:44Z_
+_Last updated: 2026-08-07T01:54:11Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -12,22 +12,22 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator is the sole writer; pooled agents remain read-only.
 
 ## Active step
-- J-010c3b: fix the four root causes in the source-bound full-suite FAIL and rerun it serially.
+- J-010c3c: run the immutable full suite on the corrected clean commit and regenerate its plan.
 
 ## Measured baseline
 - Registry: 84 active + 20 declined across 16 roles; every role has >=5 authored skills.
 - Catalog: 84 authored, 0 canonical-ready, 0 approved, 0 projection-backed published.
 - Database: isolated `semiskill_test` reaches 0023; development `semiskill` remains at 0015.
-- Migration: 0015->0023 authority is audited, but the unapproved `91cdd50` plan is superseded by
-  the current test-fix step and must be regenerated from the next clean commit.
-- Verification: 328 affected tests passed; the exact full suite on `91cdd50` truthfully failed with
-  1047 passed, 13 failed, 13 errors, 7 skipped and 1 xpassed.
-- Dashboard 8899 exposes the failed immutable run; canonical scoreboard remains unavailable/stale.
+- Migration: the unapproved `91cdd50` digest is obsolete; regenerate only after a complete PASS.
+- Regression repair: 206 affected tests pass with 2 skips; Ruff, compile and diff checks pass.
+- Test isolation: post-test artifacts/projections/contracts/cells are zero, protected triggers 4/4
+  enabled and cluster capability memberships restored.
+- Dashboard 8899 exposes the prior failed run; canonical scoreboard remains unavailable/stale.
 
 ## Immediate order
-1. Fix test isolation, valid review fixtures, version/label lineage and invalid-state simulations.
-2. Rerun focused tests and the immutable full suite; regenerate and approve the migration plan.
-3. Execute migration, ship safe review issuance and scoreboard v3, then publish 1 -> 5 -> 84.
+1. Produce a clean-source immutable full-suite PASS and a new exact read-only migration plan.
+2. Obtain digest approval, execute 0016-0023 and implement safe review issuance + scoreboard v3.
+3. Vertically verify/approve/publish 1 -> 5 -> batches <=10 until all 84 are live.
 
 ## Standing hazards
 - Never run database tests concurrently; use only the exact isolated `_test` database.
@@ -35,5 +35,5 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Scoreboard v2 nested evidence/progress validation has an independently reproduced P0 gap.
 - BLK-001: production Entra/OIDC, SharePoint and service identities are not configured.
 ## Last checkpoint
-- J-010c3a: preserved the immutable failed full-suite evidence and root-cause diagnosis.
-- Commit 91cdd50: J-010c2 forward-migration authority and dashboard chain.
+- J-010c3b: repaired the full-suite regressions and post-test isolation.
+- Commit ca7096f: preserved the source-bound failed-run evidence and diagnosis.

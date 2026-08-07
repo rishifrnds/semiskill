@@ -10,9 +10,12 @@ import uuid
 from contextlib import AbstractContextManager
 from pathlib import Path
 
+import psycopg
 import pytest
 
 from semiskill import cli
+from semiskill.artifacts.schema import Artifact, ArtifactType, ActorKind, SourceSystem
+from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.verification import full_suite
 from semiskill.verification.evidence import (
     PYTEST_PLUGIN,
@@ -26,6 +29,7 @@ from semiskill.verification.evidence import (
     strict_json_bytes,
     validate_run,
 )
+from tests.conftest import _reset_test_rows
 
 
 def _source(commit: str = "a" * 40, tree: str = "b" * 40) -> dict:
@@ -411,6 +415,47 @@ def test_database_lease_uses_only_pg_catalog_qualified_identity_and_lock_sql():
     assert "pg_catalog.pg_try_advisory_lock" in source
     assert "pg_catalog.pg_advisory_unlock" in source
     assert "replace_existing | write_through" in source
+
+
+@pytest.mark.integration
+def test_guarded_test_reset_is_idempotent_and_restores_empty_rows_and_triggers(pg_dsn):
+    store = PostgresArtifactStore(pg_dsn)
+    store.append(Artifact.new(
+        artifact_type=ArtifactType.COMMENT,
+        source_system=SourceSystem.CLI,
+        actor="test-reset",
+        actor_kind=ActorKind.SERVICE_ACCOUNT,
+        payload={"probe": True},
+    ))
+
+    _reset_test_rows(pg_dsn)
+    _reset_test_rows(pg_dsn)
+
+    with psycopg.connect(pg_dsn) as conn:
+        counts = conn.execute(
+            "SELECT (SELECT count(*) FROM artifacts),"
+            "(SELECT count(*) FROM verified_publication_events),"
+            "(SELECT count(*) FROM verified_review_contracts),"
+            "(SELECT count(*) FROM verified_review_contract_cells)"
+        ).fetchone()
+        triggers = conn.execute(
+            "SELECT count(*) FILTER (WHERE tgenabled='O'),count(*) FROM pg_trigger "
+            "WHERE tgname=ANY(%s)",
+            ([
+                "artifacts_block_truncate",
+                "verified_publication_events_block_truncate",
+                "verified_review_contracts_block_truncate",
+                "verified_review_contract_cells_block_truncate",
+            ],),
+        ).fetchone()
+        policy = conn.execute(
+            "SELECT environment,database_name,policy_version,approve_threshold::float8,enabled,"
+            "allow_unregistered_test_fixtures FROM publication_trust_policy"
+        ).fetchall()
+
+    assert counts == (0, 0, 0, 0)
+    assert triggers == (4, 4)
+    assert policy == [("test", "semiskill_test", "publication-v1", 0.8, True, True)]
 
 
 def test_runner_requires_exact_expected_test_database(tmp_path):

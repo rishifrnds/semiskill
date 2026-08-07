@@ -293,6 +293,18 @@ def test_malformed_coordinator_check_is_rejected_before_agent_output():
     assert store.append_many_calls == 0
 
 
+@pytest.mark.parametrize("facet", ["version", "role", "level"])
+def test_contract_rejects_missing_required_skill_facet_before_the_actuator(facet):
+    skill = version("dv-a")
+    malformed = replace(skill, payload={**skill.payload, facet: None})
+    store = Store([malformed])
+
+    with pytest.raises(BatchRejected, match=rf"skill version {facet} is required"):
+        issue_review_batch_contract(store=store, contract=batch_contract([malformed]))
+
+    assert store.by_type(ArtifactType.GATE_DECISION) == []
+
+
 @pytest.mark.parametrize("authentication_context", [
     {"provider": "test", "subject": "coordinator:test"},
     {"provider": "test", "subject_sha256": "sha256:" + "a" * 64, "token": "secret"},

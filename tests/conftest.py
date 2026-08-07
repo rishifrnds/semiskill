@@ -129,6 +129,48 @@ def _ensure_test_database(dsn: str) -> None:
             conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database)))
 
 
+def _reset_test_rows(dsn: str) -> None:
+    """Restore the isolated test database's mutable rows and trigger posture."""
+    with psycopg.connect(dsn) as conn:
+        conn.execute("ALTER TABLE artifacts DISABLE TRIGGER artifacts_block_truncate")
+        conn.execute(
+            "ALTER TABLE verified_publication_events DISABLE TRIGGER "
+            "verified_publication_events_block_truncate"
+        )
+        conn.execute(
+            "ALTER TABLE verified_review_contracts DISABLE TRIGGER "
+            "verified_review_contracts_block_truncate"
+        )
+        conn.execute(
+            "ALTER TABLE verified_review_contract_cells DISABLE TRIGGER "
+            "verified_review_contract_cells_block_truncate"
+        )
+        conn.execute(
+            "TRUNCATE verified_review_contract_cells, verified_review_contracts, "
+            "verified_publication_events, artifacts"
+        )
+        conn.execute(
+            "ALTER TABLE verified_review_contract_cells ENABLE TRIGGER "
+            "verified_review_contract_cells_block_truncate"
+        )
+        conn.execute(
+            "ALTER TABLE verified_review_contracts ENABLE TRIGGER "
+            "verified_review_contracts_block_truncate"
+        )
+        conn.execute(
+            "ALTER TABLE verified_publication_events ENABLE TRIGGER "
+            "verified_publication_events_block_truncate"
+        )
+        conn.execute("ALTER TABLE artifacts ENABLE TRIGGER artifacts_block_truncate")
+        conn.execute("DELETE FROM publication_trust_policy")
+        conn.execute(
+            "INSERT INTO publication_trust_policy "
+            "(policy_id,environment,database_name,policy_version,approve_threshold,enabled,"
+            "allow_unregistered_test_fixtures) "
+            "VALUES (true,'test',current_database(),'publication-v1',0.8,true,true)"
+        )
+
+
 @pytest.fixture(scope="session")
 def _migrated_db() -> str:
     """Create/migrate the isolated test DB once; never fall back to DATABASE_URL."""
@@ -157,42 +199,8 @@ def pg_dsn(_migrated_db) -> str:
     """Reset only `_test` and restore every cluster-global test capability afterward."""
     dsn = _migrated_db
     with _test_capability_lease(dsn):
-        with psycopg.connect(dsn) as conn:
-            conn.execute("ALTER TABLE artifacts DISABLE TRIGGER artifacts_block_truncate")
-            conn.execute(
-                "ALTER TABLE verified_publication_events DISABLE TRIGGER "
-                "verified_publication_events_block_truncate"
-            )
-            conn.execute(
-                "ALTER TABLE verified_review_contracts DISABLE TRIGGER "
-                "verified_review_contracts_block_truncate"
-            )
-            conn.execute(
-                "ALTER TABLE verified_review_contract_cells DISABLE TRIGGER "
-                "verified_review_contract_cells_block_truncate"
-            )
-            conn.execute(
-                "TRUNCATE verified_review_contract_cells, verified_review_contracts, "
-                "verified_publication_events, artifacts"
-            )
-            conn.execute(
-                "ALTER TABLE verified_review_contract_cells ENABLE TRIGGER "
-                "verified_review_contract_cells_block_truncate"
-            )
-            conn.execute(
-                "ALTER TABLE verified_review_contracts ENABLE TRIGGER "
-                "verified_review_contracts_block_truncate"
-            )
-            conn.execute(
-                "ALTER TABLE verified_publication_events ENABLE TRIGGER "
-                "verified_publication_events_block_truncate"
-            )
-            conn.execute("ALTER TABLE artifacts ENABLE TRIGGER artifacts_block_truncate")
-            conn.execute("DELETE FROM publication_trust_policy")
-            conn.execute(
-                "INSERT INTO publication_trust_policy "
-                "(policy_id,environment,database_name,policy_version,approve_threshold,enabled,"
-                "allow_unregistered_test_fixtures) "
-                "VALUES (true,'test',current_database(),'publication-v1',0.8,true,true)"
-            )
-        yield dsn
+        _reset_test_rows(dsn)
+        try:
+            yield dsn
+        finally:
+            _reset_test_rows(dsn)

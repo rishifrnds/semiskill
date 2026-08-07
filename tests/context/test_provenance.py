@@ -25,7 +25,8 @@ def _art(t, refs=(), label="team", payload=None):
 
 
 def _md(slug):
-    return f"---\nname: {slug}\nslug: {slug}\n---\nbody"
+    return (f"---\nname: {slug}\nslug: {slug}\nfunction: design-verification\n"
+            "role: dv-engineer\nlevel: senior\n---\nbody")
 
 
 @pytest.mark.integration
@@ -40,7 +41,8 @@ def test_lineage_traces_verification_trail(store, pg_dsn):
     ids = {n.artifact_id for n in res.nodes}
     expected = {
         sv.artifact_id, fixture.approval.artifact_id,
-        fixture.automated_review.artifact_id, fixture.content_review.artifact_id,
+        *[review.artifact_id for review in store.by_type(ArtifactType.REVIEW)],
+        *store.verified_review_contract_ids(),
         *[scan.artifact_id for scan in fixture.scans],
     }
     assert ids == expected
@@ -72,7 +74,8 @@ def test_untrusted_lineage_reader_cannot_self_assert_team(store, pg_dsn):
 
 @pytest.mark.integration
 def test_unpublished_lineage_is_not_queryable_even_with_clearance(store, pg_dsn):
-    skill = _art(ArtifactType.SKILL_VERSION); store.append(skill)
+    skill = _art(ArtifactType.SKILL_VERSION)
+    store.append(skill)
     assert get_lineage(
         dsn=pg_dsn, start_artifact_id=skill.artifact_id, principal=["team"],
         trusted_clearance=True,
@@ -81,7 +84,8 @@ def test_unpublished_lineage_is_not_queryable_even_with_clearance(store, pg_dsn)
 
 @pytest.mark.integration
 def test_reuse_graph(store, pg_dsn):
-    sv = build_skill_version(skill_md=_md("dv/x"), actor="a"); store.append(sv)
+    sv = build_skill_version(skill_md=_md("dv/x"), actor="a")
+    store.append(sv)
     publish_test_skill(store, sv)
     store.append(build_reuse_event(skill_version_id=sv.artifact_id, actor="u1"))
     store.append(build_reuse_event(skill_version_id=sv.artifact_id, actor="u2", method="copy"))

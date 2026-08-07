@@ -4,7 +4,7 @@ from semiskill.artifacts.migrate import apply_migrations
 from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, ActorKind
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.capture.intake import build_skill_version
-from semiskill.intelligence.controller import review_queue, controller_decision, ControllerDecision
+from semiskill.intelligence.controller import controller_decision, review_queue
 from semiskill.intelligence.stability import ExecRecord, StabilityParams
 from semiskill.sensor.judge import GoldItem, record_gold_set, calibrate_judge
 from tests.support import publish_test_skill
@@ -20,7 +20,11 @@ def store(pg_dsn):
 
 
 def _review(store, slug, safety, verdict="request-changes"):
-    sv = store.append(build_skill_version(skill_md=f"---\nname: {slug}\nslug: {slug}\n---\nb", actor="a"))
+    sv = store.append(build_skill_version(
+        skill_md=(f"---\nname: {slug}\nslug: {slug}\nfunction: design-verification\n"
+                  "role: dv-engineer\nlevel: senior\n---\nb"),
+        actor="a",
+    ))
     review = store.append(Artifact.new(
         artifact_type=ArtifactType.REVIEW, source_system=SourceSystem.CLI, actor="ctl",
         actor_kind=ActorKind.AGENT, input_refs=[sv.artifact_id],

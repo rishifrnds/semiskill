@@ -704,12 +704,8 @@ def test_the_registry_rules_block_nothing():
 
 
 @pytest.mark.integration
-@pytest.mark.xfail(reason="still three live C011 findings — two blocks that promise a shared field "
-                          "in prose and do not emit it, and one cross-skill citation of a field "
-                          "that does not exist. Those are authoring defects owned by the skills, "
-                          "not rename-wave debt; test_c011_* below assert they are still there",
-                   strict=False)
 def test_only_the_four_synonym_warns_remain():
+    """The former xfail is now a launch assertion: no registry synonym debt remains."""
     registry_rules = {"C003", "C006", "C007", "C009", "C010", "C011", "C012"}
     left = [f for f in check_pack(PACK) if f.rule in registry_rules]
     assert left == []

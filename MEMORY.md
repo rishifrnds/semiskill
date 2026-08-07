@@ -877,7 +877,22 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010c3b] fix the four root causes in the source-bound full-suite FAIL and rerun it serially.
+- [J-010c3b] 2026-08-07T01:54:11Z  status: done
+  what: preserved every tightened production gate while repairing stale role/level and permission
+  fixtures, exact review-contract witnesses in adversarial MemoryStore state, full-suite adapter
+  environment isolation, complete lineage expectations, post-test row cleanup and stale XPASS debt;
+  missing review facets now fail in Python before the SQL actuator
+  artifacts: this J-010c3b checkpoint, semiskill/authoring/review_collection.py,
+  tests/conftest.py, tests/verification/test_full_suite.py, affected API/context/controller/snapshot
+  fixtures; 75 root-cause tests passed, followed by 206 affected tests passed with 2 skips; Ruff,
+  Python compilation and diff checks passed; post-run database rows were zero, protected triggers
+  4/4 enabled and capability memberships restored
+  next: J-010c3c run the immutable full suite on the corrected clean commit and regenerate the exact
+  read-only development migration plan only after a complete PASS
+
+
+## In-Flight Step
+- [J-010c3c] run the immutable full suite on the corrected clean commit and regenerate its plan.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval

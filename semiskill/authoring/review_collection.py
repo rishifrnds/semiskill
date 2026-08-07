@@ -146,6 +146,9 @@ def _validate_contract_fields(contract: ReviewBatchContract) -> dict[str, Review
             raise BatchRejected(f"{slug}: contract does not reference a skill version")
         if not isinstance(version.payload, dict) or version.payload.get("slug") != slug:
             raise BatchRejected(f"{slug}: contract slug does not match skill version")
+        for facet in ("version", "role", "level"):
+            if not _text(version.payload.get(facet)):
+                raise BatchRejected(f"{slug}: skill version {facet} is required")
         if not _text(cell.reviewer_identity) or not _text(cell.fixer_identity):
             raise BatchRejected(f"{slug}: contract reviewer and fixer identities are required")
         if cell.reviewer_identity == cell.fixer_identity:
