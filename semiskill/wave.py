@@ -198,6 +198,30 @@ def _is_infrastructure_error(exc: BaseException) -> bool:
     return (type(exc).__module__ or "").startswith("psycopg") and "Data" not in name
 
 
+def judge_policy_refusal(*, judge_required: bool, judge_risk_scanner) -> str | None:
+    """Return why this wave cannot succeed, or None if the stage-5 policy is satisfiable.
+
+    The two rules are individually right and jointly unsatisfiable: ``run_pipeline`` records stage 5
+    as ``not_sampled`` when no judge is supplied (a skipped judge must never be rendered as a pass),
+    and the security gate then refuses the skill with ``REQUIRED_JUDGE_NOT_PASSED``. Capturing and
+    scanning anyway writes six artifacts per skill that are known in advance to fail, and buries the
+    cause a step downstream in the scoreboard.
+
+    One predicate, used by both ``run_wave`` and the CLI, so a plan can never promise what a run
+    will refuse. Deliberately no global "skip the judge" switch: a single control that turns the
+    judge off for everything is precisely the control that gets left on.
+    """
+    if judge_required and judge_risk_scanner is None:
+        return (
+            "stage 5 is required by policy but no judge_risk_scanner is configured: every skill "
+            "in this wave would be captured, scanned, and then refused at the security gate with "
+            "REQUIRED_JUDGE_NOT_PASSED. Supply a calibrated judge scanner (see BLK-004), or pass "
+            "judge_required=False for a wave the policy genuinely exempts. Do not resolve this by "
+            "rewriting a not_sampled stage 5 into a pass."
+        )
+    return None
+
+
 def run_wave(
     *,
     store: ArtifactStore,
@@ -226,20 +250,10 @@ def run_wave(
     """
     if allow_ungated:
         raise ValueError("allow_ungated was removed: wave cannot publish or bypass content review")
-    if judge_required and judge_risk_scanner is None:
-        # The two rules are individually right and jointly unsatisfiable: run_pipeline records
-        # stage 5 as `not_sampled` when no judge is supplied (a skipped judge must never be
-        # rendered as a pass), and the security gate then refuses the skill with
-        # REQUIRED_JUDGE_NOT_PASSED. Capturing and scanning anyway writes six artifacts per skill
-        # that are known in advance to fail, and buries the cause a step downstream. Refuse here,
-        # before anything is written, and name what is missing.
-        raise ValueError(
-            "stage 5 is required by policy but no judge_risk_scanner is configured: every skill "
-            "in this wave would be captured, scanned, and then refused at the security gate with "
-            "REQUIRED_JUDGE_NOT_PASSED. Supply a calibrated judge scanner (see BLK-004), or pass "
-            "judge_required=False for a wave the policy genuinely exempts. Do not resolve this by "
-            "rewriting a not_sampled stage 5 into a pass."
-        )
+    refusal = judge_policy_refusal(
+        judge_required=judge_required, judge_risk_scanner=judge_risk_scanner)
+    if refusal:
+        raise ValueError(refusal)
     if on_duplicate not in {"supersede", "skip", "fail"}:
         raise ValueError(f"on_duplicate must be supersede|skip|fail, got {on_duplicate!r}")
 

@@ -300,7 +300,9 @@ def cmd_wave(args, store, out) -> int:
     fixture truncates it between tests.
     """
     from semiskill.authoring.lint import lint_wave_dir, render as render_lint
-    from semiskill.wave import load_wave, render_report, run_wave, write_wave_report
+    from semiskill.wave import (
+        judge_policy_refusal, load_wave, render_report, run_wave, write_wave_report,
+    )
 
     dsn = args.dsn or Config.from_env().database_url
     writes = args.command == "wave" and not args.dry_run
@@ -355,18 +357,33 @@ def cmd_wave(args, store, out) -> int:
         only = set(requested)
     selected = [item for item in items if only is None or item.slug in only]
 
+    # No calibrated stage-5 judge adapter is wired anywhere yet (BLK-004), so the policy is
+    # currently unsatisfiable. Evaluate it BEFORE constructing a store, so both the plan and the run
+    # refuse identically and neither needs a reachable database to tell the operator why.
+    refusal = judge_policy_refusal(judge_required=True, judge_risk_scanner=None)
+
     # Build the store from the RESOLVED dsn, not the environment default — otherwise --dsn would
     # steer the pipeline's corpus probe while artifacts silently landed in a different database.
-    if store is None and writes:
+    if store is None and writes and not refusal:
         from semiskill.artifacts.store import PostgresArtifactStore
         store = PostgresArtifactStore(dsn)
 
     if args.command == "wave-plan" or args.dry_run:
         for i in selected:
             print(f"{i.slug}\t{i.payload_sha256[:12]}\t{i.path}", file=out)
+        if refusal:
+            # Planning succeeded; the plan is simply negative. Report the inventory the operator
+            # asked for, then the refusal — never "would be captured/scanned".
+            print(f"\n{len(selected)} skill(s) inventoried, but this wave would refuse before "
+                  f"writing anything: {refusal}", file=out)
+            return 0
         print(f"\n{len(selected)} skill(s) would be captured/scanned against {dsn}; "
               "wave would create zero approvals and zero publications.", file=out)
         return 0
+
+    if refusal:
+        print(f"wave refused: {refusal}", file=out)
+        return 2
 
     report = run_wave(store=store, dsn=dsn, items=items, only=only,
                       permissions_label=args.label,

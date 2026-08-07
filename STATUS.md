@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T07:35:00Z_
+_Last updated: 2026-08-07T07:48:00Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,16 +14,21 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010d5 (make the CLI wave-plan path honest) is selected, not started.
+- none in flight. J-010d6 is selected, not started, and is blocked on BLK-005.
 
-## J-010d4 result: the judge contradiction now fails loudly, and unblocks nothing on purpose
-Per explicit user decision, the stage-5 judge policy was NOT relaxed. `run_wave` now accepts
-`judge_risk_scanner`/`judge_required` and refuses the whole wave before touching the store when
-stage 5 is required and no judge scanner is configured (ADR-026). `semiskill wave` therefore refuses
-until BLK-004 is resolved - which is the honest state, because it was previously writing six
-artifacts per skill that the security gate was always going to reject. `security_pass` remains 0.
-Known remaining gap: the CLI `wave-plan`/`--dry-run` path returns before `run_wave` and still prints
-an over-optimistic plan. That is J-010d5, not a claim that it works.
+## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
+Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
+`semiskill.wave.judge_policy_refusal` now backs both `run_wave` and the CLI (ADR-026):
+
+- `run_wave` refuses the whole wave before touching the store when stage 5 is required and no judge
+  scanner is configured.
+- `semiskill wave` prints `wave refused: ...` and exits 2 instead of raising a traceback.
+- `semiskill wave-plan` still inventories all 84 skills, but says the wave would refuse rather than
+  claiming they "would be captured/scanned". Verified against the real catalog.
+
+`semiskill wave` therefore refuses until BLK-004 is resolved. That is the honest state: it was
+previously writing six artifacts per skill that the security gate was always going to reject.
+`security_pass` remains 0 by design. Neither step earns any catalog credit.
 
 ## What the crashed session actually did (recorded, not credited)
 An unrecorded session ran ~2026-08-07T05:48Z-06:12Z and died without checkpointing. Its output is
@@ -49,7 +54,8 @@ now preserved under J-010d3. It committed `c8f5fa3` with no STEP-ID and no MEMOR
 - Development DB identity has been observed as three different values as schema advanced:
   `sha256:9b98194d...` (dashboard, 03:17Z), `sha256:85a8cb63...` (migration plan, ~05:48Z),
   `sha256:d29b329d...` (scoreboard, 05:54Z). None of the three is currently re-observable.
-- Git: HEAD `c8f5fa3`, `main` is 0 behind / 1 ahead of `origin/main`; no rebase was pending.
+- Git: `c8f5fa3` and `3ce5694` are pushed; `1494750`, `47c4aaf` and this J-010d5 checkpoint are
+  local-only. Re-verify local/remote equality before treating any of them as shared.
 - Canonical anomaly set: still unavailable; scoreboard v3 does not exist.
 
 ## The structural blocker found by the crashed session (SPEC A)
@@ -62,11 +68,11 @@ sit at `SECURITY_BLOCKED` even though every stage that ran scored 1.000 and the 
 rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 
 ## Immediate order
-1. Make the CLI `wave-plan`/`--dry-run` path refuse consistently with `run_wave`.
-2. Restore the development store, re-verify schema 0023 and the 84 captures, then run the
-   integration suites deferred by BLK-005 serially.
-3. Review and test the inherited `tools/issue_batch.py` before it leases any real work.
-4. Scoreboard v3/progress v2, then Stage 2 and calibrated Stage 5, then prove 1 -> 5 -> 84.
+1. Restore the development store, re-verify schema 0023 and the 84 captures, then run the
+   integration suites deferred by BLK-005 serially. Integration coverage of the wave/pipeline
+   changes has NOT run yet.
+2. Review and test the inherited `tools/issue_batch.py` before it leases any real work.
+3. Scoreboard v3/progress v2, then Stage 2 and calibrated Stage 5, then prove 1 -> 5 -> 84.
 
 ## Active blockers
 - BLK-001: production Entra/OIDC, SharePoint and least-privilege identities are absent.
@@ -88,6 +94,7 @@ rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
   untrusted until J-010d6 tests it against `collect_wave.py::_validate`.
 
 ## Last checkpoint
-- J-010d3 is the containing state-repair checkpoint (`artifacts: this J-010d3 checkpoint`).
-- It abandons J-010d2 as superseded by events and preserves the crashed session's evidence without
-  granting it any review, approval, publication or launch-readiness credit.
+- J-010d5 is the containing checkpoint (`artifacts: this J-010d5 checkpoint`).
+- Earlier this session: J-010d3 repaired state after the crash, J-010d4 added the wave-level judge
+  refusal, and J-010d5-correction-of-J-010d4 fixed a forward-dated timestamp.
+- No step this session earns any review, approval, publication or launch-readiness credit.

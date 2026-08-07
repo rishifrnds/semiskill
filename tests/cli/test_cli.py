@@ -502,6 +502,38 @@ def test_a_wave_is_not_stopped_by_pack_level_warnings(tmp_path):
     assert "before any artifact was written" not in out.getvalue()
 
 
+def test_wave_plan_does_not_promise_a_wave_that_would_refuse(tmp_path):
+    """A plan that reports `would be captured/scanned` for a wave which cannot execute is a lie.
+
+    No calibrated stage-5 judge is configured anywhere in this environment (BLK-004), so the real
+    wave refuses. The plan must say so while still showing the inventory it was asked for.
+    """
+    import io
+    from semiskill.cli import main
+    _clean_skill(tmp_path, "dv-one")
+
+    out = io.StringIO()
+    rc = main(["wave-plan", str(tmp_path)], store=None, out=out)
+    text = out.getvalue()
+    assert rc == 0                                   # planning succeeded; the plan is just negative
+    assert "dv-one" in text                          # inventory is still useful and still shown
+    assert "would be captured/scanned" not in text   # the false promise is gone
+    assert "judge_risk_scanner" in text and "refuse" in text
+
+
+def test_wave_refuses_with_a_message_not_a_traceback_when_no_judge_is_configured(tmp_path):
+    """The refusal must reach the operator as a CLI message, before any store is constructed."""
+    import io
+    from semiskill.cli import main
+    _clean_skill(tmp_path, "dv-one")
+
+    out = io.StringIO()
+    rc = main(["wave", str(tmp_path), "--dsn", "postgresql://unreachable/nowhere"],
+              store=None, out=out)
+    assert rc == 2
+    assert "wave refused" in out.getvalue() and "judge_risk_scanner" in out.getvalue()
+
+
 def test_wave_plan_only_accepts_known_unique_exact_slugs(tmp_path):
     import io
     from semiskill.cli import main

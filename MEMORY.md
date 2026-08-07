@@ -1042,9 +1042,24 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   reason: a forward-dated timestamp is the same defect as a backdated one - it makes the durable log
     disagree with the commit it describes, and the next session's 15-minute freshness gate reads it
 
+- [J-010d5] 2026-08-07T07:48:00Z  status: done
+  what: made the CLI refuse consistently with the wave, so `wave-plan` can no longer promise a run
+    that would refuse and `wave` reports a message instead of a traceback
+  artifacts: this J-010d5 checkpoint, semiskill/wave.py (`judge_policy_refusal`), semiskill/cli.py
+  verification: two DB-free CLI tests written first and observed failing, then passing. Full DB-free
+    subset of tests/wave + tests/cli + tests/spine + tests/authoring + tests/governance +
+    tests/tools: 391 passed, 40 skipped, 0 failed. Manual check against the real catalog:
+    `wave-plan skills` inventories all 84 and then states the wave would refuse, exit 0.
+    Integration tests still NOT run - Docker daemon down (BLK-005).
+  design: one shared `judge_policy_refusal` predicate backs both `run_wave` and the CLI, so a plan
+    can never disagree with a run. No CLI flag to disable the judge was added: a single global
+    switch that turns the judge off for everything is the control that gets left on.
+  credit: none toward security_pass, review, approval or publication.
+  next: J-010d6 restore the store, re-verify the two unverified claims, run the integration suites
+
 ## In-Flight Step
 
-- none. J-010d5 is selected but not started.
+- none. J-010d6 is selected but not started; it is blocked on BLK-005.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
