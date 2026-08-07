@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T08:45:25Z_
+_Last updated: 2026-08-07T08:56:49Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010d8 (re-run the immutable suite for a current PASS record) is selected.
+- none in flight. J-010d9 (fix the response-delivery race, then re-run the suite) is selected.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -83,16 +83,22 @@ rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 - BLK-003: the internal Stage-2 image/rule pack needs AppSec/legal/supply-chain approval.
 - BLK-004: Stage-5 needs loopback-only runtime plus independent labels/adjudication/calibration.
 
-## Full-suite status
-Run `08e18e7c-90c3-4d3a-8383-c604edfc57e5` on `cc3508a`: 1105 passed, 2 failed, 7 skipped.
+## Full-suite status: NOT a current PASS
+Latest run `350ecd33-8f78-4a76-a7eb-7f2b6ec97908` on `a1d8746`: 1106 passed, 1 failed, 7 skipped.
 
-- The README red-team regression it exposed is FIXED. It was introduced by `105b3cb` and hidden
-  because the prior full-suite run predates that commit.
-- `test_host_origin_csrf_and_media_type_fail_closed` is a KNOWN WINDOWS FLAKE, not fixed: it aborts
-  reading the response with WinError 10053, hits a different parametrization each time, and passed
-  36/36 on re-run. The server's fail-closed status codes are correct; the race is that it closes
-  while the client is still writing. Not silenced with a retry - do not read a later green run as
-  proof the race is gone.
+- The README red-team regression is FIXED (1105 -> 1106 passed). It was introduced by `105b3cb` and
+  stayed hidden because the prior full-suite run predates that commit.
+- `test_host_origin_csrf_and_media_type_fail_closed` still fails intermittently. It has now hit
+  three DIFFERENT parametrizations across three runs (`overrides10-415`, `overrides0-421`,
+  `overrides2-421`) and passes 36/36 standalone - a race, not a defect in any rejection path.
+- Root cause: `dashboard/server.py::Handler._json` writes the rejection and returns without draining
+  the unread request body; on Windows, closing with unread data sends RST and discards the response.
+  The status codes themselves are correct.
+- Deliberately NOT patched: an unbounded drain is a DoS vector, a blocking drain hangs the existing
+  `413` case that never sends its body, and a test retry hides the race. J-010d9 implements a
+  bounded non-blocking drain (or explicit half-close) with its own tests.
+- **Consequence:** any gate requiring a full-suite PASS - a new migration plan, a release checkpoint
+  - stays blocked until J-010d9 lands. Do not read a lucky green run as resolution.
 
 ## Standing hazards
 - Never run database tests concurrently; use only the explicit isolated `_test` database.

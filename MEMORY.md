@@ -1116,9 +1116,33 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication.
   next: J-010d8 re-run the immutable suite on this clean source to obtain a current PASS record
 
+- [J-010d8] 2026-08-07T08:56:49Z  status: done
+  what: re-ran the immutable full suite on clean source, confirmed the README fix, and root-caused
+    the remaining flake without patching a security-sensitive path under time pressure
+  artifacts: this J-010d8 checkpoint,
+    dashboard/runs/full-suite/runs/350ecd33-8f78-4a76-a7eb-7f2b6ec97908.json
+  verification: run `350ecd33-8f78-4a76-a7eb-7f2b6ec97908` on commit `a1d8746` reported 1106 passed,
+    1 failed, 7 skipped, 0 errors against isolated `semiskill_test` at 0023. The README regression is
+    gone (1105 -> 1106 passed). The sole remaining failure is the known flake, which hit a THIRD
+    distinct parametrization (`overrides2-421`, after `overrides10-415` and `overrides0-421`) -
+    conclusive evidence of a race rather than a defect in any specific rejection path.
+  root-cause: `dashboard/server.py::Handler._json` writes the rejection response and returns without
+    draining the unread request body. On Windows, closing a socket with unread data in the receive
+    buffer sends RST, which discards the response the client has not yet read. The server's status
+    codes are correct; only delivery races.
+  not-fixed-deliberately: every obvious remedy has a sharp edge in a fail-closed security path. An
+    unbounded drain is a DoS vector; a blocking drain hangs the existing `413` case, which sets
+    Content-Length 16385 and deliberately never sends the body; a test-side retry hides the race.
+    The correct fix is a bounded, non-blocking drain (or an explicit half-close) with its own tests,
+    which is a designed step, not an end-of-session patch.
+  consequence: the immutable full suite is NOT a current PASS. Any gate that requires a full-suite
+    PASS - a new migration plan, a release checkpoint - remains blocked until J-010d9 lands.
+  credit: none toward security_pass, review, approval or publication.
+  next: J-010d9 implement the bounded non-blocking drain (or half-close) and re-run the full suite
+
 ## In-Flight Step
 
-- none. J-010d8 is selected but not started.
+- none. J-010d9 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
