@@ -1092,9 +1092,33 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication.
   next: J-010d7 run the immutable full suite on this clean source
 
+- [J-010d7] 2026-08-07T08:45:25Z  status: done
+  what: ran the immutable full suite on clean source, fixed the one real regression it exposed, and
+    characterised the one flaky failure instead of papering over it
+  artifacts: this J-010d7 checkpoint, README.md,
+    dashboard/runs/full-suite/runs/08e18e7c-90c3-4d3a-8383-c604edfc57e5.json
+  verification: run `08e18e7c-90c3-4d3a-8383-c604edfc57e5` on commit `cc3508a` reported 1105 passed,
+    2 failed, 7 skipped, 0 errors, 0 xfailed/xpassed against isolated `semiskill_test` at 0023.
+    Both failures were diagnosed rather than assumed:
+  finding-1 (real, PRE-EXISTING, now fixed): `test_root_readme_does_not_claim_unexecuted_redteam_
+    results` failed because commit `105b3cb` (J-010d1) rewrote README.md and deleted the red-team
+    section including its required "authoritative corpus execution is currently unavailable"
+    caveat. It went unnoticed because the previous full-suite run predates that commit - exactly the
+    staleness HANDOFF.md warned about. README now states the unavailability explicitly; the same
+    edit removed the now-false "development schema 0015" claim.
+  finding-2 (flaky, NOT fixed, characterised): `test_host_origin_csrf_and_media_type_fail_closed`
+    failed with `ConnectionAbortedError [WinError 10053]` while READING the response. It hit
+    `overrides10-415` in the suite run and `overrides0-421` on the next run, then passed 12/12 three
+    consecutive times (36/36). It is a Windows TCP race: the server sends its fail-closed response
+    and closes while the client is still writing, so Windows sends RST and discards the unread
+    response. The server's status codes are correct. Deliberately NOT silenced with a retry - a
+    green suite bought by hiding a race is worth less than a recorded one.
+  credit: none toward security_pass, review, approval or publication.
+  next: J-010d8 re-run the immutable suite on this clean source to obtain a current PASS record
+
 ## In-Flight Step
 
-- none. J-010d7 is selected but not started.
+- none. J-010d8 is selected but not started.
 
 ## Pending Steps
 1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before

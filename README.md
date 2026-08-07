@@ -81,8 +81,9 @@ unavailable when its canonical scoreboard or source evidence is stale.
 
 ## Current high-risk gaps
 
-- Development schema 0015 must be migrated through 0023 under a fresh source-bound human-approved
-  plan digest.
+- The held-out red-team corpus has no current result to report, because
+  authoritative corpus execution is currently unavailable. No adversarial pass rate, escape count or
+  blocking claim should be read into this repository. Absence of a result is not a clean result.
 - Stage 2 needs the internally governed deterministic scanner selected by ADR-024; the old
   claude-flow path cannot earn credit.
 - Stage 5 needs a loopback-only runtime, exact adapter and independently labeled calibration report.

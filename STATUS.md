@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-07T08:30:50Z_
+_Last updated: 2026-08-07T08:45:25Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -14,7 +14,7 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 - Coordinator PID 3408 is the sole writer; pooled agents are read-only auditors.
 
 ## Active step
-- none in flight. J-010d7 (immutable full suite on this clean source) is selected, not started.
+- none in flight. J-010d8 (re-run the immutable suite for a current PASS record) is selected.
 
 ## J-010d4 + J-010d5 result: the judge contradiction now fails loudly, and unblocks nothing
 Per explicit user decision, the stage-5 judge policy was NOT relaxed. One shared predicate
@@ -73,8 +73,8 @@ sit at `SECURITY_BLOCKED` even though every stage that ran scored 1.000 and the 
 rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 
 ## Immediate order
-1. Run the immutable full suite on this clean source (it refuses a dirty tree), then regenerate a
-   scoreboard from clean source rather than the current `dirty: true` snapshot.
+1. Re-run the immutable full suite on this clean source for a current PASS record, then regenerate
+   a scoreboard from clean source rather than the current `dirty: true` snapshot.
 2. Review and test the inherited `tools/issue_batch.py` before it leases any real work.
 3. Scoreboard v3/progress v2, then Stage 2 and calibrated Stage 5, then prove 1 -> 5 -> 84.
 
@@ -82,6 +82,17 @@ rescoped.** Details and the proposed resolution are in `docs/UNBLOCK_SPECS.md`.
 - BLK-001: production Entra/OIDC, SharePoint and least-privilege identities are absent.
 - BLK-003: the internal Stage-2 image/rule pack needs AppSec/legal/supply-chain approval.
 - BLK-004: Stage-5 needs loopback-only runtime plus independent labels/adjudication/calibration.
+
+## Full-suite status
+Run `08e18e7c-90c3-4d3a-8383-c604edfc57e5` on `cc3508a`: 1105 passed, 2 failed, 7 skipped.
+
+- The README red-team regression it exposed is FIXED. It was introduced by `105b3cb` and hidden
+  because the prior full-suite run predates that commit.
+- `test_host_origin_csrf_and_media_type_fail_closed` is a KNOWN WINDOWS FLAKE, not fixed: it aborts
+  reading the response with WinError 10053, hits a different parametrization each time, and passed
+  36/36 on re-run. The server's fail-closed status codes are correct; the race is that it closes
+  while the client is still writing. Not silenced with a retry - do not read a later green run as
+  proof the race is gone.
 
 ## Standing hazards
 - Never run database tests concurrently; use only the explicit isolated `_test` database.
