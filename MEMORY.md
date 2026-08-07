@@ -892,7 +892,23 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
 
 
 ## In-Flight Step
-- [J-010c3c] run the immutable full suite on the corrected clean commit and regenerate its plan.
+- [J-010c3c] 2026-08-07T03:04:15Z  status: done
+  what: produced a clean-source immutable full-suite PASS at `b36f250` and generated the exact
+  read-only 0015-to-0023 development migration plan; subsequent read-only pooled audits prepared
+  the Stage-2, Stage-5, authenticated review-issuance and scoreboard-v3 implementation contracts
+  without changing the reviewed source
+  delayed: true, reason: the completed run and its plan were intentionally held byte-stable while
+  awaiting the exact human migration decision; the user then requested a versioned handoff and
+  project-skill/state refresh, which explicitly supersedes the still-unapproved source-bound plan
+  artifacts: b36f250, dashboard/runs/full-suite/runs/d7af92e6-f0fc-455c-b368-739355bf0043.json,
+  sha256:33045ec0f96509209441e9bf855f8e37cc2dd3fc5419546ff809bdd664044f8f,
+  migration plan sha256:ed397d3454c73094852e1da1d3723ddb53007c2ac175f56358ae4e3c7a7cb864;
+  1078 passed, 0 failed, 0 errors, 7 skipped, 0 xfailed/xpassed on exact `semiskill_test`
+  next: J-010d1 refresh the canonical handoff, project skill, learnings and state, then regenerate
+  the exact migration plan and push the synchronized main branch
+
+- [J-010d1] refresh the canonical handoff, project skill, learnings and related state; verify,
+  regenerate the source-bound migration plan, commit and push synchronized `main`.
 
 ## Pending Steps
 1. [J-008] hash-bound review artifacts, calibrated collection, deterministic readiness, real approval
