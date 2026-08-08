@@ -2,7 +2,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -11,6 +13,7 @@ from typing import Protocol
 import psycopg
 import psycopg.rows
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 from semiskill.artifacts.schema import (
     PERMISSIONS_LABELS,
     Artifact,
@@ -224,6 +227,8 @@ class PostgresArtifactStore:
     def __init__(self, dsn: str, *, approval_dsn: str | None = None,
                  review_contract_dsn: str | None = None, export_dsn: str | None = None):
         self._dsn = dsn
+        self._pools: dict[str, ConnectionPool] = {}
+        self._pools_lock = threading.Lock()
         configured_approval_dsn = approval_dsn or os.environ.get(
             "SEMISKILL_APPROVAL_DATABASE_URL"
         )
@@ -285,6 +290,50 @@ class PostgresArtifactStore:
             dsn if database_name.lower().endswith("_test") else None
         )
 
+    def _pool(self, dsn: str) -> ConnectionPool:
+        """Return this instance's connection pool for `dsn`, creating it lazily on first use.
+
+        Every public method used to open-and-close a brand new physical connection per call,
+        which exhausted Windows ephemeral ports under serial test load (J-010e6, ADR-027). One
+        small pool per distinct DSN is kept instead — up to four, since the approval actuator,
+        review coordinator and export reader must be distinct database logins and so cannot
+        share a pool. `min_size=1` matches actual single-connection-at-a-time usage; `max_size=4`
+        gives the threaded dashboard API headroom without recreating the original problem.
+        """
+        pool = self._pools.get(dsn)
+        if pool is not None:
+            return pool
+        with self._pools_lock:
+            pool = self._pools.get(dsn)
+            if pool is None:
+                pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
+                self._pools[dsn] = pool
+        return pool
+
+    @contextmanager
+    def _connection(self, dsn: str, *, row_factory=psycopg.rows.tuple_row):
+        """Check out a pooled connection with the exact row_factory the caller needs.
+
+        `pool.connection()` wraps the checked-out connection in the same commit-on-success /
+        rollback-on-exception behaviour as bare `psycopg.connect(...)`, so no call site's
+        transaction semantics change. `row_factory` is always reset to the default before the
+        connection returns to the pool so a `dict_row` setting can never leak into a later
+        call site on a reused physical connection.
+        """
+        with self._pool(dsn).connection() as conn:
+            conn.row_factory = row_factory
+            try:
+                yield conn
+            finally:
+                conn.row_factory = psycopg.rows.tuple_row
+
+    def close(self) -> None:
+        """Close every pooled connection. Safe to call multiple times or never (see __del__)."""
+        with self._pools_lock:
+            pools, self._pools = self._pools, {}
+        for pool in pools.values():
+            pool.close()
+
     def database_identity(self, *, environment: str) -> dict:
         """Return a stable non-secret identity for scoreboard provenance."""
         info = psycopg.conninfo.conninfo_to_dict(self._dsn)
@@ -304,7 +353,7 @@ class PostgresArtifactStore:
         if self._export_dsn is None:
             raise ValueError("export reader database identity is not configured")
         info = psycopg.conninfo.conninfo_to_dict(self._export_dsn)
-        with psycopg.connect(self._export_dsn) as conn:
+        with self._connection(self._export_dsn) as conn:
             session_user, roles, has_reader = conn.execute(
                 "SELECT session_user, coalesce(array_agg(granted.rolname) "
                 "FILTER (WHERE granted.rolname LIKE 'semiskill_export_label_%'), ARRAY[]::name[]) "
@@ -343,7 +392,7 @@ class PostgresArtifactStore:
         """Return the non-secret identity claim bound to the dedicated coordinator login."""
         if self._review_contract_dsn is None:
             raise RuntimeError("dedicated review coordinator database identity is not configured")
-        with psycopg.connect(self._review_contract_dsn) as conn:
+        with self._connection(self._review_contract_dsn) as conn:
             session_user, authorized = conn.execute(
                 "SELECT session_user,"
                 "pg_has_role(session_user,'semiskill_review_coordinator','MEMBER')"
@@ -358,7 +407,7 @@ class PostgresArtifactStore:
         }
 
     def append(self, a: Artifact) -> Artifact:
-        with psycopg.connect(self._dsn) as conn:
+        with self._connection(self._dsn) as conn:
             conn.execute(
                 f"INSERT INTO artifacts ({','.join(_COLS)}) VALUES ({','.join(['%s'] * len(_COLS))})",
                 _insert_values(a),
@@ -377,7 +426,7 @@ class PostgresArtifactStore:
             raise ValueError("append_approval requires an approval artifact")
         if self._approval_dsn is None:
             raise RuntimeError("dedicated approval actuator database identity is not configured")
-        with psycopg.connect(self._approval_dsn) as conn:
+        with self._connection(self._approval_dsn) as conn:
             appended = conn.execute(
                 "SELECT append_verified_approval(" + ",".join(["%s"] * 16) + ")",
                 _approval_values(a),
@@ -398,7 +447,7 @@ class PostgresArtifactStore:
             raise ValueError("append_review_contract requires a gate_decision artifact")
         if self._review_contract_dsn is None:
             raise RuntimeError("dedicated review coordinator database identity is not configured")
-        with psycopg.connect(self._review_contract_dsn) as conn:
+        with self._connection(self._review_contract_dsn) as conn:
             appended = conn.execute(
                 "SELECT append_verified_review_contract(" + ",".join(["%s"] * 16) + ")",
                 _approval_values(a),
@@ -417,7 +466,7 @@ class PostgresArtifactStore:
         """Activate an imported exact approval through the same role-scoped deterministic gate."""
         if self._approval_dsn is None:
             raise RuntimeError("dedicated approval actuator database identity is not configured")
-        with psycopg.connect(self._approval_dsn) as conn:
+        with self._connection(self._approval_dsn) as conn:
             row = conn.execute(
                 "SELECT activate_verified_publication(%s)", (approval_id,),
             ).fetchone()
@@ -439,14 +488,14 @@ class PostgresArtifactStore:
             f"INSERT INTO artifacts ({','.join(_COLS)}) "
             f"VALUES ({','.join(['%s'] * len(_COLS))})"
         )
-        with psycopg.connect(self._dsn) as conn:
+        with self._connection(self._dsn) as conn:
             for artifact in rows:
                 conn.execute(statement, _insert_values(artifact))
             conn.commit()
         return rows
 
     def get(self, artifact_id: uuid.UUID) -> Artifact | None:
-        with psycopg.connect(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
+        with self._connection(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
             row = conn.execute(
                 "SELECT * FROM artifacts WHERE artifact_id=%s", (artifact_id,)
             ).fetchone()
@@ -456,7 +505,7 @@ class PostgresArtifactStore:
         ids = list(dict.fromkeys(artifact_ids))
         if not ids:
             return []
-        with psycopg.connect(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
+        with self._connection(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
             rows = conn.execute(
                 "SELECT * FROM artifacts WHERE artifact_id = ANY(%s)", (ids,),
             ).fetchall()
@@ -464,7 +513,7 @@ class PostgresArtifactStore:
         return [by_id[artifact_id] for artifact_id in ids if artifact_id in by_id]
 
     def by_type(self, t: ArtifactType) -> list[Artifact]:
-        with psycopg.connect(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
+        with self._connection(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
             rows = conn.execute(
                 "SELECT * FROM artifacts WHERE artifact_type=%s ORDER BY timestamp_start", (t.value,)
             ).fetchall()
@@ -472,14 +521,14 @@ class PostgresArtifactStore:
 
     def verified_publication_ids(self) -> set[uuid.UUID]:
         """Return actuator-projected decisions; raw approval JSON never enters this set."""
-        with psycopg.connect(self._dsn) as conn:
+        with self._connection(self._dsn) as conn:
             rows = conn.execute(
                 "SELECT approval_id FROM verified_publication_events"
             ).fetchall()
         return {row[0] for row in rows}
 
     def verified_review_contract_ids(self) -> set[uuid.UUID]:
-        with psycopg.connect(self._dsn) as conn:
+        with self._connection(self._dsn) as conn:
             rows = conn.execute(
                 "SELECT contract_id FROM verified_review_contract_ids_v1()"
             ).fetchall()
@@ -490,7 +539,7 @@ class PostgresArtifactStore:
     ) -> bool:
         if permissions_label not in PERMISSIONS_LABELS:
             return False
-        with psycopg.connect(self._dsn) as conn:
+        with self._connection(self._dsn) as conn:
             row = conn.execute(
                 "SELECT review_contract_verified_v1(%s,%s)",
                 (contract_id, permissions_label),
@@ -499,7 +548,7 @@ class PostgresArtifactStore:
 
     def publication_reconciliation_bundle(self) -> PublicationReconciliationBundle:
         """Read evidence and actuator state from one repeatable-read transaction."""
-        with psycopg.connect(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
+        with self._connection(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             rows = conn.execute(
                 "SELECT * FROM artifacts WHERE artifact_type IN "
@@ -523,7 +572,7 @@ class PostgresArtifactStore:
 
     def publication_registry_entry(self, slug: str) -> dict | None:
         """Read the actuator's immutable current-phase publication allowlist."""
-        with psycopg.connect(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
+        with self._connection(self._dsn, row_factory=psycopg.rows.dict_row) as conn:
             row = conn.execute(
                 "SELECT slug,role,level,permissions_label,active,judge_required,registry_sha256 "
                 "FROM publication_registry_entry_v1(%s)",
@@ -544,7 +593,7 @@ class PostgresArtifactStore:
         if self._export_dsn is None:
             raise ValueError("export reader database identity is not configured")
 
-        with psycopg.connect(self._export_dsn, row_factory=psycopg.rows.dict_row) as conn:
+        with self._connection(self._export_dsn, row_factory=psycopg.rows.dict_row) as conn:
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             conn.execute("SET LOCAL ROLE semiskill_export_reader")
             rows = conn.execute(

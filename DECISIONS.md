@@ -660,6 +660,55 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: J-010d4, BLK-004; `semiskill/wave.py`; `tests/wave/test_wave.py`;
   `docs/UNBLOCK_SPECS.md` (SPEC A); `HANDOFF.md` gap 9
 
+## [ADR-027] Pool `PostgresArtifactStore` connections instead of connect-per-call
+- Date: 2026-08-08
+- Status: accepted
+- Context: `PostgresArtifactStore` opens a fresh `psycopg.connect()` on every one of its 16 call
+  sites, across up to four distinct DSNs (`_dsn`, `_approval_dsn`, `_review_contract_dsn`,
+  `_export_dsn`). J-010e6 measured 2,901 Windows sockets in TIME_WAIT during one serial
+  full-suite run and traced an intermittent `OperationalError: Address already in use` failure
+  to Windows ephemeral-port exhaustion from this per-call connect/close churn, worsening with
+  every test added. The production hot path (`semiskill/api.py`'s `/queue` handler) also builds
+  a fresh `PostgresArtifactStore` per HTTP request inside a `ThreadingHTTPServer`, so the same
+  defect exists in the dashboard, not only in tests.
+- Decision: add `psycopg-pool` (`psycopg[pool]`) as a pinned dependency and give
+  `PostgresArtifactStore` an internal, lazily-created `psycopg_pool.ConnectionPool` per distinct
+  DSN string (`min_size=1, max_size=4`), guarded by a lock against a first-use race from
+  concurrent threads. Every call site changes from `with psycopg.connect(dsn, ...) as conn:` to
+  `with self._connection(dsn, row_factory=...) as conn:`, a thin wrapper around
+  `pool.connection()` that sets the exact row_factory each call site already used and resets it
+  to the default on exit, so a reused pooled connection can never leak a `dict_row` setting into
+  a call site expecting tuples. `psycopg_pool.ConnectionPool.connection()` wraps the checked-out
+  connection in the identical `with conn:` commit/rollback-on-exit semantics as bare
+  `psycopg.connect()` (verified by reading the installed 3.3.1 source), so no write path's
+  correctness changes — every write method already calls `conn.commit()` explicitly before the
+  block exits. A `close()` method closes and drops every pool; an instance that is never closed
+  still self-cleans via `ConnectionPool.__del__` when garbage-collected.
+- Alternatives considered:
+  - A single pool shared across all four DSNs — rejected: three of the four DSNs must be
+    *different* database logins by the constructor's own identity checks (approval actuator,
+    review coordinator, export reader), so one pool cannot serve all of them; a dict keyed by
+    DSN string is the minimum structure that respects that invariant.
+  - Push pooling to callers instead of the store class (construct one pool in `cli.py`/`api.py`
+    and inject it) — rejected for this step: `ArtifactStore` is a `Protocol` with no
+    connection-pool concept, and several call sites (tests, `tools/*.py` scripts) construct
+    `PostgresArtifactStore` directly with no injection point today. Pooling inside the class
+    fixes the defect at its actual source without a wider DI refactor; a *shared, cross-instance*
+    pool at the API/CLI boundary remains a legitimate follow-up once this lands.
+  - Rely on `psycopg_pool`'s `min_size=4` default — rejected: that eagerly opens four
+    connections per store instance on first use, which is worse than today's baseline for the
+    common case (a test or CLI invocation making 1-2 calls); `min_size=1` matches observed
+    concurrency, `max_size=4` gives the threaded API server headroom without recreating the
+    original problem.
+- Consequences: fixes the connection churn at its source (the store class), including the
+  `/queue` HTTP hot path. Does NOT by itself eliminate the *test-fixture*-driven duplicate-
+  instance churn — 29 test files each construct a fresh `PostgresArtifactStore` per test, and
+  `tests/conftest.py`'s `pg_dsn` fixture separately opens two more bare connections per test for
+  its TRUNCATE reset. That is a separate, larger fixture-architecture change and is not
+  undertaken here. Adds `psycopg-pool` as a new pinned runtime dependency.
+- Related: J-010e6 (measured the port exhaustion), J-010e8; `semiskill/artifacts/store.py`;
+  `tests/artifacts/test_store.py`; `pyproject.toml`
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

@@ -1309,24 +1309,60 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     project/security work performed.
   next: J-010e8 pool artifact-store connections (ADR-worthy) or start the Stage-5 loopback adapter
 
+- [J-010e8] 2026-08-08T23:06:32Z  status: done
+  what: gave `PostgresArtifactStore` a per-DSN connection pool instead of connect-per-call,
+    fixing the Windows port-exhaustion flake measured in J-010e6
+  artifacts: this J-010e8 checkpoint, DECISIONS.md (ADR-027), pyproject.toml,
+    semiskill/artifacts/store.py, tests/artifacts/test_store.py
+  verification: 6 new tests written first and observed either failing (AttributeError: no
+    `_pools`) or, once a first pass stubbed the attribute, failing on a too-strict assertion
+    before the real implementation made them pass — see the steady-state-reuse note below.
+    `tests/artifacts/test_store.py`: 10 passed. Full `pytest tests/`: **1196 passed, 7 skipped,
+    0 failed in 200.13s** on a DIRTY tree (uncommitted at test time) - not an immutable full-suite
+    PASS record, but a real, live-database, zero-failure run with the Docker Postgres container
+    that was down at session start now up. No port-exhaustion failure this run.
+  environment note: Docker Desktop was not running at session start (`docker ps` failed to reach
+    the daemon), and `semiskill-db-1` was stopped once Docker came up. Both were started as part
+    of this step; this is routine local dev-environment startup, not a state change to the project.
+  design: one `psycopg_pool.ConnectionPool` per distinct DSN string, lazily created on first use
+    (construction alone opens zero connections - a dedicated test asserts this), `min_size=1,
+    max_size=4`, guarded by a lock against a first-use race from concurrent threads (relevant
+    because the real hot path, `semiskill/api.py`'s `/queue` handler, runs in a
+    `ThreadingHTTPServer`). `pool.connection()` wraps the checked-out connection in the identical
+    commit/rollback-on-exit semantics as bare `psycopg.connect()` (confirmed by reading the
+    installed psycopg_pool 3.3.1 source before relying on it), so no write path's correctness
+    changed - every write method already called `conn.commit()` explicitly. `row_factory` is set
+    per-checkout and reset to the default before the connection returns to the pool, so a
+    `dict_row` setting from one call site can never leak into a later tuple-returning call site on
+    a reused physical connection - proved by a dedicated test.
+  test-design-finding: the first version of the reuse test asserted `connections_num <= 1` after
+    4 calls and failed with `2 <= 1` - not a bug, a legitimate race between the pool's
+    background `min_size` warm-up and an immediate first call, which can open one on-demand extra
+    connection. Rewrote the assertion to prove the actual invariant (steady-state: once
+    `connections_num` stops moving, five more calls must not move it again) instead of a
+    warm-up-sensitive exact count.
+  scope: fixes the defect at its source (the store class), including the API's per-request hot
+    path. Does NOT eliminate test-fixture-driven churn from 29 files each constructing a fresh
+    `PostgresArtifactStore` per test, or `tests/conftest.py`'s `pg_dsn` fixture opening two more
+    bare (non-pooled, by design - it predates and is unrelated to this class) connections per test
+    for its TRUNCATE reset. Recorded as a known remaining gap in ADR-027, not silently dropped.
+  credit: none toward security_pass, review, approval or publication. Platform reliability only.
+  next: tools/issue_batch.py review against collect_wave.py::_validate
+
 ## In-Flight Step
 
-- none. J-010e8 is selected but not started.
+- none. `tools/issue_batch.py` review is selected but not started.
 
 ## Pending Steps
-1. [J-010e8] pool `PostgresArtifactStore` connections (or otherwise stop per-call connect churn) -
-   ADR-worthy. J-010e6 measured 2,901 Windows sockets in TIME_WAIT during one serial full-suite run
-   and traced it to `store.get` opening a fresh `psycopg.connect` on every call; needed before more
-   tests are added, not just for tidiness.
-2. Review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate` before it
+1. Review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate` before it
    is allowed to lease any real work; it is currently unreviewed inherited code (HANDOFF.md gap 4).
    Never actually completed despite being drafted as `[J-010d7]` in an earlier version of this list.
-3. Implement scoreboard v3/progress v2 strict nested validation and one shared live observation
+2. Implement scoreboard v3/progress v2 strict nested validation and one shared live observation
    contract; v2 remains diagnostic and cannot authorize review or release (HANDOFF.md gap 4).
-4. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
-5. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
-6. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
-7. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
+3. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
+4. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
+5. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
+6. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.

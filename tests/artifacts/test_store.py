@@ -1,3 +1,4 @@
+import uuid
 import pytest
 from pathlib import Path
 from semiskill.artifacts.migrate import apply_migrations
@@ -5,6 +6,13 @@ from semiskill.artifacts.schema import Artifact, ArtifactType, SourceSystem, Act
 from semiskill.artifacts.store import PostgresArtifactStore
 
 MIG = Path("semiskill/artifacts/migrations")
+
+
+def _artifact(slug: str) -> Artifact:
+    return Artifact.new(
+        artifact_type=ArtifactType.SKILL_VERSION, source_system=SourceSystem.CLI,
+        actor="rishi", actor_kind=ActorKind.HUMAN, payload={"slug": slug},
+    )
 
 
 @pytest.fixture
@@ -93,3 +101,68 @@ def test_non_test_approval_actuator_requires_distinct_database_identity(monkeypa
         approval_dsn="postgresql://actuator:secret@db.internal:5432/semiskill",
     )
     assert store._approval_dsn.endswith("/semiskill")
+
+
+def test_constructing_a_store_opens_no_connection(monkeypatch):
+    """J-010e8: connecting must be lazy — construction alone must never touch the network."""
+    def _refuse(*args, **kwargs):
+        raise AssertionError("PostgresArtifactStore.__init__ must not open a connection")
+    monkeypatch.setattr("psycopg.connect", _refuse)
+    monkeypatch.setattr("psycopg_pool.ConnectionPool.__init__", _refuse)
+    PostgresArtifactStore("postgresql://runtime:secret@db.internal:5432/semiskill")
+
+
+@pytest.mark.integration
+def test_repeated_calls_reuse_pooled_connections_instead_of_reconnecting(store):
+    """J-010e8: the defect this fixes — every call used to open a brand-new physical connection.
+
+    The pool's `min_size` connection is filled by a background worker started at construction,
+    which can race a call made immediately afterward into opening one extra on-demand
+    connection — that race is harmless and not what this test is about. What must NOT happen,
+    before or after that warm-up settles, is a new physical connection per call: once
+    `connections_num` stops moving, it must stay flat no matter how many more calls follow.
+    Before this fix `_pools` did not exist at all (AttributeError); with it unpooled, this loop
+    would have grown `connections_num` by one every iteration instead of holding steady.
+    """
+    a = _artifact("dv/pool-check")
+    store.append(a)
+    store.get(a.artifact_id)
+    pool = store._pools[store._dsn]
+    warm = pool.get_stats()["connections_num"]
+    for _ in range(5):
+        store.get(a.artifact_id)
+        store.by_type(ArtifactType.SKILL_VERSION)
+    assert pool.get_stats()["connections_num"] == warm, (
+        f"connections_num grew past {warm} after warm-up — pooling is not reusing connections"
+    )
+
+
+@pytest.mark.integration
+def test_dict_row_factory_never_leaks_into_a_tuple_returning_call(store):
+    """A pooled connection that served a dict_row method must not poison a later tuple call."""
+    a = _artifact("dv/row-factory-check")
+    store.append(a)
+    store.by_type(ArtifactType.SKILL_VERSION)  # uses row_factory=dict_row internally
+    # verified_publication_ids does `row[0]` on plain tuples; a leaked dict_row raises KeyError.
+    assert store.verified_publication_ids() == set()
+
+
+@pytest.mark.integration
+def test_append_commit_is_visible_from_a_separate_store_instance(pg_dsn):
+    """Pooling must not change durability: a committed write is visible through a fresh pool."""
+    writer = PostgresArtifactStore(pg_dsn)
+    reader = PostgresArtifactStore(pg_dsn)
+    a = _artifact("dv/cross-instance-visibility")
+    writer.append(a)
+    got = reader.get(a.artifact_id)
+    assert got is not None and got.artifact_id == a.artifact_id
+    reader.close()
+    writer.close()
+
+
+@pytest.mark.integration
+def test_close_closes_and_drops_every_pool(store):
+    store.get(uuid.uuid4())
+    assert store._pools
+    store.close()
+    assert store._pools == {}
