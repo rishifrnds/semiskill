@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-08T23:28:50Z_
+_Last updated: 2026-08-08T23:50:45Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills; prove 16 roles at >=5.
@@ -9,8 +9,15 @@ Phase J: independently verify, approve and publish the 84 active DV skills; prov
 ## Session
 - ID: 20260808T165438Z-RISHI_PC-392cc5 - lock held: yes
 - User's three-item request is COMPLETE: pool the artifact store (J-010e8), review
-  `tools/issue_batch.py` (J-010e9), start the Stage-5 adapter (J-010e10). All done, all committed
-  locally. Nothing pushed to `origin/main` yet - awaiting explicit authorization per session norms.
+  `tools/issue_batch.py` (J-010e9), start the Stage-5 adapter (J-010e10). All done and committed.
+- PUSHED at 2026-08-08T23:50:45Z with explicit user authorization: `origin/main` now equals local
+  HEAD `b98d6a7` (verified `git rev-parse HEAD` == `git rev-parse origin/main`). Single-branch
+  direct-push workflow, no PR/merge step exists in this repo.
+- User then asked to "continue till we have all 84 skills published." Flagged back to the user
+  rather than proceeding silently: 84/84 publication is blocked on THREE items that are human
+  actions outside this session's authority (BLK-001/003/004), and `.agents/skills/semiskill-
+  project/SKILL.md` explicitly forbids ever fabricating an approval to make progress look real.
+  See "Path to 84 published" below for the exact decision this needs from the user.
 - Coordinator PID 2038 (this session's shell) is the sole writer.
 
 ## Active step
@@ -73,14 +80,40 @@ Measured, not inferred. Stage statuses across all 84 captures: stage 1 `passed`,
   As of this session, the code side (adapter) is also done, same as BLK-003/Stage-2 - both
   remaining blockers are now purely human-approval/external-dependency, not implementation gaps.
 
-## Immediate order (user's three-item request is COMPLETE - next step not yet chosen)
+## Path to 84 published — what actually gates it (asked back to the user, not yet decided)
+Every one of the 84 skills is stopped at the SAME gate right now: `_security_projection` returns
+`blocked` for all of them because stage 2 is `not_run` (84/84) and stage 5 is `not_sampled` (84/84).
+Both are now CODE-complete (Stage 2 since J-010e5, Stage 5 since this session's J-010e10) but
+BLOCKED ON HUMAN ACTION, not on more engineering:
+
+1. **BLK-003** — an AppSec/legal/supply-chain owner must approve the exact Stage-2 scanner image
+   manifest digest, bundled rule pack SHA-256, and adapter commit (ADR-024). This is a real
+   security sign-off on a container that will run untrusted skill content; it cannot be
+   self-approved by the agent that built it.
+2. **BLK-004** — two independent human labelers plus one adjudicator must blind-label a 120-example
+   held-out calibration set (60 unsafe/60 matched-safe), and a human must ratify the
+   recall/specificity/agreement thresholds, before the Stage-5 judge (J-010e10) can be trusted for
+   even one real verdict.
+3. **BLK-001** — production Entra/OIDC app registrations, the SharePoint target, and distinct
+   least-privilege service identities must be provisioned before ANYTHING can reach the real
+   catalog, even after 1-84 individually clear the development gates.
+4. Beyond the three blockers: every skill still needs an independent CONTENT review (adversarial
+   P1 + fresh-context P5 recheck, `docs/WORKFLOW.md`) and an explicit human approval per batch of
+   <=10 (`.agents/skills/semiskill-project/SKILL.md`: "Publish only through an authenticated
+   exact-evidence human approval. Never create an automatic, fixture-derived, stale, or
+   human-looking approval.") — this agent cannot manufacture that signature at any batch size.
+
+**What this session can keep doing without waiting**: infrastructure that doesn't need 1-3 resolved
+first — scoreboard v3/progress v2 (HANDOFF.md gap 4), review-issuance testing/hardening, the
+vertical-proof plumbing for skill 1 so it's instantly runnable once BLK-003/004 close. It CANNOT
+make security_pass move off 0/84, and must not simulate/fake that it did.
+
+## Immediate order (superseded by "Path to 84 published" above until the user decides)
 1. Scoreboard v3/progress v2 strict nested validation (HANDOFF.md gap 4) - also where J-010e9's
    deferred finding (snapshot claims aren't independently re-verified against live artifacts)
    belongs.
 2. Wire `OllamaJudge`/`Stage5Policy` into cli.py/pipeline.py - only once BLK-004 actually closes.
-3. Decide whether to push this session's 4 local commits (J-010e7/8/9/10) to `origin/main` - not
-   done automatically; needs explicit authorization.
-4. HANDOFF.md's Gate 0/1/2 ordered plan otherwise unchanged: sync, activate review
+3. HANDOFF.md's Gate 0/1/2 ordered plan otherwise unchanged: sync, activate review
    infrastructure, then vertical-prove one skill end to end.
 
 ## Full-suite status
