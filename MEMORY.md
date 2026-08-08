@@ -1349,20 +1349,73 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication. Platform reliability only.
   next: tools/issue_batch.py review against collect_wave.py::_validate
 
+- [J-010e9] 2026-08-08T23:14:28Z  status: done
+  what: reviewed and tested `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate`;
+    found and fixed a real path-containment defect, verified everything else holds
+  artifacts: this J-010e9 checkpoint, tools/issue_batch.py, tests/tools/test_issue_batch.py
+  verification: 5 new adversarial tests written first and observed failing against the unpatched
+    file (an absolute-path registry escape, a relative `..` traversal, an absolute skills-root
+    escape, and an empty-path case), then passing after the fix. Full targeted run:
+    `tests/tools/test_issue_batch.py` + `test_collect_wave.py` + `test_review_collection.py`:
+    60 passed, 0 failed. Full `pytest tests/`: 1200 passed, 7 skipped, 0 failed, 205s, live DB, no
+    port-exhaustion failure (confirms J-010e8's pooling fix is holding under a second heavy run).
+  finding-1 (real, FIXED): `_verify_snapshot_freshness` joined `sources.registry.path` /
+    `sources.skills.root` - both untrusted fields from the snapshot document - onto `repo_root`
+    with `repo_root / str(...)` and no containment check before `read_bytes()` /
+    `full_input_tree_sha256()`. `Path.__truediv__` silently discards the left operand when the
+    right is absolute, and a relative `..`-laden string escapes once resolved; either turned this
+    freshness check into an arbitrary local file read / directory enumeration primitive with zero
+    defense. Added `_confined_path()` (tools/issue_batch.py:81-101), mirroring the containment
+    check the trusted snapshot GENERATOR already applies on write
+    (semiskill/authoring/snapshot.py ~line 1383, `.resolve().relative_to(repository_path)`) on the
+    read side too. Wired into both call sites.
+  finding-2 (not fixed, deliberately deferred, recorded not dropped): `_cell_checks` derives all
+    four required-check booleans entirely from the snapshot document's OWN self-reported status
+    fields, never by reading the actual `automated_review`/`scan_run` artifacts back from the
+    store to confirm they really recorded `passed`. `_verify_snapshot_freshness` only proves the
+    snapshot's source TREE hasn't drifted (registry/skills bytes, git HEAD, DB identity) - it
+    proves nothing about whether the verdicts recorded inside the snapshot's cells are truthful,
+    and `load_scoreboard_snapshot`'s `snapshot_id` is a self-consistency hash, not a signature from
+    a trusted producer. This can't produce a real lease today - `security_pass` is 0/84 under
+    honest generation (HANDOFF.md gap 9) - but the trust boundary itself has no independent
+    artifact-level re-verification. This is the same architectural gap already tracked as
+    "scoreboard v3" (HANDOFF.md gap 4, next pending item below); fixing `issue_batch.py` alone
+    without that broader work would be solving it in the wrong file. Not actioned here.
+  finding-3 (informational, not a defect): `tools/collect_wave.py` hand-maintains its own copy of
+    the required root/cell field-name sets rather than importing them from
+    `review_collection._contract_payload`'s own key list - currently matches exactly (verified by
+    set-equality), but is a drift risk if the payload shape ever changes in one file and not the
+    other. Left alone: fixing it means touching a second file's own trust boundary for a
+    currently-inert risk, out of scope for reviewing `issue_batch.py`.
+  finding-4 (not a defect, verified positive): slug values used in output filenames
+    (`{slug}.contract.json`) carry no independent allowlist check in `issue_batch.py` itself, but
+    every real slug was already sanitized at capture time (`_slugify`,
+    semiskill/capture/intake.py:82-84, strips everything but `[a-z0-9-]`) and `_lease_cell`
+    requires the artifact's own stored slug to match, so this is not independently exploitable
+    today - relies on an invariant enforced in a different module, noted for awareness only.
+  schema check: the contract shape `issue_batch.py` emits and what `collect_wave.load_contract`
+    requires match field-for-field at both root and cell level (verified by reading both, not
+    just running the round-trip tests) - `tests/tools/test_issue_batch.py`'s existing
+    `test_issued_contract_round_trips_through_collect_wave_validate` /
+    `test_recheck_contract_round_trips_through_collect_wave_validate` already proved this in
+    practice; confirmed the field-set equality is not accidental.
+  credit: none toward security_pass, review, approval or publication. This makes the review-batch
+    issuance path itself more trustworthy; it does not move any skill through the security gate.
+  next: start the Stage-5 loopback adapter (Ollama)
+
 ## In-Flight Step
 
-- none. `tools/issue_batch.py` review is selected but not started.
+- none. The Stage-5 loopback adapter is selected but not started.
 
 ## Pending Steps
-1. Review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate` before it
-   is allowed to lease any real work; it is currently unreviewed inherited code (HANDOFF.md gap 4).
-   Never actually completed despite being drafted as `[J-010d7]` in an earlier version of this list.
-2. Implement scoreboard v3/progress v2 strict nested validation and one shared live observation
-   contract; v2 remains diagnostic and cannot authorize review or release (HANDOFF.md gap 4).
-3. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
-4. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
-5. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
-6. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
+1. Implement scoreboard v3/progress v2 strict nested validation and one shared live observation
+   contract; v2 remains diagnostic and cannot authorize review or release (HANDOFF.md gap 4). This
+   is also where J-010e9's finding-2 (snapshot claims aren't independently re-verified against
+   live artifacts) should be resolved - not by patching `issue_batch.py` further.
+2. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
+3. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
+4. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
+5. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.

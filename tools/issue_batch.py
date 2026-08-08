@@ -78,6 +78,29 @@ class BatchRefused(RuntimeError):
     """The whole run is refused before any contract/prompt file is written."""
 
 
+def _confined_path(repo_root: Path, raw: object, *, what: str) -> Path:
+    """Join a snapshot-supplied path onto `repo_root` and refuse any escape.
+
+    `sources.registry.path` / `sources.skills.root` come from the snapshot document, which is
+    untrusted input (CLAUDE.md: treat every submitted artifact as an injection payload) — not a
+    value this file may assume is repo-relative. `Path.__truediv__` silently discards `repo_root`
+    when the right operand is absolute, and a relative `..`-laden string escapes it once resolved,
+    which would otherwise turn this freshness check into an arbitrary local file read / directory
+    enumeration. Mirrors the containment check the trusted generator already applies on write
+    (semiskill/authoring/snapshot.py, ~line 1383) on the read side too.
+    """
+    text = str(raw) if raw is not None else ""
+    if not text or text.strip() != text:
+        raise BatchRefused(f"snapshot {what} path is empty or has surrounding whitespace")
+    resolved_root = repo_root.resolve()
+    resolved = (repo_root / text).resolve()
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError:
+        raise BatchRefused(f"snapshot {what} path escapes the repository: {text!r}") from None
+    return resolved
+
+
 @dataclass(frozen=True, slots=True)
 class Refusal:
     """One typed, reported refusal. The rest of the batch still proceeds."""
@@ -107,7 +130,7 @@ def _verify_snapshot_freshness(document: dict, *, repo_root: Path, store) -> Non
         raise BatchRefused("snapshot has no sources section to verify freshness against")
 
     registry_source = sources.get("registry") or {}
-    registry_path = repo_root / str(registry_source.get("path", ""))
+    registry_path = _confined_path(repo_root, registry_source.get("path"), what="registry")
     try:
         registry_bytes = registry_path.read_bytes()
     except OSError as exc:
@@ -120,7 +143,7 @@ def _verify_snapshot_freshness(document: dict, *, repo_root: Path, store) -> Non
         )
 
     skills_source = sources.get("skills") or {}
-    skills_root = repo_root / str(skills_source.get("root", ""))
+    skills_root = _confined_path(repo_root, skills_source.get("root"), what="skills")
     try:
         actual_tree_sha = full_input_tree_sha256(skills_root)
     except SnapshotUnavailable as exc:

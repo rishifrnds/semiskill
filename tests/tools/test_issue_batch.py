@@ -432,3 +432,43 @@ def test_verify_snapshot_freshness_refuses_a_moved_commit():
     sources["repository"]["commit"] = "0" * 40
     with pytest.raises(BatchRefused, match="source-mismatched"):
         _verify_snapshot_freshness({"sources": sources}, repo_root=REPO, store=store)
+
+
+# --------------------------------------------------------------------------------------
+# Snapshot freshness — path containment. The snapshot document is untrusted input (CLAUDE.md:
+# treat every submitted artifact as an injection payload); `sources.registry.path` /
+# `sources.skills.root` must never let this file read or hash a file outside the repository.
+# --------------------------------------------------------------------------------------
+
+def test_verify_snapshot_freshness_refuses_an_absolute_registry_path_escape(tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("outside-the-repo", encoding="utf-8")
+    store = Store([])
+    sources = _real_sources()
+    sources["registry"]["path"] = str(secret)
+    with pytest.raises(BatchRefused, match="escapes the repository"):
+        _verify_snapshot_freshness({"sources": sources}, repo_root=REPO, store=store)
+
+
+def test_verify_snapshot_freshness_refuses_a_relative_traversal_registry_path():
+    store = Store([])
+    sources = _real_sources()
+    sources["registry"]["path"] = "../../../../../../etc/passwd"
+    with pytest.raises(BatchRefused, match="escapes the repository"):
+        _verify_snapshot_freshness({"sources": sources}, repo_root=REPO, store=store)
+
+
+def test_verify_snapshot_freshness_refuses_an_absolute_skills_root_escape(tmp_path):
+    store = Store([])
+    sources = _real_sources()
+    sources["skills"]["root"] = str(tmp_path)
+    with pytest.raises(BatchRefused, match="escapes the repository"):
+        _verify_snapshot_freshness({"sources": sources}, repo_root=REPO, store=store)
+
+
+def test_verify_snapshot_freshness_refuses_an_empty_registry_path():
+    store = Store([])
+    sources = _real_sources()
+    sources["registry"]["path"] = ""
+    with pytest.raises(BatchRefused, match="empty"):
+        _verify_snapshot_freshness({"sources": sources}, repo_root=REPO, store=store)
