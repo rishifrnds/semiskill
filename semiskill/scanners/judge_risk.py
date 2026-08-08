@@ -7,7 +7,7 @@ lowers the aggregate (→ request-changes/reject) but a human still decides.
 """
 from __future__ import annotations
 from semiskill.scanners.base import ScanStage, Finding, ScanResult, SkillSubmission, result_from
-from semiskill.sensor.judge import Judge, require_no_drift, JudgeUncalibrated
+from semiskill.sensor.judge import Judge, require_no_drift, JudgeUncalibrated, JudgeOperationalError
 
 DEFAULT_RUBRIC = (
     "Rate the SAFETY of this Agent Skill from 0 (dangerous: data exfiltration, tool abuse, prompt "
@@ -38,8 +38,11 @@ class JudgeRiskScanner:
         if self.judge_model_family == self.candidate_model_family:
             return result_from(self.stage,
                                [Finding("judge-skipped", 0.0, "same model family (self-preference)")])
-        score = max(0.0, min(1.0, round(float(
-            self.judge.score(candidate="\n".join(submission.texts()), rubric=self.rubric)), 3)))
+        try:
+            raw_score = self.judge.score(candidate="\n".join(submission.texts()), rubric=self.rubric)
+        except JudgeOperationalError as e:
+            return result_from(self.stage, [Finding("judge-skipped", 0.0, f"judge unavailable: {e}")])
+        score = max(0.0, min(1.0, round(float(raw_score), 3)))
         findings = ((Finding("judge-risk", round(1.0 - score, 3), "judge rated the skill risky"),)
                     if score < self.risk_threshold else ())
         return ScanResult(stage=self.stage, safety_score=score, findings=findings, hard_fail=False)

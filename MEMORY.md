@@ -1403,19 +1403,71 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     issuance path itself more trustworthy; it does not move any skill through the security gate.
   next: start the Stage-5 loopback adapter (Ollama)
 
+- [J-010e10] 2026-08-08T23:28:18Z  status: done
+  what: built the Stage-5 Ollama loopback judge adapter (ADR-028) and fixed a real crash-on-error
+    gap in `JudgeRiskScanner` discovered while wiring it in
+  artifacts: this J-010e10 checkpoint, DECISIONS.md (ADR-028), semiskill/scanners/stage5_ollama.py,
+    semiskill/scanners/judge_risk.py, tests/scanners/test_stage5_ollama.py,
+    tests/sensor/test_judge_sensor.py
+  verification: 25 new adversarial tests for the adapter (all passing against a real local
+    `http.server` standing in for Ollama - no live daemon needed) plus 1 new test for the
+    scanner fix, confirmed red-then-green by reverting the fix under `git stash` and watching it
+    fail with the exact uncaught `JudgeOperationalError` before restoring it. Targeted:
+    `tests/scanners/ tests/sensor/ tests/spine/`: 166 passed. Full `pytest tests/`: **1226
+    passed, 7 skipped, 0 failed, 233.92s**, live DB, no port-exhaustion failure - third
+    consecutive clean full run this session.
+  pre-existing gap found and fixed (not introduced by this step): `JudgeRiskScanner.scan()`
+    (semiskill/scanners/judge_risk.py) called `self.judge.score(...)` with no try/except at all.
+    `JudgeOperationalError`'s own docstring says "fail-soft skip", and the two lines above already
+    handle `JudgeUncalibrated` that way, but the actual scoring call was unguarded - any real
+    network-backed `Judge` would have crashed the whole pipeline run on a transport hiccup instead
+    of degrading like every other unavailable stage. Fixed by catching `JudgeOperationalError` and
+    returning a `judge-skipped` finding, matching the existing pattern exactly.
+  design: `Stage5Policy.approved` defaults to `False`, the code-enforced form of BLK-004 (mirrors
+    `Stage2Policy.approved`/BLK-003 exactly) - the engine is never invoked at all when unapproved,
+    proven by a dedicated test with zero server calls recorded. `_is_loopback_only()` doesn't
+    trust the daemon's claimed bind address; it independently proves the same port is NOT also
+    reachable from this machine's actual LAN address (addressing HANDOFF.md gap 3's wildcard-bind
+    problem), tested deterministically via a monkeypatched "LAN IP" against two REAL local
+    servers (one bound to 127.0.0.1 only, one to 0.0.0.0) rather than depending on real network
+    topology. Model identity is re-read from `/api/tags` and compared to a pinned digest, never
+    trusted from the request itself (mirrors ADR-024's "container cannot assert its own
+    identity", applied to a model's output instead of a scanner container's). No redirects, no
+    proxy, temperature 0, empty tools list, bounded request/response size, exact-key-set
+    validation of the returned JSON, numeric range check that also rejects bools (`type(x) not in
+    (int, float)` correctly excludes `bool` even though `bool` subclasses `int` in Python).
+  scope boundary (deliberate): NOT wired into cli.py/pipeline.py yet - no env vars, no CLI flags,
+    no activation path. BLK-004 means it cannot be legitimately enabled regardless; wiring
+    activation now would be dead configuration surface. Endpoint shapes
+    (`/api/tags`,`/api/generate`) are written from Ollama's documented API and are UNVERIFIED
+    against a live daemon in this environment - recorded as an explicit re-verification task in
+    ADR-028, not assumed correct.
+  credit: none toward security_pass, review, approval or publication, and cannot earn any until
+    BLK-004 closes. Also does not touch `judge_policy_refusal` or `REQUIRED_JUDGE_NOT_PASSED`
+    (ADR-026), by design.
+  next: this closes the user's requested three-item sequence (pool connections -> review
+    issue_batch.py -> start Stage-5 adapter). Resume from HANDOFF.md's ordered plan: scoreboard
+    v3/progress v2 next (Gate 1), or a fresh Gate-0 sync (clean-source full suite + push) if the
+    user wants this session's work landed on origin first.
+
 ## In-Flight Step
 
-- none. The Stage-5 loopback adapter is selected but not started.
+- none. Next step not yet selected - the user's three-item request is complete.
 
 ## Pending Steps
 1. Implement scoreboard v3/progress v2 strict nested validation and one shared live observation
    contract; v2 remains diagnostic and cannot authorize review or release (HANDOFF.md gap 4). This
    is also where J-010e9's finding-2 (snapshot claims aren't independently re-verified against
    live artifacts) should be resolved - not by patching `issue_batch.py` further.
-2. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
-3. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
-4. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
-5. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
+2. Wire `OllamaJudge`/`Stage5Policy` into the CLI/pipeline once BLK-004 closes (not before -
+   J-010e10 deliberately left this unwired).
+3. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
+4. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
+5. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
+6. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
+7. This session's three commits (J-010e8, J-010e9, J-010e10, plus the J-010e7 repair) are
+   local-only as of J-010e10 - push only when the user authorizes it (HANDOFF.md Gate 0 step 3
+   requires proving local HEAD equals origin/main after push, not before).
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.

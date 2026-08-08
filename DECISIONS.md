@@ -709,6 +709,63 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Related: J-010e6 (measured the port exhaustion), J-010e8; `semiskill/artifacts/store.py`;
   `tests/artifacts/test_store.py`; `pyproject.toml`
 
+## [ADR-028] Stage 5 judge is a pinned, fail-closed Ollama loopback HTTP adapter
+- Date: 2026-08-08
+- Status: accepted (code only — see Consequences; this does not accept BLK-004's calibration)
+- Context: HANDOFF.md's "Proposed Stage 5 direction" sketched Ollama-over-loopback as the
+  intended Stage-5 runtime but was never promoted to an implementation decision, and no
+  Ollama/Stage-5 code existed anywhere in the repository. `semiskill.sensor.judge.Judge` (the
+  `score(*, candidate, rubric) -> float` protocol `JudgeRiskScanner` already consumes) and
+  `JudgeOperationalError` (documented as "fail-soft skip") already existed, but nothing
+  implemented `Judge`, and — found while wiring this in — `JudgeRiskScanner.scan()` had no
+  `try/except` around `self.judge.score(...)` at all, so any real network-backed judge would have
+  crashed the whole pipeline run on a transport error instead of degrading like every other
+  unavailable stage. This is the first outbound network client of any kind in this codebase.
+- Decision: add `semiskill/scanners/stage5_ollama.py` (`Stage5Policy`, `OllamaJudge`,
+  `Stage5Refused`) following the same rigor ADR-024 established for Stage 2: `Stage5Policy.
+  approved` defaults to `False` and is the code-enforced form of BLK-004, exactly mirroring how
+  `Stage2Policy.approved` enforces BLK-003 — the engine (Ollama) is never called at all when
+  unapproved. Every other precondition and failure mode is also fail-closed: the daemon must
+  claim a loopback host AND independently prove it is not *also* reachable from this machine's
+  LAN address (`_is_loopback_only`, addressing HANDOFF.md gap 3's wildcard-bind problem); the
+  model's identity is re-read from `/api/tags` and compared against a pinned digest rather than
+  trusted from the request; requests use `stream: false`, `temperature: 0`, an empty `tools`
+  list, and a JSON-schema `format` constraint; responses are read with a hard byte cap and never
+  follow a redirect or consult a proxy (`urllib.request.HTTPRedirectHandler.redirect_request`
+  returns `None`, `ProxyHandler({})`); the judge's own JSON reply is validated by exact key-set
+  and numeric range, matching ADR-024's "the container cannot assert its own identity" principle
+  applied to a model's own output instead of a scanner container's. Any violation raises
+  `Stage5Refused` (a `JudgeOperationalError`), never a fabricated score. Separately fixed
+  `JudgeRiskScanner.scan()` to catch `JudgeOperationalError` and record an honest `judge-skipped`
+  finding, matching the handling already present for `JudgeUncalibrated` two lines above it.
+- Alternatives considered:
+  - Trust the daemon's advertised bind address instead of independently probing reachability —
+    rejected: that is exactly the "trust the container's own claim" failure ADR-024 rejected for
+    Stage 2, and HANDOFF.md gap 3 exists precisely because the real local daemon's actual bind
+    posture (wildcard) disagreed with what was assumed.
+  - Add `requests`/`httpx` as a dependency for the HTTP client — rejected: nothing in this
+    codebase makes outbound HTTP calls yet, so stdlib `urllib.request` (already available, no new
+    dependency) meets HANDOFF.md's "standard library only" requirement with no added
+    supply-chain surface, at the cost of writing the no-redirect/no-proxy opener by hand once.
+  - Wire `OllamaJudge`/`Stage5Policy` into `cli.py`/`pipeline.py` now (env vars, CLI flags) —
+    rejected for this step: the adapter cannot be legitimately enabled until BLK-004's held-out
+    calibration exists, so wiring activation now would be dead configuration surface; building it
+    as a standalone, directly-testable module first (same order Stage 2 followed: staging, then
+    report, then adapter, then integration) keeps each step's diff reviewable.
+- Consequences: Stage 5 has a real, thoroughly fail-closed-tested candidate implementation, but
+  it earns ZERO credit and must not be activated until BLK-004 closes (independent held-out
+  calibration corpus, blinded labels, adjudication, ratified thresholds) — this ADR accepts the
+  *code shape*, not a calibration. The exact `/api/tags`/`/api/generate` response shapes are
+  written from Ollama's documented API and are UNVERIFIED against a live daemon in this
+  environment; re-verify both against the exact pinned Ollama/model version before BLK-004
+  approval. `JudgeRiskScanner`'s new exception handling changes behavior for ANY `Judge`
+  implementation, not just this one — reviewed as strictly additive (a crash becomes a skip,
+  never becomes a pass).
+- Related: BLK-004; ADR-024 (Stage-2 rigor this mirrors); ADR-026 (judge policy this must not
+  touch); `semiskill/scanners/stage5_ollama.py`; `semiskill/scanners/judge_risk.py`;
+  `semiskill/sensor/judge.py`; `tests/scanners/test_stage5_ollama.py`;
+  `tests/sensor/test_judge_sensor.py`; `HANDOFF.md` ("Proposed Stage 5 direction")
+
 <!-- Template for a new entry — copy, fill in, append at the bottom:
 ## [ADR-NNN] <short decision title>
 - Date: <YYYY-MM-DD>

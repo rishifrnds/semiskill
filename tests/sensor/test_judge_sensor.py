@@ -5,7 +5,7 @@ from semiskill.artifacts.schema import ArtifactType
 from semiskill.artifacts.store import PostgresArtifactStore
 from semiskill.sensor.judge import (
     GoldItem, record_gold_set, calibrate_judge, require_calibrated, require_no_drift,
-    JudgeUncalibrated, JudgeDrifted)
+    JudgeUncalibrated, JudgeDrifted, JudgeOperationalError)
 from semiskill.scanners.base import SkillSubmission
 from semiskill.scanners.judge_risk import JudgeRiskScanner
 
@@ -100,3 +100,27 @@ def test_judge_risk_same_family_skips(store):
                          judge_model_family="anthropic",
                          candidate_model_family="anthropic").scan(_sub("x"))
     assert any(f.code == "judge-skipped" for f in r.findings)
+
+
+class _RaisingJudge:
+    """A judge whose `score()` fails operationally (transport/API error), never a value."""
+
+    def score(self, *, candidate, rubric):
+        raise JudgeOperationalError("ollama transport error: connection refused")
+
+
+@pytest.mark.integration
+def test_judge_risk_operational_error_skips_instead_of_crashing(store):
+    """A judge that cannot reach its backend must degrade to an honest skip, not propagate.
+
+    `JudgeOperationalError`'s own docstring says "fail-soft skip", but before this fix
+    `JudgeRiskScanner.scan()` had no try/except around `self.judge.score(...)` at all — a
+    real network-backed Judge (e.g. the Ollama loopback adapter) would have crashed the whole
+    pipeline run instead of recording stage 5 as skipped like every other unavailable stage.
+    """
+    _calibrate(store, _agree)
+    r = JudgeRiskScanner(store=store, judge=_RaisingJudge(),
+                         judge_model_family="openai", candidate_model_family="anthropic").scan(_sub("x"))
+    assert r.safety_score == 1.0
+    assert any(f.code == "judge-skipped" for f in r.findings)
+    assert r.hard_fail is False
