@@ -1276,28 +1276,57 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication.
   next: J-010e7 either pool artifact-store connections (ADR-worthy) or start the Stage-5 adapter
 
+- [J-010e7] 2026-08-08T16:57:03Z  status: done
+  what: resumed after a session gap; took over a stale `.session-lock` with explicit user approval
+    and repaired two discovered state-file corruptions before touching any project work
+  artifacts: this J-010e7 checkpoint, STATUS.md, MEMORY.md, .session-lock (gitignored)
+  verification: `.session-lock` was held by session `20260807T071649Z-RISHI_PC-cdcf04`
+    (PID 3408, stamped 2026-08-07T12:17:50Z) - about 28.6h old, past the 2h staleness threshold.
+    `Get-Process -Id 3408` returned no matching process (exit 1, empty output), confirming the
+    holder is dead. User was shown the lock contents and the corruption findings and explicitly
+    chose "take over lock, repair STATUS.md, then continue" before any file was written.
+  finding-1 (corruption, repaired): `git cat-file -s` across the last 5 commits touching STATUS.md
+    showed 7904 -> 8717 -> 8933 -> 9492 -> **8494079** bytes, i.e. commit `5d7bc97` (J-010e6) grew
+    the file ~900x by appending the same paragraph thousands of times (with stray leading
+    characters `<`, `!`, `.` visible at each repeat boundary) instead of overwriting it. This
+    violates the file's own stated contract ("overwrite, never append") and was already committed
+    to HEAD, not just a local artifact. Rewritten to a normal single snapshot; the unique content of
+    that append (the J-010e6 full-suite PASS + port-exhaustion finding) was already preserved
+    verbatim in the frozen J-010e6 entry above and is restated in the new STATUS.md.
+  finding-2 (staleness, repaired): the `Pending Steps` list below this entry still listed
+    `[J-010d5]` through `[J-010e1]` as pending, but the `Completed Steps` section directly above
+    shows all six of those exact STEP-IDs already `status: done` (see entries at J-010d5 07:48:00Z
+    through J-010e1 09:54:08Z). Comparing each stale bullet's description against the real
+    completed entry under the same ID showed the IDs were reused for different, though related,
+    work as plans changed during execution (e.g. the bullet numbered `[J-010d6]` describes
+    "bring the development store back up", which is what the real `J-010d6` entry did; but the
+    bullet numbered `[J-010d7]`, "review tools/issue_batch.py", is NOT what the real `J-010d7`
+    entry did - that ID was used for a full-suite run and README fix instead). Net effect: the
+    `tools/issue_batch.py` review item was genuinely never completed under any ID and had gone
+    invisible, camouflaged inside a list that looked otherwise executed. Corrected below without a
+    reserved ID; nothing above this line was altered, per the never-edit-completed-entries rule.
+  credit: none toward security_pass, review, approval or publication. Pure state-hygiene, no
+    project/security work performed.
+  next: J-010e8 pool artifact-store connections (ADR-worthy) or start the Stage-5 loopback adapter
+
 ## In-Flight Step
 
-- none. J-010e7 is selected but not started.
+- none. J-010e8 is selected but not started.
 
 ## Pending Steps
-1. [J-010d5] make the CLI honest: `cmd_wave` returns early for `wave-plan`/`--dry-run` before
-   `run_wave`, so it still prints "N skill(s) would be captured/scanned" for a wave that would in
-   fact refuse. Surface the same refusal there, and give `cmd_wave` a clean error path so the
-   ValueError prints as a message rather than a traceback.
-2. [J-010d6] bring the development store back up and independently re-verify the crashed session's
-   two unverified claims: schema really at 0023, and 84 `skill_version` + scan artifacts really
-   present. Then run the integration suites deferred by BLK-005, serially.
-3. [J-010d7] review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate`
-   before it is allowed to lease any real work; it is currently unreviewed inherited code.
-4. [J-010d8] implement scoreboard v3/progress v2 strict nested validation and one shared live
-   observation contract; v2 remains diagnostic and cannot authorize review or release.
-5. [J-010d9] implement and promote the ADR-024 Stage-2 scanner plus calibrated loopback Stage 5
-6. [J-010e1] run a new clean-source immutable serial full suite and push synchronized `main`
-7. [J-011] prove one exact skill and then the five-skill vertical cohort end to end
-8. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready
-9. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls
-10. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate
+1. [J-010e8] pool `PostgresArtifactStore` connections (or otherwise stop per-call connect churn) -
+   ADR-worthy. J-010e6 measured 2,901 Windows sockets in TIME_WAIT during one serial full-suite run
+   and traced it to `store.get` opening a fresh `psycopg.connect` on every call; needed before more
+   tests are added, not just for tidiness.
+2. Review and test `tools/issue_batch.py` (SPEC B) against `collect_wave.py::_validate` before it
+   is allowed to lease any real work; it is currently unreviewed inherited code (HANDOFF.md gap 4).
+   Never actually completed despite being drafted as `[J-010d7]` in an earlier version of this list.
+3. Implement scoreboard v3/progress v2 strict nested validation and one shared live observation
+   contract; v2 remains diagnostic and cannot authorize review or release (HANDOFF.md gap 4).
+4. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
+5. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
+6. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
+7. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.
