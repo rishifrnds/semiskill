@@ -5,16 +5,26 @@ Full rules: see STATE_RULES.md.
 
 ## [BLK-001] Production identities and tenant integration are not configured
 - Raised: 2026-08-06T13:29:31Z
-- Blocks: J-014 production activation and SharePoint publication
+- Blocks: J-014 production activation and SharePoint publication (NARROWED 2026-08-09, ADR-029 —
+  no longer blocks the "84 published to the development catalog" milestone)
 - Type: missing-credential
-- Description: Entra/OIDC tenant values, SharePoint target configuration and distinct production
-  runtime, approval-actuator, export-reader and migration credentials are absent. The loopback
-  development owner is intentionally non-crediting and cannot satisfy the production gate.
+- Description: Entra/OIDC tenant values, SharePoint target configuration and distinct PRODUCTION
+  runtime/migration credentials are absent, and there is no SharePoint/Graph integration code to
+  activate even once supplied (verified 2026-08-08). The DEVELOPMENT-environment
+  approval-actuator, review-coordinator and export-reader credentials are RESOLVED as of J-010f1
+  (2026-08-09): three local Postgres logins were provisioned against the existing loopback DB,
+  each holding exactly one capability-role grant, verified to actually exercise their granted
+  functions (not just role membership). Per ADR-029, the near-term "published" milestone targets
+  this development catalog, not SharePoint, so this blocker no longer gates 84/84.
 - What I tried: implemented and tested fail-closed adapters, exact capability contracts and a
   development-only witnessed migration path; no tenant secrets were inferred or fabricated.
-- What I need to unblock: provision the tenant/app registrations and least-privilege database
-  identities, then supply their approved configuration through the documented environment contract.
-- Escalate at: 2026-08-08T13:29:31Z
+  Provisioned and verified the development-scope credentials (J-010f1) once the user chose to
+  target the development catalog rather than wait (ADR-029).
+- What I need to unblock: for the remaining PRODUCTION-only scope — provision the Entra/OIDC
+  tenant/app registrations and a real SharePoint target, then supply their approved configuration
+  through the documented environment contract. Not needed for 84/84-to-development.
+- Escalate at: 2026-08-08T13:29:31Z (already surfaced to and acknowledged by the user this
+  session via the ADR-029 scoping decision; production-only scope remains open, non-urgent)
 
 ## [BLK-003] Stage-2 scanner image and rule pack lack supply-chain approval
 - Raised: 2026-08-07T03:10:37Z
@@ -41,6 +51,10 @@ Full rules: see STATE_RULES.md.
   120-example balanced calibration design without treating the proposal as completed evidence.
 - What I need to unblock: nominate two independent labelers and one adjudicator, ratify the corpus
   and metrics, complete blinded labeling, and configure the runtime loopback-only.
+- Update 2026-08-09 (ADR-031): asked explicitly, the user chose solo labeling over waiting for a
+  second labeler/adjudicator. This is a recorded, explicit deviation from the two-labeler design,
+  not a resolution — the resulting kappa will not be a genuine inter-rater statistic. Still BLOCKS
+  Stage-5 credit until the solo calibration actually completes.
 - Escalate at: 2026-08-09T03:10:37Z
 
 <!-- Template for a new blocker:

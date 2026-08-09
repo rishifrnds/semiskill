@@ -1450,24 +1450,61 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     v3/progress v2 next (Gate 1), or a fresh Gate-0 sync (clean-source full suite + push) if the
     user wants this session's work landed on origin first.
 
+- [J-010f0] 2026-08-08T23:50:45Z  status: done
+  what: pushed J-010e7..e10 (local repair + pooling + issue_batch fix + Stage-5 adapter) to
+    `origin/main` with explicit user authorization
+  artifacts: this J-010f0 checkpoint, commit `ef09db6` (pushed)
+  verification: `git rev-parse HEAD` == `git rev-parse origin/main` == `ef09db6...` after push.
+  credit: none toward security_pass, review, approval or publication - a sync action.
+  next: J-010f1 record the user's three scope decisions and provision dev-environment DB roles
+
+- [J-010f1] 2026-08-09T01:00:14Z  status: done
+  what: recorded three explicit user scope decisions as ADRs, then provisioned and verified the
+    local development-environment approval/review-coordinator/export-reader DB identities
+  artifacts: this J-010f1 checkpoint, DECISIONS.md (ADR-029/030/031), BLOCKERS.md, .env
+    (gitignored, not committed - contains the generated local credentials)
+  context: the user asked to "continue till we have all 84 skills published." Research (3 parallel
+    read-only agents) found the real gates are narrower/differently-shaped than HANDOFF.md implied:
+    "published" is already a dev-catalog DB concept with zero SharePoint code to activate (ADR-029);
+    BLK-003's Stage-2 image/rule pack is a real multi-day build, not an approval click, and nothing
+    (Dockerfile, rule pack, signing, SBOM) exists yet (ADR-030); BLK-004's two-labeler design is
+    real and intentional, not an oversight (ADR-031). Presented all three to the user via
+    AskUserQuestion; they chose dev-catalog target, pragmatic Stage-2 rigor, and solo calibration
+    labeling - all recorded as ADR-029/030/031 with explicit alternatives-considered, not silently
+    decided.
+  verification: created `semiskill_approval_login` / `semiskill_review_login` /
+    `semiskill_export_login` (idempotent CREATE-or-ALTER, each granted exactly one capability role
+    per migrations 0011/0012/0016; export login also granted `semiskill_export_label_team` to
+    match the `team` default permissions_label). Verified via `PostgresArtifactStore` identity
+    methods (`review_coordinator_authentication_context()`, `export_database_identity()`) AND,
+    because PG16 has per-grant INHERIT semantics that role-membership alone doesn't prove,
+    empirically confirmed each login can actually invoke its actuator function
+    (`append_verified_review_contract`/`append_verified_approval`) by calling each with
+    deliberately-invalid data and observing a business-logic `CheckViolation`, not
+    `InsufficientPrivilege` - proves the grant chain works, not just that membership resolves.
+  updated BLOCKERS.md: BLK-001 narrowed to production-only scope (dev credentials resolved);
+    BLK-004 updated to note the solo-labeling path chosen, still blocking until calibration runs.
+  credit: none toward security_pass, review, approval or publication. Infrastructure only.
+  next: wire the review-issue CLI command (HANDOFF.md Gate 1 item 2)
+
 ## In-Flight Step
 
-- none. Next step not yet selected - the user's three-item request is complete.
+- none. Next: wire the review-issue CLI command.
 
 ## Pending Steps
-1. Implement scoreboard v3/progress v2 strict nested validation and one shared live observation
-   contract; v2 remains diagnostic and cannot authorize review or release (HANDOFF.md gap 4). This
-   is also where J-010e9's finding-2 (snapshot claims aren't independently re-verified against
-   live artifacts) should be resolved - not by patching `issue_batch.py` further.
-2. Wire `OllamaJudge`/`Stage5Policy` into the CLI/pipeline once BLK-004 closes (not before -
-   J-010e10 deliberately left this unwired).
-3. [J-011] prove one exact skill and then the five-skill vertical cohort end to end.
-4. [J-012] re-review/fix the historical 3/32/49 routing cohorts in batches <=10 until 84 are ready.
-5. [J-013] finish the ACL/provenance-bound Next.js catalog, deployment and market-readiness controls.
-6. [J-014] obtain explicit approvals, publish 84, regenerate outputs and pass the final launch gate.
-7. This session's three commits (J-010e8, J-010e9, J-010e10, plus the J-010e7 repair) are
-   local-only as of J-010e10 - push only when the user authorizes it (HANDOFF.md Gate 0 step 3
-   requires proving local HEAD equals origin/main after push, not before).
+1. Wire `review-issue` CLI command (mostly-existing logic in `tools/issue_batch.py` +
+   `semiskill/authoring/review_collection.py`, needs a `semiskill/` module + cli.py subparser).
+2. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
+   live store (not just internal self-consistency), per J-010e9 finding-2 / HANDOFF.md gap 4.
+3. Build the real Stage-2 image + rule pack under ADR-030's pragmatic scope; wire `Stage2Adapter`
+   into `pipeline.py`/`wave.py` replacing the retired `npx` runner; get the user's explicit digest
+   approval (BLK-003).
+4. Wire `OllamaJudge`/`Stage5Policy` into the CLI/pipeline; build and propose the 120-item
+   calibration gold set for the user's solo labeling (ADR-031); run calibration (BLK-004).
+5. Vertical-prove `dv-minimal-reproducer` end to end against the now-real development approval
+   chain (J-010f1), then the 5-skill wave-0 cohort, then the remaining 79 in batches <=10.
+6. [J-013] Next.js catalog / market-readiness work remains deferred - not required for the
+   development-catalog milestone (ADR-029); revisit before any production/SharePoint launch.
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.

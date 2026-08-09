@@ -777,3 +777,123 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
 - Consequences: <trade-offs>
 - Related: <STEP-IDs, ADRs>
 -->
+
+## [ADR-029] The near-term "84 published" milestone targets the development catalog, not SharePoint
+- Date: 2026-08-08
+- Status: accepted
+- Context: the user asked the agent to "continue till we have all 84 skills published." Tracing
+  the actual code (not the docs) found that "published" is already, in the current implementation,
+  a Postgres `approval` artifact with `environment="development"` reachable through
+  `publication_registry_entry`/the verified publication projection — a real, hash-bound,
+  append-only, trigger-protected DB record. "Publish to SharePoint" has ZERO implementation:
+  `semiskill catalog` generates static `catalog.md`/`catalog.html`/`catalog.csv` files and prints
+  instructions for a human to manually upload them; there is no Graph/SharePoint/Entra HTTP client
+  anywhere in the codebase, no `msal`/`azure-*` dependency, and the one `EntraVerifier` `Protocol`
+  in `semiskill/governance/identity.py` has no concrete implementation. Waiting for BLK-001
+  (production Entra tenant + SharePoint target) before letting any skill be "published" would
+  block on infrastructure this project does not yet have code to use even if supplied.
+- Decision: the working near-term definition of "skill X is published" is an `approval` artifact
+  with `decision="approve"`, `published=true`, `environment="development"`, bound by exact payload
+  hash, reachable via the same verified-publication-projection machinery production will
+  eventually use — issued through `semiskill approve --environment development`. This requires
+  provisioning three additional LOCAL Postgres logins (`semiskill_approval_login`,
+  `semiskill_review_login`, `semiskill_export_login`, each holding exactly one capability-role
+  grant already defined by migrations 0011/0012/0016) against the existing loopback docker-compose
+  database — a 10-minute local DB-admin action with zero external/production dependency, not part
+  of BLK-001. Production/SharePoint activation (BLK-001 in its full form: Entra/OIDC tenant,
+  SharePoint target, distinct production service identities, deployment, CI, backup, monitoring)
+  remains a separate, later milestone.
+- Alternatives considered:
+  - Wait for BLK-001 before counting any skill as published — rejected: BLK-001 in full requires
+    organizational/IT decisions (tenant provisioning, app registrations) outside this session's
+    authority, and SharePoint has no implementation to activate even once credentials exist; this
+    would block 84/84 on work that has not been scoped or started.
+  - Build the SharePoint/Graph integration now so "published" can mean the real target from the
+    start — rejected: this is a substantial new integration (auth flow, Graph API client,
+    document-library upload, list-item creation) that was never part of this session's approved
+    scope and duplicates effort once real tenant values are supplied; better to build it once,
+    against real credentials, than twice.
+- Consequences: 84/84 "published" will mean "approved and published to the internal development
+  catalog projection" — real, verifiable, audit-backed, but NOT externally discoverable and NOT a
+  substitute for an eventual production/SharePoint launch. Every status report from this point
+  must say "development catalog," never bare "published," to avoid the exact overclaiming
+  HANDOFF.md has repeatedly had to correct. BLK-001 is narrowed in practice to production-only
+  scope; BLOCKERS.md should be updated to reflect that the development approval/export/review
+  identity chain is resolved (see this ADR + J-010f1), leaving only genuine production-tenant work
+  under BLK-001.
+- Related: BLK-001; J-010f1 (local DB role provisioning); `semiskill/governance/publish.py`;
+  `semiskill/authoring/catalog_page.py`; `docs/AUTHORING_CONTRACT.md` §9; `HANDOFF.md` gap 6
+
+## [ADR-030] Stage-2 BLK-003 resolution uses pragmatic pinned-digest rigor, defers signing/SBOM
+- Date: 2026-08-08
+- Status: accepted
+- Context: ADR-024 specifies an internally mirrored and SIGNED Semgrep derivative with an SBOM/CVE
+  record and legal/license review before promotion. Investigation found NONE of this exists yet —
+  no Dockerfile, no real rule pack (only a 2-line placeholder string inside a test file), no
+  build/mirror pipeline, no signing tooling (no cosign/sigstore anywhere), no SBOM/CVE scanning
+  config, and `Stage2Adapter`/`Stage2Policy` (built J-010e3/e4/e5) are not even wired into
+  `semiskill/spine/pipeline.py` yet — production still calls the retired `npx`-based
+  `SecurityAuditScanner`. Building the full ADR-024 supply chain (image signing, automated SBOM/CVE
+  scanning, formal legal/license review) is real, multi-day-plus infrastructure work disproportionate
+  to a solo/internal project's current stage. The user, asked explicitly, chose pragmatic scope.
+- Decision: resolve BLK-003 in two stages. Stage A (this effort): build a Dockerfile pinning the
+  upstream `semgrep/semgrep` image by an EXACT digest (not a mutable tag), write a real detection
+  rule pack covering this project's actual threat model, wire the `engine` callable
+  (`docker run --read-only --network=none --cap-drop=ALL --security-opt=no-new-privileges`,
+  non-root) into `Stage2Adapter`, wire `Stage2Adapter` into `pipeline.py`/`wave.py` replacing the
+  retired runner, and have the user — as the accountable owner of this internal project — review
+  and explicitly approve the exact `(image_manifest_digest, rule_pack_sha256, adapter_commit)`
+  triple, recorded in BLOCKERS.md/DECISIONS.md. Stage B (explicitly deferred, not silently
+  dropped): cosign/sigstore image signing, automated SBOM generation, CVE scanning, and formal
+  legal/license review — tracked as a new backlog item, not claimed as done.
+- Alternatives considered:
+  - Build the full signed/SBOM'd pipeline now — rejected by explicit user choice: disproportionate
+    time cost for an internal/solo project relative to the risk it mitigates today, where the
+    accountable approver IS the same person who would review the SBOM/signature anyway.
+  - Skip BLK-003 entirely and leave Stage 2 `not_run` forever — rejected: Stage 2 blocks every
+    skill unconditionally (HANDOFF.md gap 9); without SOME resolution, 84/84 published is
+    unreachable regardless of the other blockers.
+- Consequences: skills reaching `security_pass` under this resolution have real static-analysis
+  coverage from a digest-pinned, sandboxed scanner with a genuine rule pack — a real security
+  improvement over `not_run` — but do NOT have image-provenance attestation, automated
+  vulnerability scanning, or formal legal sign-off. This must be stated plainly in any scoreboard
+  or status report claiming `security_pass`, not glossed over. Revisit Stage B before any
+  production/external launch (see ADR-029) — signing/SBOM matters more once untrusted parties can
+  reach the catalog.
+- Related: ADR-024 (the rigor this partially defers); BLK-003; J-010e3/e4/e5 (Stage-2 host code,
+  unchanged); `semiskill/scanners/stage2_adapter.py`; `Dockerfile` and rule pack (to be added)
+
+## [ADR-031] Stage-5 BLK-004 calibration uses solo labeling, explicit deviation from two-labeler design
+- Date: 2026-08-08
+- Status: accepted
+- Context: `semiskill/sensor/judge.py`'s design (and HANDOFF.md's proposed calibration protocol)
+  calls for two independent human labelers plus an adjudicator over a 120-example held-out corpus,
+  specifically so labeler agreement/disagreement can itself be measured — a single labeler's
+  verdict becomes ground truth by fiat with no independent cross-check. This is a real, deliberate
+  design choice in the existing code (the `cohen_kappa` machinery exists specifically to measure
+  inter-rater agreement), not an oversight. For a solo/internal project, recruiting a second
+  independent labeler plus a third adjudicator is not currently available. Asked explicitly, the
+  user chose to label solo rather than wait.
+- Decision: the calibration gold-set will be blind-labeled by the user alone. The resulting
+  `kappa` computed by `calibrate_judge`/`cohen_kappa` will NOT be a genuine inter-rater agreement
+  statistic — with one labeler there is nothing to compare against except the judge itself, which
+  is exactly what the calibration is supposed to independently validate. This is a real integrity
+  gap, not a paperwork one, and is recorded as such rather than presented as satisfying the
+  original design.
+- Alternatives considered:
+  - Wait until a second labeler is available — rejected by explicit user choice, to make progress
+    now rather than block indefinitely on recruiting.
+  - Silently relax `min_kappa`/the calibration requirement to make the numbers move — rejected
+    outright: this is exactly the failure class ADR-026 already named ("resolve it with a failing
+    test first, and do not widen the policy merely to make the counts move").
+  - Have the agent generate BOTH the candidate content AND act as a second "labeler" — rejected:
+    the agent authored the gold-set candidates with an intended ground truth in mind, so an agent
+    "label" would not be independent of that authorship; it would not add real information.
+- Consequences: any Stage-5 `security_pass` earned under this calibration must be reported
+  alongside this ADR — "judge calibrated against one labeler's solo judgment, not independently
+  cross-validated" — never presented as satisfying the original two-labeler/adjudicator design.
+  Recruiting a genuine second labeler and re-running calibration remains open follow-up work,
+  tracked here rather than closed. `BLOCKERS.md`'s BLK-004 should be updated to note the solo
+  calibration path taken, not marked fully resolved in the original sense.
+- Related: BLK-004; `semiskill/sensor/judge.py` (`cohen_kappa`, `calibrate_judge`); J-010e10
+  (Stage-5 adapter); the 120-item gold-set (to be added)
