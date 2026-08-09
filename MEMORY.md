@@ -1487,24 +1487,89 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication. Infrastructure only.
   next: wire the review-issue CLI command (HANDOFF.md Gate 1 item 2)
 
+- [J-010f2] 2026-08-09T01:14:59Z  status: done
+  what: wired the `review-issue` CLI command; moved orchestration from the unpackaged `tools/`
+    tree into an importable `semiskill/` module (HANDOFF.md Gate 1 item 2)
+  artifacts: this J-010f2 checkpoint, semiskill/authoring/issue_batch.py (new, the real logic),
+    tools/issue_batch.py (now a thin script wrapper), semiskill/cli.py (`cmd_review_issue` +
+    subparser), tests/tools/test_issue_batch.py (import updated), tests/cli/test_cli.py
+    (5 new tests)
+  verification: 5 new CLI-plumbing tests pass (guard clauses only - the underlying logic already
+    has 60 passing tests in tests/tools/test_issue_batch.py, untouched by the move).
+    tests/tools/+tests/cli/+tests/authoring/: 425 passed. NOTE: the full-suite claim for this step
+    is corrected below under J-010f3 - the first full-suite run after this step found 23 errors +
+    7 failed, entirely caused by J-010f1's DB roles, not by this step's changes.
+  design: `review-issue` mirrors `wave`'s exact safety pattern - refuses the isolated `_test`
+    database unconditionally, requires `--yes` before writing to the real `semiskill` dev catalog.
+    `tools/issue_batch.py` kept as a thin delegator (imports + re-exports from the new location)
+    so direct `python tools/issue_batch.py ...` invocation still works; `semiskill review-issue`
+    is the preferred path going forward.
+  credit: none toward security_pass, review, approval or publication. Infrastructure only.
+  next: J-010f3 (see below - a regression this step's own full-suite check caught)
+
+- [J-010f3] 2026-08-09T01:39:56Z  status: done
+  what: found and fixed two real regressions from J-010f1's DB role provisioning, both surfaced
+    only by actually running the full suite before checkpointing - not by the identity-method
+    checks J-010f1 relied on
+  artifacts: this J-010f3 checkpoint, DECISIONS.md (ADR-032, corrects ADR-029),
+    docker-compose.yml (new `db-test` service), .env / .env.example (TEST_DATABASE_URL now points
+    at the new cluster; explicit warning against exporting actuator DSNs for pytest), BLOCKERS.md
+  root-cause-1 (cluster-wide role pollution): Postgres ROLES are cluster-wide, not per-database.
+    J-010f1's three new logins, granted into the capability roles, were visible from
+    `semiskill_test` too (same cluster, different database) - `tests/artifacts/
+    test_forward_migration.py`'s `_attest_checkpoint_0015`/`_post_migration_attestations` assert
+    an EXACT role/membership set as a security invariant (unexpected grants = privilege-escalation
+    signal) and correctly caught the drift: first full-suite run after J-010f2 showed 7 failed,
+    23 errors, ALL in that one file. Fixed by splitting Postgres into two docker-compose services:
+    `db` (port 5432, service definition left byte-identical to avoid `docker compose up`
+    recreating the container and orphaning its 628 already-captured artifacts) keeps the real
+    catalog and the three logins; new `db-test` (port 5433, no named volume, fully disposable)
+    hosts ONLY `semiskill_test` on its own cluster, bootstrapped via `pg_dump`/`pg_restore` of the
+    already-migrated database rather than fixing a separate latent bug in `apply_migrations()`
+    (applying the full migration history to a truly empty DB in one transaction hits Postgres's
+    "unsafe use of new enum value" restriction - real, pre-existing, NOT fixed here, recorded as
+    follow-up).
+  root-cause-2 (env-var-driven test/dev DSN conflation): after fixing root-cause-1, a full-suite
+    run WITH `.env` sourced still showed 95 failed, 44 errors - a different, unrelated cause.
+    `PostgresArtifactStore.__init__` reads `SEMISKILL_APPROVAL_DATABASE_URL`/`_REVIEW_COORDINATOR_
+    DATABASE_URL`/`_EXPORT_DATABASE_URL` from the environment UNCONDITIONALLY, even for a store
+    constructed against the isolated test database - silently redirecting approval/review/export
+    calls to the real `db` cluster instead of falling back to the single test DSN that `tests/
+    conftest.py`'s `_test_capability_lease` fixture grants full capability to. Fixed by
+    convention, not code: `.env.example` now explicitly documents that pytest must run with ONLY
+    `TEST_DATABASE_URL` exported, never the three actuator DSNs.
+  verification: after both fixes, full `pytest tests/` (TEST_DATABASE_URL only, no actuator DSNs
+    exported): **1231 passed, 7 skipped, 0 failed, 302.67s** - clean. Re-verified identity
+    resolution still works against the split-cluster setup (review_coordinator_authentication_
+    context, export_database_identity) and the 628 pre-existing artifacts in `db` are untouched.
+  process note: this is the second correction this session to an ADR-029/030/031-era claim -
+    both came from actually running the full suite before trusting a "should be fine, it's just
+    local/isolated" characterization. J-010f1's "10-minute, zero-risk" framing was wrong on both
+    counts; STATE_RULES.md's "run the step's scoped verification" requirement exists exactly for
+    this - the identity-method checks I ran for J-010f1 were real but insufficient, since they
+    couldn't see cluster-wide state or env-var interaction with OTHER tests.
+  credit: none toward security_pass, review, approval or publication. Correction/infrastructure.
+  next: close the scoreboard v3 gap (HANDOFF.md gap 4 / J-010e9 finding-2)
+
 ## In-Flight Step
 
-- none. Next: wire the review-issue CLI command.
+- none. Next: close the scoreboard v3 gap (artifact-level re-verification).
 
 ## Pending Steps
-1. Wire `review-issue` CLI command (mostly-existing logic in `tools/issue_batch.py` +
-   `semiskill/authoring/review_collection.py`, needs a `semiskill/` module + cli.py subparser).
-2. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
+1. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
    live store (not just internal self-consistency), per J-010e9 finding-2 / HANDOFF.md gap 4.
-3. Build the real Stage-2 image + rule pack under ADR-030's pragmatic scope; wire `Stage2Adapter`
+2. Build the real Stage-2 image + rule pack under ADR-030's pragmatic scope; wire `Stage2Adapter`
    into `pipeline.py`/`wave.py` replacing the retired `npx` runner; get the user's explicit digest
    approval (BLK-003).
-4. Wire `OllamaJudge`/`Stage5Policy` into the CLI/pipeline; build and propose the 120-item
+3. Wire `OllamaJudge`/`Stage5Policy` into the CLI/pipeline; build and propose the 120-item
    calibration gold set for the user's solo labeling (ADR-031); run calibration (BLK-004).
-5. Vertical-prove `dv-minimal-reproducer` end to end against the now-real development approval
-   chain (J-010f1), then the 5-skill wave-0 cohort, then the remaining 79 in batches <=10.
-6. [J-013] Next.js catalog / market-readiness work remains deferred - not required for the
+4. Vertical-prove `dv-minimal-reproducer` end to end against the now-real development approval
+   chain (J-010f1/f3), then the 5-skill wave-0 cohort, then the remaining 79 in batches <=10.
+5. [J-013] Next.js catalog / market-readiness work remains deferred - not required for the
    development-catalog milestone (ADR-029); revisit before any production/SharePoint launch.
+6. Follow-up, not urgent: `apply_migrations()`'s same-transaction new-enum-value bug (J-010f3
+   root-cause-1) - only surfaces when bootstrapping a truly empty `_test` database in one shot;
+   worked around via pg_dump/restore for `db-test`, not fixed at the source.
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.

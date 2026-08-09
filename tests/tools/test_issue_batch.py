@@ -13,7 +13,7 @@ from semiskill.authoring.review_collection import MAX_BATCH_SIZE
 from semiskill.authoring.snapshot import full_input_tree_sha256
 from semiskill.capture.intake import build_skill_version, payload_fingerprint
 from tools.collect_wave import load_contract
-from tools.issue_batch import (
+from semiskill.authoring.issue_batch import (
     REPO,
     BatchRefused,
     Refusal,

@@ -1,6 +1,20 @@
 # Local, egress-controlled artifact store (ADR-005). Credentials are LOCAL-DEV-ONLY and match
 # .env.example; a real deployment supplies DATABASE_URL from a secret and never uses these.
-# Port is bound to loopback (127.0.0.1) so the dev DB is not exposed to the local network.
+# Ports are bound to loopback (127.0.0.1) so neither DB is exposed to the local network.
+#
+# TWO separate clusters, not one (ADR-032, correcting ADR-029): Postgres ROLES are cluster-wide,
+# not per-database, and `db` holds real captured skill data (85 skill_version + 338 scan_run +
+# 84 injection_test + 119 review + 2 gate_decision artifacts as of J-010f3) that must not be
+# orphaned or recreated. `db`'s service definition below is intentionally UNCHANGED from before
+# ADR-032 (same image/environment/volumes/ports/command) so `docker compose up` never recreates
+# its container. `db` stays the REAL development catalog and now also hosts the distinct
+# approval/review-coordinator/export-reader logins (J-010f1/f3). `db-test` is a wholly new, fully
+# disposable service hosting ONLY the isolated `semiskill_test` pytest database on its OWN
+# cluster — putting the operational logins on the same cluster as pytest's database broke
+# migration-checkpoint attestation tests that assert an exact role/membership set (tests/
+# artifacts/test_forward_migration.py `_attest_checkpoint_0015`/`_post_migration_attestations`).
+# Splitting the clusters is the fix, not weakening those checks. `TEST_DATABASE_URL` now points at
+# `db-test`; `DATABASE_URL` and the three actuator DSNs stay pointed at `db`, unchanged.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -13,6 +27,20 @@ services:
     ports: ["127.0.0.1:5432:5432"]
     # Throwaway local databases (ADR-005). Development catalog and pytest use different DB names;
     # the fixture can truncate only the guarded `_test` database. Never use these flags in prod.
+    command: >
+      postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+      -c checkpoint_timeout=60min -c max_wal_size=2GB
+
+  db-test:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: semiskill
+      POSTGRES_PASSWORD: semiskill
+      POSTGRES_DB: semiskill_test
+    ports: ["127.0.0.1:5433:5432"]
+    # Fully disposable: no named volume, so recreating this container wipes it clean. Its own
+    # cluster, so pytest's isolated database never shares role/membership state with `db`'s
+    # operational actuator logins.
     command: >
       postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
       -c checkpoint_timeout=60min -c max_wal_size=2GB

@@ -396,6 +396,46 @@ def cmd_wave(args, store, out) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_review_issue(args, store, out) -> int:
+    """Coordinator-only: mint review-batch contracts from a validated scoreboard snapshot.
+
+    Never issues into the isolated pytest database (the fixture truncates it between tests), and
+    requires --yes before writing into the real development catalog, mirroring `wave`'s guard.
+    """
+    from semiskill.artifacts.store import PostgresArtifactStore
+    from semiskill.authoring.issue_batch import BatchRefused, run_issue_batch
+    from semiskill.authoring.review_collection import BatchRejected
+    from semiskill.authoring.snapshot import SnapshotUnavailable, load_scoreboard_snapshot
+
+    dsn = args.dsn or Config.from_env().database_url
+    dbname = dsn.rsplit("/", 1)[-1].split("?")[0]
+    if dbname.endswith("_test"):
+        print("review-issue refused: refusing to issue leases into the isolated pytest database\n"
+              f"  dsn: {dsn}\n  point --dsn at the development catalog database.", file=out)
+        return 2
+    if not args.yes and dbname == "semiskill":
+        print("review-issue refused: refusing to write to the development catalog without --yes\n"
+              f"  dsn: {dsn}\n  pass --yes after checking the target database.", file=out)
+        return 2
+    try:
+        document = load_scoreboard_snapshot(args.snapshot)
+    except SnapshotUnavailable as exc:
+        print(f"review-issue refused: {exc}", file=out)
+        return 2
+    store = store or PostgresArtifactStore(dsn)
+    try:
+        manifest = run_issue_batch(
+            store=store, document=document, phase=args.phase, prompt_version=args.prompt_version,
+            size=args.size, out_dir=args.out_dir, batch_id=args.batch_id,
+            issuer_identity=args.issuer_identity, repo_root=Path(args.repo_root).resolve(),
+        )
+    except (BatchRefused, BatchRejected) as exc:
+        print(f"review-issue refused: {exc}", file=out)
+        return 2
+    print(json.dumps(manifest, indent=2), file=out)
+    return 0 if manifest["issued"] > 0 or manifest["eligible_considered"] == 0 else 1
+
+
 def cmd_pack(args, store, out) -> int:
     """Build the deliverable pack from what the catalog says is published (ADR-008/009)."""
     from semiskill.artifacts.store import PostgresArtifactStore
@@ -658,6 +698,25 @@ def build_parser() -> argparse.ArgumentParser:
                        help="skip the pre-flight lint (not recommended)")
         w.add_argument("--yes", action="store_true", help="confirm writing to this database")
         w.set_defaults(func=cmd_wave, needs_store=needs_store)
+
+    ri = sub.add_parser(
+        "review-issue",
+        help="coordinator-only: mint review-batch contracts from a validated scoreboard snapshot",
+    )
+    ri.add_argument("--dsn", default=None, help="catalog database (defaults to DATABASE_URL)")
+    ri.add_argument("--snapshot", type=Path, required=True,
+                    help="validated scoreboard snapshot JSON (semiskill scoreboard --snapshot-out)")
+    ri.add_argument("--phase", required=True, choices=["review", "recheck"])
+    ri.add_argument("--prompt-version", required=True, dest="prompt_version",
+                    help="e.g. P1-ADVERSARIAL-REVIEW@3 or P5-RECHECK-CALIBRATED@3")
+    ri.add_argument("--size", type=int, default=10, help="at most 10 skills per batch")
+    ri.add_argument("--out-dir", type=Path, required=True, dest="out_dir")
+    ri.add_argument("--batch-id", default=None, dest="batch_id",
+                    help="defaults to a generated phase+timestamp id")
+    ri.add_argument("--issuer-identity", default="orchestrator:review-issue@1", dest="issuer_identity")
+    ri.add_argument("--repo-root", default=".", dest="repo_root")
+    ri.add_argument("--yes", action="store_true", help="confirm writing to this database")
+    ri.set_defaults(func=cmd_review_issue, needs_store=False)
 
     def add_export_scope_arguments(command):
         command.add_argument("--scoreboard-snapshot", required=True,

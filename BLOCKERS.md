@@ -11,15 +11,19 @@ Full rules: see STATE_RULES.md.
 - Description: Entra/OIDC tenant values, SharePoint target configuration and distinct PRODUCTION
   runtime/migration credentials are absent, and there is no SharePoint/Graph integration code to
   activate even once supplied (verified 2026-08-08). The DEVELOPMENT-environment
-  approval-actuator, review-coordinator and export-reader credentials are RESOLVED as of J-010f1
-  (2026-08-09): three local Postgres logins were provisioned against the existing loopback DB,
-  each holding exactly one capability-role grant, verified to actually exercise their granted
-  functions (not just role membership). Per ADR-029, the near-term "published" milestone targets
-  this development catalog, not SharePoint, so this blocker no longer gates 84/84.
+  approval-actuator, review-coordinator and export-reader credentials are RESOLVED as of J-010f3
+  (2026-08-09, corrected from J-010f1): three local Postgres logins on the `db` cluster (port
+  5432), each holding exactly one capability-role grant, verified to actually exercise their
+  granted functions. J-010f1's first attempt broke migration-checkpoint attestation tests because
+  Postgres roles are cluster-wide and `semiskill_test` shared that cluster; J-010f3 split the
+  local Postgres into `db` (real catalog + these logins) and a separate disposable `db-test`
+  cluster (ADR-032) to fix it — see ADR-032 for the full diagnosis. Per ADR-029, the near-term
+  "published" milestone targets this development catalog, not SharePoint, so this blocker no
+  longer gates 84/84.
 - What I tried: implemented and tested fail-closed adapters, exact capability contracts and a
   development-only witnessed migration path; no tenant secrets were inferred or fabricated.
-  Provisioned and verified the development-scope credentials (J-010f1) once the user chose to
-  target the development catalog rather than wait (ADR-029).
+  Provisioned and verified the development-scope credentials (J-010f1), then corrected the
+  cluster-topology regression it caused (J-010f3/ADR-032) once the full suite caught it.
 - What I need to unblock: for the remaining PRODUCTION-only scope — provision the Entra/OIDC
   tenant/app registrations and a real SharePoint target, then supply their approved configuration
   through the documented environment contract. Not needed for 84/84-to-development.

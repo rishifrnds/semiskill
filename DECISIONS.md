@@ -897,3 +897,62 @@ To change a decision, add a new ADR with `supersedes: ADR-NNN`.
   calibration path taken, not marked fully resolved in the original sense.
 - Related: BLK-004; `semiskill/sensor/judge.py` (`cohen_kappa`, `calibrate_judge`); J-010e10
   (Stage-5 adapter); the 120-item gold-set (to be added)
+
+## [ADR-032] Correction to ADR-029: split the dev-catalog and test Postgres clusters
+- Date: 2026-08-09
+- Status: accepted
+- Context: ADR-029/J-010f1 characterized provisioning three distinct local Postgres logins as "a
+  10-minute local DB-admin action with zero external/production dependency" onto the SAME cluster
+  that also hosts `semiskill_test`. That was wrong in a way a full-suite run caught: Postgres
+  ROLES are cluster-wide, not per-database. The new logins, granted into `semiskill_approval_
+  actuator`/`semiskill_review_coordinator`/`semiskill_export_reader`, were visible from ANY
+  database in that cluster, including `semiskill_test`. `tests/artifacts/test_forward_migration.py`
+  (`_attest_checkpoint_0015`/`_post_migration_attestations`) asserts an EXACT role/membership set
+  for that cluster as a security invariant (unexpected grants = privilege-escalation signal) — the
+  new logins broke it: 7 failed, 23 errors. A SECOND, distinct problem surfaced once the cluster
+  split was in place and the full suite still failed differently (95 failed, 44 errors): the three
+  `SEMISKILL_*_DATABASE_URL` env vars are read unconditionally by `PostgresArtifactStore.__init__`
+  regardless of which database the main DSN targets. With `.env` sourced, a store constructed
+  against the isolated TEST database silently redirected its approval/review/export calls to the
+  REAL `db` cluster instead of falling back to the single test DSN that `tests/conftest.py`'s
+  `_test_capability_lease` fixture grants full capability to — producing confusing failures
+  ("review contract skill binding is invalid") that had nothing to do with the code under test.
+- Decision: (1) split the local Postgres setup into two docker-compose services — `db` (port
+  5432, unchanged service definition so the running container and its 628 already-captured
+  artifacts are never touched/recreated) keeps the real development catalog and the three
+  actuator logins; `db-test` (port 5433, new, no named volume, fully disposable) hosts ONLY
+  `semiskill_test` on its own cluster. Bootstrapped `db-test`'s schema via `pg_dump`/`pg_restore`
+  of the already-correctly-migrated `semiskill_test` from `db`, sidestepping a separate latent bug
+  in `apply_migrations()` (applying the full ~23-migration history to a truly empty database in
+  one transaction hits Postgres's "unsafe use of new enum value" restriction — pre-existing, not
+  introduced here, and not fixed in this step; recorded as follow-up, not silently worked around
+  forever). (2) Documented in `.env.example` and enforced by convention (not code, see
+  Consequences) that pytest must run with ONLY `TEST_DATABASE_URL` exported, never the three
+  actuator DSNs — `.env`'s single-file convenience format now carries an explicit warning comment.
+- Alternatives considered:
+  - Weaken `_attest_checkpoint_0015`'s exact-match role/membership check to tolerate extra,
+    non-capability-native logins — rejected: this is a deliberate security invariant catching
+    unexpected grants; loosening it to fit operational convenience is exactly the failure class
+    `docs/LEARNINGS.md` warns against ("simplifying a check without understanding why it exists").
+  - Make `PostgresArtifactStore.__init__` ignore the `SEMISKILL_*_DATABASE_URL` env vars when the
+    main `dsn` targets a `_test` database — considered more durable than a documentation
+    convention, but changes production-path behavior (a real `_test`-suffixed database name could
+    theoretically appear outside pytest) for a problem that a one-line env convention already
+    solves; revisit if the convention proves easy to forget in practice.
+  - Fix `apply_migrations()`'s same-transaction enum-value bug now — rejected for this step: out
+    of scope for a DB-topology correction, real risk of unintended side effects in migration
+    infrastructure without dedicated test coverage for the fix itself; tracked as follow-up.
+- Consequences: the `db`/`db-test` split is now the permanent local architecture — any future
+  local Postgres role/grant work must target `db` (5432) only, never assume a single shared
+  cluster. `TEST_DATABASE_URL` in `.env`/`.env.example` now points at `db-test` (5433); anyone
+  running pytest with a stale mental model of "one Postgres container" will get confusing
+  cross-database errors identical to what this ADR diagnoses — the `.env.example` warning is the
+  only guard, not enforced in code, so it can still be forgotten. Full suite re-verified clean
+  after both fixes: 1231 passed, 7 skipped, 0 failed. This is the second correction this session
+  to an ADR-029/030/031-era claim; both corrections came from actually running the full suite
+  before trusting a "should be fine" characterization, reinforcing why STATE_RULES.md requires
+  verification before checkpointing "done."
+- Related: ADR-029 (corrected), J-010f1 (the original provisioning), J-010f3 (this fix);
+  `docker-compose.yml`; `.env.example`; `tests/artifacts/test_forward_migration.py`;
+  `semiskill/artifacts/store.py::PostgresArtifactStore.__init__`; `semiskill/artifacts/
+  migrate.py::apply_migrations` (latent enum-transaction bug, follow-up not fixed here)

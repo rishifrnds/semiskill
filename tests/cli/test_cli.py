@@ -645,3 +645,70 @@ def test_snapshot_generation_failure_preserves_prior_file(tmp_path, monkeypatch)
     assert "private database detail" not in out.getvalue()
 
 
+# --------------------------------------------------------------------------------------
+# review-issue (HANDOFF.md Gate 1 item 2) — CLI plumbing only; the underlying
+# semiskill.authoring.issue_batch logic has its own thorough coverage in
+# tests/tools/test_issue_batch.py. These guards run before any store is touched, mirroring
+# `wave`'s isolated-database/--yes protection, so an unreachable DSN proves they never connect.
+# --------------------------------------------------------------------------------------
+
+def test_review_issue_refuses_the_isolated_test_database(tmp_path):
+    out = io.StringIO()
+    rc = main([
+        "review-issue", "--dsn", "postgresql://nope:nope@127.0.0.1:1/semiskill_test",
+        "--snapshot", str(tmp_path / "missing.json"), "--phase", "review",
+        "--prompt-version", "P1-ADVERSARIAL-REVIEW@3", "--out-dir", str(tmp_path / "out"),
+    ], store=None, out=out)
+    assert rc == 2
+    assert "isolated pytest database" in out.getvalue()
+
+
+def test_review_issue_refuses_without_yes_against_the_dev_catalog(tmp_path):
+    out = io.StringIO()
+    rc = main([
+        "review-issue", "--dsn", "postgresql://nope:nope@127.0.0.1:1/semiskill",
+        "--snapshot", str(tmp_path / "missing.json"), "--phase", "review",
+        "--prompt-version", "P1-ADVERSARIAL-REVIEW@3", "--out-dir", str(tmp_path / "out"),
+    ], store=None, out=out)
+    assert rc == 2
+    assert "--yes" in out.getvalue()
+
+
+def test_review_issue_yes_bypasses_the_dev_catalog_guard_and_reaches_the_snapshot_load(tmp_path):
+    """--yes clears the write guard; the next thing it must hit is snapshot loading, not a
+    silent pass — proving the guard is actually consulted rather than short-circuiting True."""
+    out = io.StringIO()
+    rc = main([
+        "review-issue", "--dsn", "postgresql://nope:nope@127.0.0.1:1/semiskill", "--yes",
+        "--snapshot", str(tmp_path / "missing.json"), "--phase", "review",
+        "--prompt-version", "P1-ADVERSARIAL-REVIEW@3", "--out-dir", str(tmp_path / "out"),
+    ], store=None, out=out)
+    assert rc == 2
+    assert "review-issue refused" in out.getvalue()
+    assert "--yes" not in out.getvalue()  # past the write guard now
+
+
+def test_review_issue_refuses_a_batch_that_would_reject_with_a_message_not_a_traceback(tmp_path):
+    """A non-`semiskill`/non-`_test` dbname (e.g. a custom dev catalog name) skips both guards
+    and reaches real orchestration, which then refuses cleanly on a malformed snapshot."""
+    snapshot = tmp_path / "scoreboard.json"
+    snapshot.write_text(json.dumps({"cells": "not-a-list"}), encoding="utf-8")
+    out = io.StringIO()
+    rc = main([
+        "review-issue", "--dsn", "postgresql://nope:nope@127.0.0.1:1/semiskill_custom", "--yes",
+        "--snapshot", str(snapshot), "--phase", "review",
+        "--prompt-version", "P1-ADVERSARIAL-REVIEW@3", "--out-dir", str(tmp_path / "out"),
+    ], store=None, out=out)
+    assert rc == 2
+    assert "review-issue refused" in out.getvalue()
+
+
+def test_review_issue_is_registered_in_the_cli_parser():
+    args = build_parser().parse_args([
+        "review-issue", "--snapshot", "s.json", "--phase", "recheck",
+        "--prompt-version", "P5-RECHECK-CALIBRATED@3", "--out-dir", "out/",
+    ])
+    assert args.func.__name__ == "cmd_review_issue"
+    assert args.phase == "recheck" and args.size == 10
+
+
