@@ -34,14 +34,26 @@ Full rules: see STATE_RULES.md.
 - Raised: 2026-08-07T03:10:37Z
 - Blocks: Stage-2 production credit and the first end-to-end skill publication
 - Type: external-dependency
-- Description: ADR-024 selects an internally built and signed Semgrep OSS-mode derivative, but the internal
-  image, bundled SemiSkill rules, SBOM/CVE record, license review and signature policy do not yet
-  exist as approved artifacts. The former claude-flow path is not a valid fallback.
-- What I tried: audited the current runner, recorded its fail-open coverage/egress/write defects and
-  pinned provisional upstream coordinates for controlled evaluation only.
-- What I need to unblock: AppSec and legal/supply-chain owners must approve the exact image platform
-  manifest, rule-pack SHA-256, adapter source commit/digest and policy/schema hashes after the adapter
-  and adversarial tests pass.
+- Description: ADR-024 selects an internally built and signed Semgrep OSS-mode derivative; ADR-030
+  (2026-08-08) rescoped this to pragmatic rigor for the internal/solo project - pin the exact
+  upstream digest, ship a real rule pack, defer formal signing/SBOM/CVE automation as explicit
+  follow-up. As of J-010f4 (2026-08-09) the code and content side is DONE and tested with real
+  Docker execution: `Stage2Adapter` is wired into `pipeline.py`/`wave.py`, the rule pack has 9
+  real rules, and a benign-passes/malicious-hard-fails round trip is proven end to end. Still
+  blocked pending exactly one thing - the user's explicit sign-off - not more engineering.
+- Exact digest triple awaiting approval (J-010f4):
+  - `image_manifest_digest = sha256:2e01772afbd85789464594ca86e22896748cbc78a5d9751dfc947a40b214ccc2`
+    (upstream `semgrep/semgrep@<digest>`, used directly - no local derivative build; the rule
+    pack is a separately-tracked host file, mounted read-only, never baked into the image)
+  - `rule_pack_sha256 = sha256:81a5e721b1ce52c9e165c1d35696f7a1df38d2351a1f939b0418f7251a3844e1`
+    (`docker/stage2/rules/semiskill.yml`, 9 rules - review the file directly, it's short)
+  - `adapter_commit = a9833db0a3681b66765df0fbc28b49e225bded0e`
+- What I tried: audited the current runner, recorded its fail-open coverage/egress/write defects,
+  pinned provisional upstream coordinates, then (J-010f4) actually built and tested the real
+  scanner against both benign and adversarial content with real Docker execution - not mocked.
+- What I need to unblock: the user reviews the exact digest triple above (and the rule pack file
+  itself, `docker/stage2/rules/semiskill.yml`) and explicitly approves it. No AppSec/legal team
+  exists for this internal/solo project (ADR-030) - the user is the accountable approver.
 - Escalate at: 2026-08-09T03:10:37Z
 
 ## [BLK-004] Stage-5 held-out calibration needs independent human labels

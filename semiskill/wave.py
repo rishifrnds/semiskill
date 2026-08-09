@@ -239,6 +239,7 @@ def run_wave(
     security_audit_runner=None,
     judge_risk_scanner=None,
     judge_required: bool = True,
+    stage2_policy=None,
 ) -> WaveReport:
     """Capture/scan candidates and stop before approval.
 
@@ -282,6 +283,7 @@ def run_wave(
                 security_audit_runner=security_audit_runner,
                 judge_risk_scanner=judge_risk_scanner,
                 judge_required=judge_required,
+                stage2_policy=stage2_policy,
             )
         except Exception as exc:  # noqa: BLE001 - isolate content errors, abort infrastructure
             if _is_infrastructure_error(exc):
@@ -333,6 +335,7 @@ def _run_one(
     security_audit_runner,
     judge_risk_scanner=None,
     judge_required: bool = True,
+    stage2_policy=None,
 ) -> WaveItemResult:
     if dry_run:
         return WaveItemResult(
@@ -374,6 +377,7 @@ def _run_one(
             security_audit_runner=security_audit_runner,
             judge_risk_scanner=judge_risk_scanner,
             judge_required=judge_required,
+            stage2_policy=stage2_policy,
         )
     else:
         pipeline = _pipeline_from_review(store, skill_version, automated)

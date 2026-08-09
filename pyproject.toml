@@ -19,4 +19,7 @@ include = ["semiskill*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: requires a live Postgres (DATABASE_URL)"]
+markers = [
+    "integration: requires a live Postgres (DATABASE_URL)",
+    "docker: requires a local Docker daemon and the pinned Stage-2 Semgrep image",
+]

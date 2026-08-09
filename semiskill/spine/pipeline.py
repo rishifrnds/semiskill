@@ -20,6 +20,8 @@ from semiskill.scanners.static_structure import StaticStructureScanner
 from semiskill.scanners.injection_probe import InjectionProbeScanner
 from semiskill.scanners.secret_pii import SecretPiiScanner
 from semiskill.scanners.security_audit import SecurityAuditScanner, ToolUnavailable
+from semiskill.scanners.stage2_adapter import Stage2Adapter, Stage2Policy
+from semiskill.scanners.stage2_engine import docker_semgrep_engine
 
 APPROVE_THRESHOLD = 0.8
 REJECT_THRESHOLD = 0.5
@@ -40,10 +42,20 @@ def _unconfigured_security_audit(_submission):
     raise ToolUnavailable("security-audit adapter is not configured")
 
 
-def _build_scanners(dsn: str, security_audit_runner=None, judge_risk_scanner=None):
+def _build_scanners(dsn: str, security_audit_runner=None, judge_risk_scanner=None,
+                    stage2_policy: Stage2Policy | None = None):
+    # ADR-024/ADR-030: Stage2Adapter is the accepted Stage-2 authority; the old npx-based
+    # SecurityAuditScanner is retired (HANDOFF.md) but stays as the pre-ADR-024 fallback when no
+    # stage2_policy is supplied, so existing callers that don't yet pass one keep today's
+    # behavior exactly (both paths currently produce `not_run` either way, since Stage2Policy.
+    # approved defaults to False pending BLK-003). Callers should migrate to stage2_policy.
+    if stage2_policy is not None:
+        stage2 = Stage2Adapter(engine=docker_semgrep_engine, policy=stage2_policy)
+    else:
+        stage2 = SecurityAuditScanner(security_audit_runner or _unconfigured_security_audit)
     scanners = [
         StaticStructureScanner(),
-        SecurityAuditScanner(security_audit_runner or _unconfigured_security_audit),
+        stage2,
         InjectionProbeScanner(dsn),
         SecretPiiScanner(),
     ]
@@ -92,7 +104,8 @@ def _write_review(store: ArtifactStore, sv: Artifact, scans: list[Artifact], ver
 
 def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id,
                  security_audit_runner=None, judge_risk_scanner=None,
-                 judge_required: bool = True) -> PipelineResult:
+                 judge_required: bool = True,
+                 stage2_policy: Stage2Policy | None = None) -> PipelineResult:
     sv = store.get(skill_version_id)
     if sv is None or sv.artifact_type is not ArtifactType.SKILL_VERSION:
         raise ValueError("skill_version not found")
@@ -100,7 +113,7 @@ def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id,
     submission = SkillSubmission.from_payload(sv.payload)
 
     scans: list[Artifact] = []
-    for scanner in _build_scanners(dsn, security_audit_runner, judge_risk_scanner):
+    for scanner in _build_scanners(dsn, security_audit_runner, judge_risk_scanner, stage2_policy):
         result = scanner.scan(submission)
         scans.append(_write_scan(store, sv, result, label))
 

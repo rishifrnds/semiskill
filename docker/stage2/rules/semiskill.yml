@@ -1,0 +1,147 @@
+# SemiSkill Stage-2 rule pack (ADR-024/ADR-030). Generic (regex-over-text) rules so Markdown
+# SKILL.md bodies get real coverage - the gap that retired the previous npx-based runner
+# (HANDOFF.md: "does not scan Markdown SKILL.md"). Deliberately complementary to, not a
+# duplicate of, the other stages: stage 3 (injection_probe.py) is a held-out corpus probe for
+# instruction-injection phrasing, and stage 4 (secret_pii.py) already covers concrete credential
+# formats (AWS/GitHub/Slack keys, private key headers, JWTs, SSNs, credit cards) with hard-coded
+# Python regexes. This pack focuses on categories neither of those cover: dangerous embedded
+# command execution, data-exfiltration shapes, and (as defense-in-depth, some deliberate overlap
+# with stage 3) explicit prompt-injection/jailbreak phrasing that a static, auditable rule can
+# catch even if the held-out corpus ever drifts.
+#
+# `semiskill_severity` in each rule's metadata is what semiskill/scanners/stage2_engine.py reads
+# to map into stage2_report.py's five-level vocabulary (critical/high/medium/low/info) - Semgrep's
+# own three-level ERROR/WARNING/INFO doesn't have enough range for this pipeline's hard-fail
+# threshold (>= 0.9, i.e. only `critical`).
+#
+# This is a first real pass, not an exhaustive one - extend it as review work surfaces new
+# patterns worth encoding deterministically (ADR-030 explicitly scopes this as ongoing, not
+# frozen).
+rules:
+  - id: semiskill.pipe-remote-to-shell
+    languages: [generic]
+    severity: ERROR
+    metadata:
+      semiskill_severity: critical
+      category: command-execution
+    message: >-
+      Content pipes a downloaded resource directly into a shell interpreter (curl/wget | sh|bash).
+      This is a remote-code-execution shape regardless of what the surrounding prose claims the
+      skill is for - a skill body should describe a procedure, never execute one.
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)(curl|wget)\s[^\n|]*\|\s*(sudo\s+)?(sh|bash|zsh|python[23]?)\b'
+          - pattern-regex: '(?i)(sh|bash|zsh)\s+<\(\s*(curl|wget)\b'
+
+  - id: semiskill.base64-decode-execute
+    languages: [generic]
+    severity: ERROR
+    metadata:
+      semiskill_severity: critical
+      category: command-execution
+    message: >-
+      Content decodes a base64 blob and feeds it to an interpreter or shell - a common obfuscated
+      payload-execution pattern with no legitimate reason to appear in a review/authoring skill.
+    patterns:
+      - pattern-regex: '(?i)base64\s+(-d|--decode)[^\n]{0,80}\|\s*(sh|bash|zsh|python[23]?|eval)\b'
+
+  - id: semiskill.reverse-shell-shape
+    languages: [generic]
+    severity: ERROR
+    metadata:
+      semiskill_severity: critical
+      category: command-execution
+    message: >-
+      Content matches a common reverse-shell invocation shape (nc/ncat with -e, or a
+      bash /dev/tcp redirect). No DV/authoring skill legitimately needs this.
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)\b(nc|ncat|netcat)\s[^\n]*-e\s+(/bin/)?(sh|bash)\b'
+          - pattern-regex: '(?i)bash\s+-i\s+>&\s*/dev/tcp/'
+
+  - id: semiskill.destructive-filesystem-wipe
+    languages: [generic]
+    severity: ERROR
+    metadata:
+      semiskill_severity: high
+      category: command-execution
+    message: >-
+      Content includes an unqualified recursive-force delete of a root-level or wildcard path.
+      A legitimate skill scopes destructive commands narrowly and never instructs a blanket wipe.
+    patterns:
+      - pattern-regex: '(?i)rm\s+-[a-z]*r[a-z]*f[a-z]*\s+(/\S*|~\S*|\*)\s*$'
+
+  - id: semiskill.exfiltrate-via-http-post
+    languages: [generic]
+    severity: ERROR
+    metadata:
+      semiskill_severity: high
+      category: data-exfiltration
+    message: >-
+      Content posts local file contents or environment variables to a remote endpoint (curl -X
+      POST/--data with @file or $ENV_VAR). This is the concrete exfiltration shape CLAUDE.md's
+      "network-egress control" principle exists to catch, independent of surrounding wording.
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)curl\s[^\n]*(-X\s*POST|--request\s+POST)[^\n]*(--data|-d)\s*@'
+          - pattern-regex: '(?i)curl\s[^\n]*(--data|-d)\s*"[^"\n]*\$\{?[A-Z_][A-Z0-9_]*\}?'
+
+  - id: semiskill.env-dump-to-network
+    languages: [generic]
+    severity: WARNING
+    metadata:
+      semiskill_severity: high
+      category: data-exfiltration
+    message: >-
+      Content dumps the environment (`env`/`printenv`/`set`) and pipes it toward a network tool.
+      Environment variables routinely carry credentials this skill has no stated need to expose.
+    patterns:
+      - pattern-regex: '(?i)\b(env|printenv|set)\b\s*\|\s*(curl|wget|nc|ncat|netcat)\b'
+
+  - id: semiskill.prompt-injection-override-phrase
+    languages: [generic]
+    severity: ERROR
+    metadata:
+      semiskill_severity: high
+      category: prompt-injection
+    message: >-
+      Content contains a direct instruction-override phrase aimed at an AI agent reading this
+      skill ("ignore previous/all instructions", "disregard your system prompt", etc.). A DV
+      procedure never needs to address the agent's own instruction hierarchy. Defense-in-depth
+      alongside stage 3's held-out corpus probe (semiskill/scanners/injection_probe.py) - this
+      static rule catches the pattern even if the held-out corpus is ever unavailable or drifts.
+    patterns:
+      - pattern-regex: '(?i)\b(ignore|disregard|forget)\s+(all\s+|any\s+)?(previous|prior|above|your)\s+(instructions?|system\s*prompt|rules?)\b'
+
+  - id: semiskill.prompt-injection-role-override
+    languages: [generic]
+    severity: WARNING
+    metadata:
+      semiskill_severity: medium
+      category: prompt-injection
+    message: >-
+      Content attempts to redefine the agent's role or operating mode mid-body ("you are now",
+      "new instructions:", "system:", "developer mode"). Legitimate skills describe a procedure
+      for the agent to follow, not a persona/instruction reset for it to adopt.
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)\byou\s+are\s+now\s+(a|an)\b'
+          - pattern-regex: '(?i)^\s*(new\s+instructions?|system)\s*:'
+          - pattern-regex: '(?i)\b(developer|jailbreak|dan)\s+mode\b'
+
+  - id: semiskill.disable-safety-tooling
+    languages: [generic]
+    severity: WARNING
+    metadata:
+      semiskill_severity: medium
+      category: scope-violation
+    message: >-
+      Content instructs disabling a safety/verification mechanism this project relies on
+      (--no-verify, skip hooks, disable a security check) - exactly the pattern
+      CLAUDE.md/STATE_RULES.md single out as requiring explicit human approval, never a default
+      instruction embedded in reusable skill content.
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)--no-verify\b'
+          - pattern-regex: '(?i)\bskip\s+(the\s+)?(pre-?commit\s+)?hooks?\b'
+          - pattern-regex: '(?i)\bdisable\s+(the\s+)?(security|safety)\s+(check|scan|gate)\b'

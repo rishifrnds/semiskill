@@ -1551,25 +1551,91 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication. Correction/infrastructure.
   next: close the scoreboard v3 gap (HANDOFF.md gap 4 / J-010e9 finding-2)
 
+- [J-010f4] 2026-08-09T02:09:35Z  status: done
+  what: built the real Stage-2 scanner under ADR-030's pragmatic scope - Semgrep rule pack, the
+    `docker run` engine wrapper, and wired `Stage2Adapter` into `pipeline.py`/`wave.py` - and
+    proved it end to end with REAL Docker execution, not mocks
+  artifacts: this J-010f4 checkpoint, docker/stage2/rules/semiskill.yml (9 rules),
+    semiskill/scanners/stage2_engine.py, semiskill/spine/pipeline.py (stage2_policy param),
+    semiskill/wave.py (stage2_policy threaded through run_wave/_run_one),
+    tests/scanners/test_stage2_engine.py, tests/spine/test_pipeline.py (3 new stage2 tests),
+    pyproject.toml (new `docker` pytest marker)
+  exact digest triple ready for BLK-003 approval (task #8, needs the user):
+    image_manifest_digest = sha256:2e01772afbd85789464594ca86e22896748cbc78a5d9751dfc947a40b214ccc2
+    (upstream `semgrep/semgrep@<digest>`, pulled and verified working offline/OSS-only/non-root
+    this session - not a locally-rebuilt derivative, per the design note below)
+    rule_pack_sha256 = sha256:81a5e721b1ce52c9e165c1d35696f7a1df38d2351a1f939b0418f7251a3844e1
+    (docker/stage2/rules/semiskill.yml, 9 rules)
+    adapter_commit = a9833db0a3681b66765df0fbc28b49e225bded0e (HEAD at start of this step)
+  verification: 19 new tests in test_stage2_engine.py (14 fast translation-logic unit tests +
+    5 REAL `@pytest.mark.docker` tests actually invoking the pinned container) + 3 new
+    `@pytest.mark.integration @pytest.mark.docker` tests in test_pipeline.py proving the FULL
+    chain (run_pipeline -> Stage2Adapter -> docker_semgrep_engine -> real Semgrep container).
+    A benign skill scans clean with exact coverage; a skill body containing
+    `curl ... | bash` gets a real `critical` finding, hard-fails, and blocks the pipeline at
+    ScanStage.SECURITY_AUDIT with the correct verdict - not asserted against a fake/mocked
+    engine anywhere in these tests. Full `pytest tests/`: **1253 passed, 7 skipped, 0 failed,
+    365.35s** (TEST_DATABASE_URL only, per ADR-032).
+  design decision (not a new ADR - implements ADR-030's already-accepted decision): the rule
+    pack stays a HOST-side file mounted read-only at scan time (`/rules/semiskill.yml`,
+    separate from the payload mount), never baked into a locally-built derivative image -
+    `Stage2Policy` already tracks `image_manifest_digest` and `rule_pack_sha256` as two
+    independent provenance elements (not one combined image hash), which only makes sense if
+    the rule pack isn't part of the image. This also means no local `docker build`/derivative
+    image was needed at all - `image_manifest_digest` pins the untouched upstream digest
+    directly, which is MORE auditable (anyone can `docker pull` and verify byte-for-byte) than a
+    locally-built image nobody else can reproduce without also owning this exact rule-pack file.
+  real bug found and fixed along the way (Semgrep behavior, not a design flaw): Semgrep prefixes
+    every `check_id` with its `--config` file's parent directory name -
+    `--config /rules/semiskill.yml` reports `rules.semiskill.<id>`, not `semiskill.<id>`.
+    Confirmed via direct JSON inspection, not assumed. `_rule_id()` strips the deterministic
+    `rules.` prefix so `rule_id` matches what the pack's own `id:` field actually says.
+  sandboxing verified working (not assumed from ADR-024's text): `--network none --read-only
+    --cap-drop ALL --security-opt no-new-privileges --user semgrep`. Two real gotchas found by
+    actually running it: (1) Semgrep needs a writable `$HOME` even for a read-only scan (writes
+    `~/.semgrep` settings on first run) - fixed with `--tmpfs /tmp -e HOME=/tmp`; (2) Semgrep
+    hangs indefinitely without `--metrics=off --disable-version-check` when `--network none` is
+    set, because it tries to phone home and gets no response rather than a fast refusal -
+    reproduced directly (container had to be `docker kill`ed), then fixed.
+  rule pack scope (9 rules, documented as first-pass/extend-over-time in the pack's own header):
+    dangerous command execution (remote-pipe-to-shell, base64-decode-execute, reverse-shell
+    shape, destructive rm), data exfiltration (HTTP POST of file/env contents), prompt-injection
+    phrases (instruction-override, role-override - deliberate defense-in-depth overlap with
+    stage 3's held-out corpus probe), and disabling this project's own safety tooling
+    (--no-verify etc.). Deliberately does NOT duplicate stage 4's credential-format regexes
+    (AWS/GitHub/Slack keys, JWTs, SSNs already covered in secret_pii.py).
+  wiring is additive, not a breaking replacement: `run_pipeline`/`run_wave` gained an optional
+    `stage2_policy` parameter; when omitted, behavior is byte-identical to before (falls back to
+    the old `SecurityAuditScanner`/`security_audit_runner`, itself still defaulting to
+    `not_run`). Full retirement of the old runner (ADR-024 says "retired") is a smaller
+    follow-up once `stage2_policy` is wired all the way to CLI flags - deliberately not done
+    yet, mirroring how J-010e10 left Stage-5 CLI-unwired pending its own blocker.
+  credit: none toward security_pass, review, approval or publication yet - BLK-003 needs the
+    user's explicit sign-off on the exact digest triple above before `approved=True` anywhere
+    outside a test fixture. No production/real policy config sets `approved=True` in this step.
+  next: task #8 - present this digest triple to the user for explicit approval
+
 ## In-Flight Step
 
-- none. Next: close the scoreboard v3 gap (artifact-level re-verification).
+- none. Next: task #8 - present the Stage-2 digest triple to the user for explicit BLK-003
+  approval (needs the user, not more engineering) - or continue to task #9 (Stage-5 wiring) if
+  the user wants engineering to keep advancing in parallel while BLK-003 awaits their review.
 
 ## Pending Steps
-1. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
+1. Get the user's explicit BLK-003 approval on the exact digest triple recorded in J-010f4.
+2. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
    live store (not just internal self-consistency), per J-010e9 finding-2 / HANDOFF.md gap 4.
-2. Build the real Stage-2 image + rule pack under ADR-030's pragmatic scope; wire `Stage2Adapter`
-   into `pipeline.py`/`wave.py` replacing the retired `npx` runner; get the user's explicit digest
-   approval (BLK-003).
+   Deferred below critical-path items; resume notes under task #6 in the session's task tracker.
 3. Wire `OllamaJudge`/`Stage5Policy` into the CLI/pipeline; build and propose the 120-item
    calibration gold set for the user's solo labeling (ADR-031); run calibration (BLK-004).
 4. Vertical-prove `dv-minimal-reproducer` end to end against the now-real development approval
-   chain (J-010f1/f3), then the 5-skill wave-0 cohort, then the remaining 79 in batches <=10.
+   chain (J-010f1/f3) and the now-real Stage-2 scanner (J-010f4, pending approval), then the
+   5-skill wave-0 cohort, then the remaining 79 in batches <=10.
 5. [J-013] Next.js catalog / market-readiness work remains deferred - not required for the
    development-catalog milestone (ADR-029); revisit before any production/SharePoint launch.
 6. Follow-up, not urgent: `apply_migrations()`'s same-transaction new-enum-value bug (J-010f3
-   root-cause-1) - only surfaces when bootstrapping a truly empty `_test` database in one shot;
-   worked around via pg_dump/restore for `db-test`, not fixed at the source.
+   root-cause-1); full retirement of the old SecurityAuditScanner/npx runner once stage2_policy
+   reaches CLI flags (J-010f4 note).
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.
