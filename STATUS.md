@@ -1,19 +1,20 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-09T02:10:56Z_
+_Last updated: 2026-08-10T09:45:36Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills to the DEVELOPMENT
 catalog (ADR-029 — production/SharePoint is a separate, later milestone); prove 16 roles at >=5.
 
 ## Session
-- ID: 20260808T165438Z-RISHI_PC-392cc5 - lock held: yes
-- This turn ran as an autonomous-loop tick (a stray `ScheduleWakeup` fired while waiting on a
-  test run earlier - not a real recurring loop the user set up). Continued the already-authorized
-  "publish all 84" task list since the user is actively driving this conversation. Stopping the
-  loop mechanism after this checkpoint (see end of session note) rather than re-arming it.
-- **BLK-003 is now ready for the user's decision** - the real Stage-2 scanner is built, wired
+- ID: 20260808T165438Z-RISHI_PC-392cc5 - lock held: yes (same session, resumed after a real-world
+  gap - `.session-lock` timestamp refreshed 2026-08-10T09:43:56Z; nothing else changed hands)
+- Since the last checkpoint (J-010f4): user asked for the 84-skill role/level matrix (answered
+  inline from HANDOFF.md data, no file changes) and then asked to consolidate this session's
+  lessons into SKILL.md and docs/LEARNINGS.md (J-010f5, this checkpoint). No engineering work
+  happened in between - the state below is otherwise identical to J-010f4.
+- **BLK-003 is still ready for the user's decision** - the real Stage-2 scanner is built, wired
   in, and tested with real Docker execution. Nothing left but the user's sign-off. See BLOCKERS.md
   for the exact digest triple, or MEMORY.md's J-010f4 entry for full detail.
 
@@ -98,9 +99,9 @@ evidence for a release gate.
   "published" or "passed" without that context (ADR-029/030/031).
 
 ## Last checkpoint
-- J-010f4 is the containing checkpoint for the Stage-2 build
-  (`artifacts: this J-010f4 checkpoint`).
-- This session: J-010e7 -> e8 -> e9 -> e10 -> (pushed) -> f0 -> f1 -> f2 -> f3 -> f4, all done,
-  about to commit f4. Next: user decision on BLK-003, or continue to Stage-5 wiring.
+- J-010f5 is the containing checkpoint for the SKILL.md/LEARNINGS.md documentation update
+  (`artifacts: this J-010f5 checkpoint`).
+- This session: J-010e7 -> e8 -> e9 -> e10 -> (pushed) -> f0 -> f1 -> f2 -> f3 -> f4 -> f5, all
+  done, about to commit f5. Next: user decision on BLK-003, or continue to Stage-5 wiring.
 - No step this session earns any review, approval, publication or launch-readiness credit yet -
   Stage 2 is code-proven but not yet approved; nothing has reached security_pass.

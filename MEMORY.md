@@ -1615,6 +1615,38 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
     outside a test fixture. No production/real policy config sets `approved=True` in this step.
   next: task #8 - present this digest triple to the user for explicit approval
 
+- [J-010f5] 2026-08-10T09:45:36Z  status: done
+  what: consolidated this session's hard-won lessons into the durable docs, at the user's
+    explicit request, before further work continues
+  artifacts: this J-010f5 checkpoint, `.agents/skills/semiskill-project/SKILL.md`,
+    `docs/LEARNINGS.md`, `.session-lock` (refreshed; gitignored)
+  what changed:
+  - SKILL.md: "Start Here" now tells a fresh session to read ADR-029..032 FIRST (they rescope
+    "done" and HANDOFF.md's prose hasn't been rewritten to match), to verify BOTH Postgres
+    containers via `docker ps` before trusting DB-touching results (not just one), and to check
+    for the pinned Stage-2 image when `@pytest.mark.docker` tests matter. Added an explicit
+    "never export the full `.env` before pytest" rule as its own numbered item, not buried in
+    prose. "Select the Next Safe Step" now distinguishes development-catalog-ready from
+    production-ready explicitly, and states the never-fabricate-an-approval line for any future
+    supply-chain/calibration blocker, not just BLK-003/004 by name. "Verify and Checkpoint" now
+    says to run the FULL suite (not just the touched area) before checkpointing any change to
+    shared infrastructure as done. "Route to Project References" gained pointers to
+    `.env.example`, the Stage-2 rule pack, and the Stage-2/5 adapter modules.
+  - LEARNINGS.md: new dated section "2026-08-09 - Local infrastructure boundaries and the real
+    Stage-2 build" with 6 entries: Postgres roles are cluster-wide not per-database (J-010f3's
+    real regression); an env var right for one purpose can be wrong for an adjacent one
+    (J-010f3's second regression); an ADR's risk claim is a hypothesis until the full suite
+    proves it (the meta-lesson from both); Semgrep prefixes check_id with the config mount's
+    directory name; a read-only/networkless sandbox still needs a writable HOME (Semgrep
+    settings file) and explicit metrics/version-check flags or it hangs; Docker bind mounts from
+    Git Bash on Windows need real Windows paths, not the `/tmp` alias.
+  why this matters, not just what: every one of these lessons was expensive to learn once
+    (multiple full-suite runs, a killed hung container, misdiagnosed-as-content-bug test
+    failures) and cheap to prevent for the next session/reader if written down - exactly
+    LEARNINGS.md's stated purpose ("stops someone simplifying a rule back out").
+  credit: none toward security_pass, review, approval or publication. Documentation only.
+  next: unchanged - task #8, present the Stage-2 digest triple to the user for BLK-003 approval
+
 ## In-Flight Step
 
 - none. Next: task #8 - present the Stage-2 digest triple to the user for explicit BLK-003

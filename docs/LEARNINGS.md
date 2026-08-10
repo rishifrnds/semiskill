@@ -203,3 +203,88 @@ hashes the tree containing MEMORY, so the requirement is self-referential and ca
 The durable convention is an exact `this <STEP-ID> checkpoint` marker whose containing commit subject
 must name the same STEP-ID; real SHAs remain mandatory when recording an already-existing commit.
 Making this explicit prevents every fresh operator from correctly stopping on an impossible gate.
+
+---
+
+## 2026-08-09 — Local infrastructure boundaries and the real Stage-2 build
+
+### Postgres roles are cluster-wide, not per-database
+
+Provisioning three new local logins (approval/review-coordinator/export-reader) against the real
+`semiskill` development database silently broke migration-checkpoint attestation tests that run
+against `semiskill_test` — because both databases lived in the *same* Postgres cluster, and
+`CREATE ROLE`/`GRANT` are cluster-scoped, not database-scoped. The attestation tests
+(`_attest_checkpoint_0015`/`_post_migration_attestations`) assert an *exact* role/membership set
+as a security invariant (unexpected grants = privilege-escalation signal); the new logins showed
+up as unexpected extras the moment `semiskill_test` was queried, regardless of which database the
+grants were logically "for." First full-suite run after provisioning: 7 failed, 23 errors, every
+one in that one file.
+
+**Rule:** any environment that needs strict role/grant isolation (a test cluster whose exact
+state is asserted) must be a genuinely separate Postgres *cluster* from one where operational
+roles get provisioned — separate *databases* on a shared cluster is not enough isolation. Fixed
+by splitting docker-compose into `db` (real catalog + actuator logins, port 5432, its service
+definition kept byte-identical so `docker compose up` never recreates the container and orphans
+its data) and `db-test` (isolated pytest cluster, port 5433, fully disposable, no named volume).
+
+### An env var that's right for one purpose can be wrong for an adjacent one
+
+Once `SEMISKILL_APPROVAL_DATABASE_URL`/`_REVIEW_COORDINATOR_DATABASE_URL`/`_EXPORT_DATABASE_URL`
+existed in `.env`, sourcing the whole file before running pytest silently redirected even
+test-database-scoped store instances to the real catalog's actuator logins —
+`PostgresArtifactStore.__init__` reads these vars unconditionally from the environment, regardless
+of what database the main DSN targets. The resulting failures ("review contract skill binding is
+invalid") read exactly like a content/logic bug, not an environment bug, and took real time to
+trace back to its actual cause. Second full-suite run after the cluster split: 95 failed, 44 errors
+— a completely different failure signature from the first regression, both from the same root cause
+(one `.env` file bundling config for two different execution contexts).
+
+**Rule:** when one file conveniently bundles config for two different execution contexts (here:
+interactive CLI/dev use vs. automated test runs), document — loudly, at the point of use, not just
+in a comment nobody reads before sourcing the file — which subset belongs to which. `.env.example`
+now carries this warning explicitly. Never assume "it's all in `.env`" is safe to source everywhere.
+
+### An ADR's risk claim is a hypothesis until the full suite proves it
+
+ADR-029 characterized the DB-role provisioning as "a 10-minute local DB-admin action with zero
+external/production dependency" — wrong on two separate, unrelated counts (the two lessons above),
+both caught only because the full suite was run before checkpointing the step as done, not because
+the identity-method spot-checks that seemed sufficient at the time (`review_coordinator_
+authentication_context()`, `export_database_identity()`) actually were sufficient — they proved
+role membership resolved, not that the cluster's overall state was still exact.
+
+**Rule:** "this change is additive/isolated/low-risk" is a claim about the whole system, not a fact
+established by the diff. Verify it with the same rigor as a functional change, especially for
+anything touching shared infrastructure (database roles, environment variables, docker-compose
+topology) — a scoped spot-check can be real and still not be the check that would have caught the
+actual regression.
+
+### Semgrep prefixes `check_id` with the config mount's directory name
+
+Loading rules via `--config /rules/semiskill.yml` reports `check_id` as `rules.<id>`, not the bare
+`<id>` the rule pack's own YAML declares — confirmed by inspecting the raw JSON output directly,
+not assumed from the pack file. Any adapter that maps a finding back to a specific rule (severity
+lookup, deduplication, display) must normalize this deterministic prefix rather than compare
+against the pack's declared id directly; the exact prefix depends on the mount path chosen, so it's
+stable only because the mount path is fixed in code, not because it's part of any documented API.
+
+### A "read-only, networkless" container sandbox still needs a writable HOME
+
+`docker run --read-only` breaks Semgrep before it scans anything, because it writes a first-run
+settings file to `$HOME/.semgrep` even for a read-only scan. The fix is a scoped `--tmpfs /tmp
+-e HOME=/tmp`, not relaxing `--read-only`. Separately, `--network none` combined with Semgrep's
+default telemetry/version-check behavior makes it **hang indefinitely** instead of failing fast —
+reproduced directly (the container had to be `docker kill`ed after a minute). `--metrics=off
+--disable-version-check` are not optional flourishes in a sandboxed invocation; without them the
+scan never completes at all. Both were found by actually running the hardened invocation end to
+end, not inferred from the vendor's documentation or the earlier design's prose.
+
+### Docker bind mounts from Git Bash on Windows need real Windows paths, not `/tmp`
+
+Two independent MSYS/Git-Bash quirks broke `docker run` in this environment: (1) MSYS path
+conversion mangles container-side path arguments (`-w /src` silently became a Windows path) unless
+`MSYS_NO_PATHCONV=1` is set for the command; (2) even with that set, a bind-mount **source** path
+under Git Bash's internal `/tmp` alias is invisible to Docker Desktop, which needs an actual
+`C:/Users/...`-style path to the same location. Neither failure mode looks like a path problem from
+the error text alone (`the working directory '...' is invalid`, `path ... does not exist`) — worth
+recognizing on sight rather than re-diagnosing from scratch next time.
