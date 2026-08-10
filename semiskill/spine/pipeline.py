@@ -22,6 +22,8 @@ from semiskill.scanners.secret_pii import SecretPiiScanner
 from semiskill.scanners.security_audit import SecurityAuditScanner, ToolUnavailable
 from semiskill.scanners.stage2_adapter import Stage2Adapter, Stage2Policy
 from semiskill.scanners.stage2_engine import docker_semgrep_engine
+from semiskill.scanners.judge_risk import JudgeRiskScanner
+from semiskill.scanners.stage5_ollama import OllamaJudge, Stage5Policy
 
 APPROVE_THRESHOLD = 0.8
 REJECT_THRESHOLD = 0.5
@@ -62,6 +64,21 @@ def _build_scanners(dsn: str, security_audit_runner=None, judge_risk_scanner=Non
     if judge_risk_scanner is not None:
         scanners.append(judge_risk_scanner)
     return scanners
+
+
+def _effective_judge_scanner(store, judge_risk_scanner, stage5_policy: Stage5Policy | None):
+    """An explicit `judge_risk_scanner` always wins (tests inject a `FakeJudge` this way); a
+    `stage5_policy` constructs the real `OllamaJudge`-backed scanner, mirroring `stage2_policy`'s
+    host-decides-construction pattern rather than making every caller wire up `JudgeRiskScanner`
+    (rubric, model-family bookkeeping, calibration params) by hand."""
+    if judge_risk_scanner is not None:
+        return judge_risk_scanner
+    if stage5_policy is None:
+        return None
+    return JudgeRiskScanner(
+        store=store, judge=OllamaJudge(stage5_policy),
+        judge_model_family=f"ollama:{stage5_policy.model}",
+    )
 
 
 def _scan_type(stage: ScanStage) -> ArtifactType:
@@ -105,12 +122,15 @@ def _write_review(store: ArtifactStore, sv: Artifact, scans: list[Artifact], ver
 def run_pipeline(*, store: ArtifactStore, dsn: str, skill_version_id,
                  security_audit_runner=None, judge_risk_scanner=None,
                  judge_required: bool = True,
-                 stage2_policy: Stage2Policy | None = None) -> PipelineResult:
+                 stage2_policy: Stage2Policy | None = None,
+                 stage5_policy: Stage5Policy | None = None) -> PipelineResult:
     sv = store.get(skill_version_id)
     if sv is None or sv.artifact_type is not ArtifactType.SKILL_VERSION:
         raise ValueError("skill_version not found")
     label = sv.permissions_label
     submission = SkillSubmission.from_payload(sv.payload)
+
+    judge_risk_scanner = _effective_judge_scanner(store, judge_risk_scanner, stage5_policy)
 
     scans: list[Artifact] = []
     for scanner in _build_scanners(dsn, security_audit_runner, judge_risk_scanner, stage2_policy):

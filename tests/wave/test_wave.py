@@ -17,6 +17,7 @@ from semiskill.wave import (
     CHANGES_REQUESTED,
     REVIEW_BLOCKED,
     WOULD_CAPTURE,
+    judge_policy_refusal,
     load_wave,
     payload_hash,
     render_report,
@@ -474,3 +475,34 @@ def test_report_and_journal_expose_exact_approval_inputs(pg_store, pg_dsn, tmp_p
     markdown, machine = write_wave_report(report, tmp_path / "out")
     assert "human approval required" in markdown.read_text(encoding="utf-8")
     assert json.loads(machine.read_text(encoding="utf-8"))["counts"]["published"] == 0
+
+
+# --------------------------------------------------------------------------------------
+# judge_policy_refusal + stage5_policy (J-010f6) — `stage5_policy` is a second valid way to
+# configure a judge (mirrors stage2_policy), not a relaxation: ADR-026's "no scanner configured"
+# refusal must still fire when NEITHER is present, and a policy object satisfies the check only
+# because it will legitimately construct a real judge, not because the check was loosened.
+# --------------------------------------------------------------------------------------
+
+def test_judge_policy_refusal_still_fires_with_neither_scanner_nor_policy():
+    refusal = judge_policy_refusal(judge_required=True, judge_risk_scanner=None, stage5_policy=None)
+    assert refusal is not None and "no judge_risk_scanner is configured" in refusal
+
+
+def test_judge_policy_refusal_is_satisfied_by_a_direct_scanner():
+    refusal = judge_policy_refusal(judge_required=True, judge_risk_scanner=_CleanJudge(),
+                                   stage5_policy=None)
+    assert refusal is None
+
+
+def test_judge_policy_refusal_is_satisfied_by_a_stage5_policy_alone():
+    from semiskill.scanners.stage5_ollama import Stage5Policy
+    policy = Stage5Policy(model_digest="sha256:" + "a" * 64, approved=True)
+    refusal = judge_policy_refusal(judge_required=True, judge_risk_scanner=None,
+                                   stage5_policy=policy)
+    assert refusal is None
+
+
+def test_judge_policy_refusal_not_required_never_refuses_either_way():
+    assert judge_policy_refusal(judge_required=False, judge_risk_scanner=None,
+                                stage5_policy=None) is None

@@ -1,7 +1,7 @@
 <!-- Ephemeral right-now snapshot; overwrite, never append. See STATE_RULES.md. -->
 
 # STATUS - SemiSkill
-_Last updated: 2026-08-10T09:45:36Z_
+_Last updated: 2026-08-10T10:59:09Z_
 
 ## Phase
 Phase J: independently verify, approve and publish the 84 active DV skills to the DEVELOPMENT
@@ -10,18 +10,18 @@ catalog (ADR-029 — production/SharePoint is a separate, later milestone); prov
 ## Session
 - ID: 20260808T165438Z-RISHI_PC-392cc5 - lock held: yes (same session, resumed after a real-world
   gap - `.session-lock` timestamp refreshed 2026-08-10T09:43:56Z; nothing else changed hands)
-- Since the last checkpoint (J-010f4): user asked for the 84-skill role/level matrix (answered
-  inline from HANDOFF.md data, no file changes) and then asked to consolidate this session's
-  lessons into SKILL.md and docs/LEARNINGS.md (J-010f5, this checkpoint). No engineering work
-  happened in between - the state below is otherwise identical to J-010f4.
-- **BLK-003 is still ready for the user's decision** - the real Stage-2 scanner is built, wired
-  in, and tested with real Docker execution. Nothing left but the user's sign-off. See BLOCKERS.md
-  for the exact digest triple, or MEMORY.md's J-010f4 entry for full detail.
+- User asked for the 84-skill role/level matrix (answered inline, no files), then to consolidate
+  lessons into SKILL.md/LEARNINGS.md (J-010f5), then to continue Stage-5 wiring while they review
+  BLK-003, plus an interactive decision page (this checkpoint covers Stage-5 wiring; the page is
+  next, not yet built as of this write).
+- **BLK-003 still awaits the user's decision** (Stage-2 digest triple, unchanged since J-010f4).
+- **Stage-5 wiring is now also DONE** (J-010f6) - proven against the REAL local Ollama daemon,
+  which is genuinely still wildcard-bound (checked via `netstat`, not assumed stale). BLK-004
+  still needs the real calibration corpus + the user's labeling.
 
 ## Active step
-- none in flight. Next: present the Stage-2 digest triple to the user (task #8) - or continue to
-  task #9 (Stage-5 CLI wiring) if the user wants engineering to keep advancing while BLK-003
-  awaits review; that path doesn't need their input yet either.
+- none in flight. Next: build the interactive HTML decision page the user asked for, then propose
+  the 120-item calibration gold set (task #10) once there's a channel for the user to review it.
 
 ## J-010f4 result: real Stage-2 scanner built, wired, and proven (done, awaiting BLK-003 approval)
 - `docker/stage2/rules/semiskill.yml`: 9 real Semgrep rules (dangerous command execution, data
@@ -49,27 +49,27 @@ catalog (ADR-029 — production/SharePoint is a separate, later milestone); prov
 
 ## TWO blockers still hold every skill at the scan gate, not one
 - Stage 2: CODE DONE (J-010f4), awaiting user approval - BLK-003.
-- Stage 5: adapter exists (J-010e10) but unwired into pipeline.py/wave.py yet, no calibration -
-  BLK-004. Next engineering task if the user wants to keep moving without waiting on BLK-003.
+- Stage 5: CODE DONE and wired (J-010f6), proven against the real (still wildcard-bound) local
+  Ollama daemon. BLK-004 remains open - needs the real 120-item gold set + the user's labeling.
 
 ## Immediate order
 1. User decision needed: approve/reject the Stage-2 digest triple (BLK-003) - see BLOCKERS.md.
-2. Independent of #1: wire `OllamaJudge`/`Stage5Policy` into `pipeline.py`/`wave.py` the same way
-   Stage-2 was just wired; build + propose the 120-item calibration gold set (ADR-031 solo
-   labeling); run calibration (BLK-004).
+2. Build + propose the 120-item calibration gold set for the user's solo labeling (ADR-031), then
+   run calibration once labeled (BLK-004). Stage-5 code wiring itself is done (J-010f6).
 3. Once both blockers close: vertical-prove `dv-minimal-reproducer` end to end, then the 5-skill
    wave-0 cohort, then the remaining 79 in batches <=10.
 4. Deferred, not urgent: scoreboard v3 artifact-reconciliation gap (task #6); full retirement of
-   the old SecurityAuditScanner/npx runner once stage2_policy reaches CLI flags;
-   `apply_migrations()`'s same-transaction enum bug (J-010f3).
+   the old SecurityAuditScanner/npx runner once stage2_policy/stage5_policy reach CLI flags;
+   `apply_migrations()`'s same-transaction enum bug (J-010f3); optionally reconfigure local
+   Ollama to loopback-only if the user wants a full successful round-trip proof, not just refusal.
 
 ## Active blockers
 - BLK-001: narrowed to PRODUCTION-only scope; doesn't gate 84/84-to-development (ADR-029/J-010f3).
 - BLK-003: code done and tested (J-010f4); needs the user's explicit digest-triple approval.
-- BLK-004: Stage-5 needs CLI wiring, a real gold-set, and the user's solo calibration labeling.
+- BLK-004: code done and wired (J-010f6); needs a real gold-set and the user's solo labeling.
 
 ## Full-suite status
-Last full `pytest tests/` run: **1253 passed, 7 skipped, 0 failed, 365.35s** (J-010f4, this
+Last full `pytest tests/` run: **1261 passed, 7 skipped, 0 failed, 373.04s** (J-010f6, this
 session, TEST_DATABASE_URL only per ADR-032). Current, trustworthy baseline.
 Last IMMUTABLE (clean-source) full-suite PASS record remains `a6792604...` on source `28379ab`
 (J-010e6) - source has changed many times since; generate a fresh one before treating it as
@@ -99,9 +99,9 @@ evidence for a release gate.
   "published" or "passed" without that context (ADR-029/030/031).
 
 ## Last checkpoint
-- J-010f5 is the containing checkpoint for the SKILL.md/LEARNINGS.md documentation update
-  (`artifacts: this J-010f5 checkpoint`).
-- This session: J-010e7 -> e8 -> e9 -> e10 -> (pushed) -> f0 -> f1 -> f2 -> f3 -> f4 -> f5, all
-  done, about to commit f5. Next: user decision on BLK-003, or continue to Stage-5 wiring.
+- J-010f6 is the containing checkpoint for the Stage-5 wiring
+  (`artifacts: this J-010f6 checkpoint`).
+- This session: J-010e7 -> e8 -> e9 -> e10 -> (pushed) -> f0 -> f1 -> f2 -> f3 -> f4 -> f5 -> f6, all
+  done, about to commit f6. Next: build the interactive decision page, then BLK-004's gold set.
 - No step this session earns any review, approval, publication or launch-readiness credit yet -
-  Stage 2 is code-proven but not yet approved; nothing has reached security_pass.
+  Stage 2 and Stage 5 are both code-proven but not yet approved; nothing has reached security_pass.

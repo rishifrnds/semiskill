@@ -8,6 +8,8 @@ from semiskill.capture.intake import build_skill_version
 from semiskill.context.retrieve import search_catalog
 from semiskill.scanners.base import ScanStage
 from semiskill.scanners.stage2_adapter import Stage2Policy
+from semiskill.scanners.stage5_ollama import Stage5Policy
+from semiskill.sensor.judge import GoldItem, calibrate_judge, record_gold_set
 from semiskill.spine.pipeline import run_pipeline
 
 MIG = Path("semiskill/artifacts/migrations")
@@ -180,3 +182,105 @@ def test_stage2_policy_real_scan_blocks_a_malicious_skill(store, pg_dsn):
                        stage2_policy=_stage2_policy())
     assert res.blocked_at == ScanStage.SECURITY_AUDIT and res.review is not None
     assert _in_catalog(pg_dsn) == set()
+
+
+# --------------------------------------------------------------------------------------
+# stage5_policy (J-010f6) — mirrors stage2_policy's host-decides-construction pattern:
+# run_pipeline builds the real JudgeRiskScanner(judge=OllamaJudge(policy), ...) internally
+# rather than requiring every caller to wire that up by hand. An explicit judge_risk_scanner
+# still wins if both are given (used by other tests here to inject a calibrated stand-in).
+# --------------------------------------------------------------------------------------
+
+_RUBRIC_VERSION = "skill_safety_v1"
+
+
+class _AgreeJudge:
+    """Calibration-only stand-in — never used as the pipeline's real judge in these tests."""
+
+    def score(self, *, candidate, rubric):
+        return 1.0 if candidate.startswith("safe") else 0.0
+
+
+def _seed_calibration(store) -> None:
+    """Give require_no_drift() something to accept, so a later real judge call is actually
+    reached instead of short-circuiting on JudgeUncalibrated (the same fixture shape
+    tests/sensor/test_judge_sensor.py uses)."""
+    gold = [GoldItem("safe A", 1), GoldItem("safe B", 1), GoldItem("evil C", 0), GoldItem("evil D", 0)]
+    gold_set = record_gold_set(store, items=gold, rubric_version=_RUBRIC_VERSION)
+    calibrate_judge(store, gold_set=gold_set, judge=_AgreeJudge(), judge_model="fake",
+                    rubric="r", rubric_version=_RUBRIC_VERSION)
+
+
+def _stage5_policy(**overrides) -> Stage5Policy:
+    base = dict(
+        host="127.0.0.1", port=11434, model="qwen3-coder:30b",
+        model_digest="sha256:06c1097efce0431c2045fe7b2e5108366e43bee1b4603a7aded8f21689e90bca",
+        approved=True,
+    )
+    base.update(overrides)
+    return Stage5Policy(**base)
+
+
+@pytest.mark.integration
+def test_stage5_policy_unapproved_is_not_sampled_same_as_default(store, pg_dsn):
+    sv = _submit(store, slug="dv/stage5-unapproved")
+    res = run_pipeline(store=store, dsn=pg_dsn, skill_version_id=sv.artifact_id,
+                       stage5_policy=_stage5_policy(approved=False))
+    judge_stage = res.scan_artifacts[4]
+    assert judge_stage.payload["stage"] == 5 and judge_stage.payload["status"] == "not_sampled"
+
+
+@pytest.mark.integration
+def test_stage5_policy_uncalibrated_is_not_sampled_even_when_approved(store, pg_dsn):
+    """No calibration record exists yet (BLK-004) - require_no_drift() must refuse before
+    OllamaJudge is ever reached, regardless of `approved`."""
+    sv = _submit(store, slug="dv/stage5-uncalibrated")
+    res = run_pipeline(store=store, dsn=pg_dsn, skill_version_id=sv.artifact_id,
+                       stage5_policy=_stage5_policy())
+    judge_stage = res.scan_artifacts[4]
+    assert judge_stage.payload["stage"] == 5 and judge_stage.payload["status"] == "not_sampled"
+
+
+@pytest.mark.integration
+def test_stage5_policy_real_local_ollama_is_refused_not_a_crash(store, pg_dsn):
+    """Proves the wiring against the REAL local Ollama daemon, not a mock. As of this session
+    that daemon listens on a wildcard interface (HANDOFF.md gap 3), so OllamaJudge correctly
+    refuses via _is_loopback_only() once calibration is seeded and the real judge is reached -
+    this is the actual current state of BLK-004's remaining gap, not a synthetic stand-in for it.
+    If Ollama is ever reconfigured loopback-only, this test's refusal reason will change (not its
+    outcome-is-never-a-crash guarantee) - re-check the assertion then."""
+    _seed_calibration(store)
+    sv = _submit(store, slug="dv/stage5-real-ollama")
+    res = run_pipeline(store=store, dsn=pg_dsn, skill_version_id=sv.artifact_id,
+                       stage5_policy=_stage5_policy())
+    judge_stage = res.scan_artifacts[4]
+    assert judge_stage.payload["stage"] == 5
+    assert judge_stage.payload["status"] == "not_sampled"
+    findings = judge_stage.payload["findings"]
+    assert any(f["code"] == "judge-skipped" for f in findings)
+    detail = next(f["detail"] for f in findings if f["code"] == "judge-skipped")
+    assert "judge unavailable" in detail
+
+
+@pytest.mark.integration
+def test_explicit_judge_risk_scanner_wins_over_stage5_policy(store, pg_dsn):
+    """An explicit judge_risk_scanner (e.g. a test's calibrated FakeJudge-backed scanner) must
+    take precedence over stage5_policy, not be silently overridden by it."""
+    from semiskill.scanners.judge_risk import JudgeRiskScanner
+
+    _seed_calibration(store)
+
+    class _FixedJudge:
+        def score(self, *, candidate, rubric):
+            return 0.95
+
+    explicit_scanner = JudgeRiskScanner(
+        store=store, judge=_FixedJudge(), judge_model_family="test",
+        candidate_model_family="unrelated", rubric_version=_RUBRIC_VERSION,
+    )
+    sv = _submit(store, slug="dv/stage5-explicit-wins")
+    res = run_pipeline(store=store, dsn=pg_dsn, skill_version_id=sv.artifact_id,
+                       judge_risk_scanner=explicit_scanner, stage5_policy=_stage5_policy())
+    judge_stage = res.scan_artifacts[4]
+    assert judge_stage.payload["status"] == "passed"
+    assert judge_stage.payload["safety_score"] == 0.95

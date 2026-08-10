@@ -198,7 +198,8 @@ def _is_infrastructure_error(exc: BaseException) -> bool:
     return (type(exc).__module__ or "").startswith("psycopg") and "Data" not in name
 
 
-def judge_policy_refusal(*, judge_required: bool, judge_risk_scanner) -> str | None:
+def judge_policy_refusal(*, judge_required: bool, judge_risk_scanner,
+                         stage5_policy=None) -> str | None:
     """Return why this wave cannot succeed, or None if the stage-5 policy is satisfiable.
 
     The two rules are individually right and jointly unsatisfiable: ``run_pipeline`` records stage 5
@@ -209,9 +210,14 @@ def judge_policy_refusal(*, judge_required: bool, judge_risk_scanner) -> str | N
 
     One predicate, used by both ``run_wave`` and the CLI, so a plan can never promise what a run
     will refuse. Deliberately no global "skip the judge" switch: a single control that turns the
-    judge off for everything is precisely the control that gets left on.
+    judge off for everything is precisely the control that gets left on. `stage5_policy` is a
+    SECOND valid way to configure a judge (mirroring `stage2_policy`'s host-decides-construction
+    pattern, `run_pipeline._effective_judge_scanner`) — not a relaxation of this policy, since
+    `OllamaJudge` still fails closed on its own (unapproved, uncalibrated, non-loopback, ...); a
+    policy object that will legitimately construct a real judge satisfies this check exactly like
+    a directly-supplied one would.
     """
-    if judge_required and judge_risk_scanner is None:
+    if judge_required and judge_risk_scanner is None and stage5_policy is None:
         return (
             "stage 5 is required by policy but no judge_risk_scanner is configured: every skill "
             "in this wave would be captured, scanned, and then refused at the security gate with "
@@ -240,6 +246,7 @@ def run_wave(
     judge_risk_scanner=None,
     judge_required: bool = True,
     stage2_policy=None,
+    stage5_policy=None,
 ) -> WaveReport:
     """Capture/scan candidates and stop before approval.
 
@@ -252,7 +259,8 @@ def run_wave(
     if allow_ungated:
         raise ValueError("allow_ungated was removed: wave cannot publish or bypass content review")
     refusal = judge_policy_refusal(
-        judge_required=judge_required, judge_risk_scanner=judge_risk_scanner)
+        judge_required=judge_required, judge_risk_scanner=judge_risk_scanner,
+        stage5_policy=stage5_policy)
     if refusal:
         raise ValueError(refusal)
     if on_duplicate not in {"supersede", "skip", "fail"}:
@@ -284,6 +292,7 @@ def run_wave(
                 judge_risk_scanner=judge_risk_scanner,
                 judge_required=judge_required,
                 stage2_policy=stage2_policy,
+                stage5_policy=stage5_policy,
             )
         except Exception as exc:  # noqa: BLE001 - isolate content errors, abort infrastructure
             if _is_infrastructure_error(exc):
@@ -336,6 +345,7 @@ def _run_one(
     judge_risk_scanner=None,
     judge_required: bool = True,
     stage2_policy=None,
+    stage5_policy=None,
 ) -> WaveItemResult:
     if dry_run:
         return WaveItemResult(
@@ -378,6 +388,7 @@ def _run_one(
             judge_risk_scanner=judge_risk_scanner,
             judge_required=judge_required,
             stage2_policy=stage2_policy,
+            stage5_policy=stage5_policy,
         )
     else:
         pipeline = _pipeline_from_review(store, skill_version, automated)

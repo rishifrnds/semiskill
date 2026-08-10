@@ -1647,27 +1647,63 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   credit: none toward security_pass, review, approval or publication. Documentation only.
   next: unchanged - task #8, present the Stage-2 digest triple to the user for BLK-003 approval
 
+- [J-010f6] 2026-08-10T10:58:10Z  status: done
+  what: wired `OllamaJudge`/`Stage5Policy` into `pipeline.py`/`wave.py`, mirroring `stage2_policy`'s
+    host-decides-construction pattern, and proved the refusal path against the REAL local Ollama
+    daemon - not a mock - while the user reviewed the Stage-2 digest in parallel
+  artifacts: this J-010f6 checkpoint, semiskill/spine/pipeline.py (`_effective_judge_scanner`,
+    `stage5_policy` param), semiskill/wave.py (`stage5_policy` threaded through `run_wave`/
+    `_run_one`; `judge_policy_refusal` gained a `stage5_policy` parameter), tests/spine/
+    test_pipeline.py (5 new tests), tests/wave/test_wave.py (4 new tests)
+  design: `judge_risk_scanner` (explicit) always wins over `stage5_policy` (constructed) -
+    matters for tests that inject a calibrated stand-in. `judge_policy_refusal` (ADR-026) now
+    treats `stage5_policy` as a SECOND valid way to configure a judge, not a relaxation:
+    `OllamaJudge` still fails closed on its own merits (unapproved/uncalibrated/non-loopback);
+    the refusal only clears because a policy that will legitimately construct a real judge is
+    present, exactly like a directly-supplied one. Neither `judge_policy_refusal`'s core
+    predicate nor `REQUIRED_JUDGE_NOT_PASSED` were touched.
+  real proof, not synthetic: this machine's actual Ollama install (`qwen3-coder:30b`,
+    `deepseek-r1:8b`, `gpt-oss:120b`, `llama3.1:8b`) is running and listening on
+    `0.0.0.0:11434`/`[::]:11434` - confirmed via `netstat`, matching HANDOFF.md gap 3 exactly,
+    not a stale claim. Seeded a real calibration record (`record_gold_set`/`calibrate_judge`,
+    same fixture shape as `tests/sensor/test_judge_sensor.py`) so `require_no_drift()` clears and
+    the pipeline actually reaches `OllamaJudge.score()` against the real daemon - which correctly
+    refuses via `_is_loopback_only()`, landing as `judge-skipped`/`not_sampled`, never a crash and
+    never a fabricated pass. Did NOT reconfigure the user's live Ollama service to be
+    loopback-only (`OLLAMA_HOST=127.0.0.1`) - that changes a real running service outside the
+    repo and wasn't asked for; flagging it as available but not done.
+  verification: full `pytest tests/`: **1261 passed, 7 skipped, 0 failed, 373.04s**
+    (TEST_DATABASE_URL only, per ADR-032).
+  credit: none toward security_pass, review, approval or publication - BLK-004 remains open
+    (needs the real 120-item gold set + the user's solo calibration labeling, ADR-031). Code path
+    is now ready the moment that calibration lands, mirroring Stage-2's code-done/approval-
+    pending state.
+  next: build the 120-item calibration gold set proposal (task #10) - or an interactive decision
+    page for the user, per their explicit request this turn
+
 ## In-Flight Step
 
-- none. Next: task #8 - present the Stage-2 digest triple to the user for explicit BLK-003
-  approval (needs the user, not more engineering) - or continue to task #9 (Stage-5 wiring) if
-  the user wants engineering to keep advancing in parallel while BLK-003 awaits their review.
+- none. Next: build the interactive decision page (this turn's other explicit request), then the
+  120-item calibration gold set proposal (task #10) once the user has a channel to review it.
 
 ## Pending Steps
 1. Get the user's explicit BLK-003 approval on the exact digest triple recorded in J-010f4.
 2. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
    live store (not just internal self-consistency), per J-010e9 finding-2 / HANDOFF.md gap 4.
    Deferred below critical-path items; resume notes under task #6 in the session's task tracker.
-3. Wire `OllamaJudge`/`Stage5Policy` into the CLI/pipeline; build and propose the 120-item
-   calibration gold set for the user's solo labeling (ADR-031); run calibration (BLK-004).
+3. Build and propose the 120-item calibration gold set for the user's solo labeling (ADR-031);
+   run calibration once labeled (BLK-004). Stage-5 code wiring itself is done (J-010f6).
 4. Vertical-prove `dv-minimal-reproducer` end to end against the now-real development approval
-   chain (J-010f1/f3) and the now-real Stage-2 scanner (J-010f4, pending approval), then the
-   5-skill wave-0 cohort, then the remaining 79 in batches <=10.
+   chain (J-010f1/f3), the now-real Stage-2 scanner (J-010f4, pending approval) and the now-wired
+   Stage-5 judge (J-010f6, pending calibration), then the 5-skill wave-0 cohort, then the
+   remaining 79 in batches <=10.
 5. [J-013] Next.js catalog / market-readiness work remains deferred - not required for the
    development-catalog milestone (ADR-029); revisit before any production/SharePoint launch.
 6. Follow-up, not urgent: `apply_migrations()`'s same-transaction new-enum-value bug (J-010f3
-   root-cause-1); full retirement of the old SecurityAuditScanner/npx runner once stage2_policy
-   reaches CLI flags (J-010f4 note).
+   root-cause-1); full retirement of the old SecurityAuditScanner/npx runner once stage2_policy/
+   stage5_policy reach CLI flags (J-010f4/f6 note); optionally reconfigure the local Ollama
+   daemon to loopback-only (`OLLAMA_HOST=127.0.0.1`) if the user wants a full successful
+   OllamaJudge round-trip proof rather than just the refusal-path proof J-010f6 has today.
 
 The 3/32/49 split is historical, non-crediting routing provenance. Every skill must restart against
 its exact current full payload hash and fresh independent evidence.

@@ -71,6 +71,15 @@ Full rules: see STATE_RULES.md.
   second labeler/adjudicator. This is a recorded, explicit deviation from the two-labeler design,
   not a resolution — the resulting kappa will not be a genuine inter-rater statistic. Still BLOCKS
   Stage-5 credit until the solo calibration actually completes.
+- Update 2026-08-10 (J-010f6): `OllamaJudge`/`Stage5Policy` are now wired into `pipeline.py`/
+  `wave.py` (mirroring Stage-2's `stage2_policy` pattern) and proven against the REAL local
+  Ollama daemon, not a mock — confirmed still listening on `0.0.0.0:11434`/`[::]:11434`
+  (wildcard, not loopback-only) via `netstat`, so `OllamaJudge` correctly refuses via its
+  `_is_loopback_only()` check once a calibration record exists to get past the uncalibrated
+  gate. Code side is DONE. Still blocked on: (1) the real 120-item gold set + the user's solo
+  labeling, (2) reconfiguring the local Ollama daemon to loopback-only if a full successful
+  score() round-trip is wanted (not done — changes a live service outside the repo, needs the
+  user's OK first).
 - Escalate at: 2026-08-09T03:10:37Z
 
 <!-- Template for a new blocker:
