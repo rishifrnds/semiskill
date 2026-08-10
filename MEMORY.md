@@ -1681,18 +1681,51 @@ Phases 0/A/B/C/D/E/F/G done → archive/MEMORY-{P0,A,B,C,D,E,F,G}.md. Built + gr
   next: build the 120-item calibration gold set proposal (task #10) - or an interactive decision
     page for the user, per their explicit request this turn
 
+- [J-010f7] 2026-08-10T14:31:07Z  status: done
+  what: full session wrap-up at the user's explicit request - published an interactive decision
+    page (already recorded above), then refreshed every durable doc so a fresh session (or this
+    one, resumed later) has a complete, accurate, single-source picture without re-deriving it
+    from ten commits of MEMORY.md entries
+  artifacts: this J-010f7 checkpoint, HANDOFF.md (comprehensive rewrite), `.agents/skills/
+    semiskill-project/SKILL.md` (policy-object wiring pattern note), `docs/LEARNINGS.md` (new
+    2026-08-10 section: extending a refusal predicate without relaxing it), `.session-lock`
+    (refreshed)
+  HANDOFF.md changes (full rewrite, not incremental): new executive verdict reflecting both
+    Stage-2 AND Stage-5 being code-complete and proven (not just designed); one-screen truth
+    table updated with the two new DONE rows and the exact digest triple; a new "Pending
+    decisions" section pointing at the interactive page and stating plainly that the page has no
+    live connection back to this repo; the exact Stage-2 digest triple reproduced in full so it
+    is never only-on-the-page; a full session log summary (J-010e7 through J-010f6) so the "why"
+    behind every current state fact is traceable without opening MEMORY.md; gaps/blockers
+    renumbered to reflect what's actually still open vs resolved; a new "Deferred, tracked, not
+    urgent" section consolidating the scoreboard-v3 gap, the apply_migrations enum bug, and the
+    old-runner-retirement follow-up in one place; Gates 0-3 marked with what's actually done vs
+    open; forecast revised given both blockers are now one decision/one build-task away instead
+    of full designs. The 84-skill catalog inventory and wave-0 cohort table are preserved
+    verbatim (unchanged this session) rather than re-typed, to avoid transcription drift.
+  credit: none toward security_pass, review, approval or publication. Documentation only - but
+    this is the file a fresh session is instructed to read first, so its accuracy matters more
+    than most.
+  next: produce the copy-pasteable resume-in-a-new-terminal prompt (this turn's other explicit
+    ask), then commit/push everything, then task #10 (calibration gold set) once there's time
+    that isn't blocked on the user's BLK-003/Ollama decisions
+
 ## In-Flight Step
 
-- none. Next: build the interactive decision page (this turn's other explicit request), then the
-  120-item calibration gold set proposal (task #10) once the user has a channel to review it.
+- none. Next: task #10 (build the 120-item calibration gold set) once the user's BLK-003/Ollama
+  decisions land, or task #6 (deferred scoreboard v3 gap) if the user wants something worked in
+  the meantime that doesn't depend on their review.
 
 ## Pending Steps
-1. Get the user's explicit BLK-003 approval on the exact digest triple recorded in J-010f4.
-2. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
-   live store (not just internal self-consistency), per J-010e9 finding-2 / HANDOFF.md gap 4.
-   Deferred below critical-path items; resume notes under task #6 in the session's task tracker.
-3. Build and propose the 120-item calibration gold set for the user's solo labeling (ADR-031);
+1. Get the user's explicit BLK-003 approval on the exact digest triple (recorded in J-010f4,
+   reproduced in full in HANDOFF.md and the interactive decision page). Also awaiting their call
+   on the small Ollama-loopback-reconfiguration question from J-010f6.
+2. Build and propose the 120-item calibration gold set for the user's solo labeling (ADR-031);
    run calibration once labeled (BLK-004). Stage-5 code wiring itself is done (J-010f6).
+3. Close scoreboard v3 gap: independent artifact-level re-verification of cell claims against the
+   live store (not just internal self-consistency), per J-010e9 finding-2 / HANDOFF.md gap 4.
+   Deferred below critical-path items; resume notes in HANDOFF.md's "Deferred, tracked, not
+   urgent" section and task #6 in the session's task tracker.
 4. Vertical-prove `dv-minimal-reproducer` end to end against the now-real development approval
    chain (J-010f1/f3), the now-real Stage-2 scanner (J-010f4, pending approval) and the now-wired
    Stage-5 judge (J-010f6, pending calibration), then the 5-skill wave-0 cohort, then the

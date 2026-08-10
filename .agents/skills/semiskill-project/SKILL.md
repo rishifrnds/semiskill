@@ -57,6 +57,13 @@ approval, and appear in the projection-backed catalog.
   evidence (digest, hash, corpus) for the human to review and wait for their explicit decision.
   Never flip a policy's `approved`/calibration flag to true outside a test fixture without that
   explicit record — this is the one line ADR-030/031 both draw clearly.
+- The established pattern for wiring a new gate stage into `run_pipeline`/`run_wave`: a
+  `<stage>_policy` object the CALLER supplies and `pipeline.py` uses to construct the real
+  scanner/judge internally (see `stage2_policy` → `Stage2Adapter`, `stage5_policy` →
+  `_effective_judge_scanner`/`OllamaJudge`) — never require the caller to hand-wire the scanner
+  object itself. If the stage has its own upfront wave-level refusal predicate (like ADR-026's
+  `judge_policy_refusal`), extend its signature to accept the new policy as a second valid
+  "a judge/scanner IS configured" input rather than relaxing what it refuses on.
 
 ## Preserve the Security Boundary
 

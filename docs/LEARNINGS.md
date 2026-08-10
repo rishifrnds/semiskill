@@ -288,3 +288,26 @@ under Git Bash's internal `/tmp` alias is invisible to Docker Desktop, which nee
 `C:/Users/...`-style path to the same location. Neither failure mode looks like a path problem from
 the error text alone (`the working directory '...' is invalid`, `path ... does not exist`) — worth
 recognizing on sight rather than re-diagnosing from scratch next time.
+
+---
+
+## 2026-08-10 — A validated pattern: extend a refusal predicate, don't relax it
+
+Wiring `OllamaJudge`/`Stage5Policy` into `pipeline.py`/`wave.py` reused the exact shape
+`stage2_policy`/`Stage2Adapter` established a day earlier: the caller supplies a policy object,
+`pipeline.py` constructs the real scanner/judge internally, and the wave-level upfront refusal
+predicate (`judge_policy_refusal`, ADR-026) gained the new policy as a second valid "a judge IS
+configured" input rather than being loosened. Worth naming as a pattern precisely because it
+generalized cleanly on the second use: `OllamaJudge` still fails closed on every axis that
+matters (unapproved, uncalibrated, non-loopback) entirely on its own, so recognizing
+`stage5_policy` as sufficient to clear the upfront refusal never actually widens what can reach a
+`"passed"` verdict — it only changes *how early* an unconfigured-judge wave gets refused, which is
+exactly what that predicate is for. The tell that this was the right shape rather than a
+convenient one: proving it against the REAL local Ollama daemon (still wildcard-bound) produced
+the correct refusal on the first real run, not a fabricated pass.
+
+**Rule:** when a security predicate exists to catch "nothing is configured", a new configuration
+mechanism can be added to what satisfies it without that being a relaxation — *provided* the thing
+it configures still independently fails closed on its own merits. If the new mechanism does NOT
+independently fail closed, adding it to the predicate's "satisfied" set would be exactly the
+relaxation ADR-026 warns against, and the two situations can look identical from the call site.
